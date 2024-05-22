@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Maze Tower Defense Game</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: auto;
+            background-color: #f0f0f0;
+        }
+        #info {
+            text-align: center;
+            font-size: 24px;
+            margin-top: 10px;
+        }
+        .upgradeButton {
+            display: block;
+            margin: 10px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1200" height="800"></canvas>
+    <div id="info">Money: $100 | Health: 50 | Range Upgrades: 0 ⚙️ | Fire Rate Upgrades: 0 ⚙️</div>
+    <button id="upgradeRangeButton" class="upgradeButton">Upgrade Tower Range ($115)</button>
+    <button id="upgradeFireRateButton" class="upgradeButton">Upgrade Tower Fire Rate ($115)</button>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const infoDisplay = document.getElementById('info');
+        const upgradeRangeButton = document.getElementById('upgradeRangeButton');
+        const upgradeFireRateButton = document.getElementById('upgradeFireRateButton');
+
+        const gridSize = 40;
+        const rows = canvas.height / gridSize;
+        const cols = canvas.width / gridSize;
+
+        let money = 100;
+        let health = 50;
+        let enemySpeed = 1.5;  // Slower initial speed
+        let spawnCount = 1;
+        let spawnInterval = 2000;
+        let gameOver = false;
+        let enemiesKilled = 0;
+        let rangeUpgrades = 0;
+        let fireRateUpgrades = 0;
+        let hoveredTower = null;
+        let maze = [];
+        let start1 = { x: Math.floor(cols / 3), y: 0 };
+        let start2 = { x: Math.floor(2 * cols / 3), y: 0 };
+        let end = { x: Math.floor(cols / 2), y: rows - 1 };
+
+        const towerCost = 15;
+        const rangeUpgradeCost = 115;
+        const fireRateUpgradeCost = 115;
+
+        const images = {
+            tower: new Image(),
+            enemy: new Image(),
+            obstacle: new Image(),
+            start: new Image(),
+            end: new Image()
+        };
+
+        images.tower.src = 'tower.png';
+        images.enemy.src = 'enemy.png';
+        images.obstacle.src = 'obstacle.png';
+        images.start.src = 'start.png';
+        images.end.src = 'end_4f.png';
+
+        const frameWidth = 512;
+        const frameHeight = 512;
+        const totalFrames = 4;
+        let currentFrame = 0;
+        const frameDuration = 200; // Duration of each frame in milliseconds
+        let lastFrameTime = 0;
+
+        let path1 = [];
+        let path2 = [];
+
+        class Tower {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.range = 100;
+                this.cooldown = 0;
+                this.fireRate = 50; // initial cooldown value
+                this.bullets = [];
+            }
+
+            draw() {
+                ctx.drawImage(images.tower, this.x - 20, this.y - 20, 40, 40);
+                if (this === hoveredTower) {
+                    this.drawRange();
+                }
+            }
+
+            drawRange() {
+                ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.range, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            shoot(enemies) {
+                if (this.cooldown > 0) {
+                    this.cooldown--;
+                    return;
+                }
+
+                for (let enemy of enemies) {
+                    let dx = enemy.x - this.x;
+                    let dy = enemy.y - this.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < this.range) {
+                        this.bullets.push(new Bullet(this.x, this.y, enemy));
+                        this.cooldown = this.fireRate;
+                        break;
+                    }
+                }
+            }
+
+            updateBullets() {
+                this.bullets = this.bullets.filter(bullet => !bullet.isHit());
+                this.bullets.forEach(bullet => bullet.move());
+            }
+
+            drawBullets() {
+                this.bullets.forEach(bullet => bullet.draw());
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, target) {
+                this.x = x;
+                this.y = y;
+                this.target = target;
+                this.speed = 4;  // Reduced bullet speed
+            }
+
+            move() {
+                let dx = this.target.x - this.x;
+                let dy = this.target.y - this.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < this.speed) {
+                    this.target.health -= 1;
+                    if (this.target.isDead()) {
+                        money += 2;
+                        enemiesKilled++;
+                        updateInfoDisplay();
+                    }
+                    this.x = this.target.x;
+                    this.y = this.target.y;
+                } else {
+                    this.x += dx / distance * this.speed;
+                    this.y += dy / distance * this.speed;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            isHit() {
+                return this.x === this.target.x && this.y === this.target.y;
+            }
+        }
+
+        class Enemy {
+            constructor(path, speed, health) {
+                this.path = path;
+                this.speed = speed;
+                this.health = health;
+                this.position = 0; // current index in the path array
+                this.x = path[0].x * gridSize + gridSize / 2;
+                this.y = path[0].y * gridSize + gridSize / 2;
+            }
+
+            draw() {
+                ctx.drawImage(images.enemy, this.x - 20, this.y - 20, 40, 40);
+            }
+
+            move() {
+                if (this.position < this.path.length - 1) {
+                    let target = this.path[this.position + 1];
+                    let dx = target.x * gridSize + gridSize / 2 - this.x;
+                    let dy = target.y * gridSize + gridSize / 2 - this.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < this.speed) {
+                        this.position++;
+                    } else {
+                        this.x += dx / distance * this.speed;
+                        this.y += dy / distance * this.speed;
+                    }
+                }
+            }
+
+            isDead() {
+                return this.health <= 0;
+            }
+
+            hitsEnd() {
+                return this.position === this.path.length - 1;
+            }
+        }
+
+        function generateMaze() {
+            maze = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+            // Generate impassable blocks randomly
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (Math.random() < 0.3 && !(i === start1.y && j === start1.x) && !(i === start2.y && j === start2.x) && !(i === end.y && j === end.x)) {
+                        maze[i][j] = 1; // 1 represents a wall
+                    }
+                }
+            }
+            path1 = astar(start1, end, maze);
+            path2 = astar(start2, end, maze);
+        }
+
+        function heuristic(a, b) {
+            return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+        }
+
+        function astar(start, end, maze) {
+            let openSet = [start];
+            let cameFrom = new Map();
+            let gScore = Array.from({ length: rows }, () => Array(cols).fill(Infinity));
+            let fScore = Array.from({ length: rows }, () => Array(cols).fill(Infinity));
+
+            gScore[start.y][start.x] = 0;
+            fScore[start.y][start.x] = heuristic(start, end);
+
+            while (openSet.length > 0) {
+                let current = openSet.reduce((lowest, node) => (fScore[node.y][node.x] < fScore[lowest.y][lowest.x] ? node : lowest));
+
+                if (current.x === end.x && current.y === end.y) {
+                    let path = [];
+                    while (current) {
+                        path.push(current);
+                        current = cameFrom.get(`${current.x},${current.y}`);
+                    }
+                    return path.reverse();
+                }
+
+                openSet = openSet.filter(node => node !== current);
+
+                for (let neighbor of getNeighbors(current, maze)) {
+                    let tentative_gScore = gScore[current.y][current.x] + 1;
+
+                    if (tentative_gScore < gScore[neighbor.y][neighbor.x]) {
+                        cameFrom.set(`${neighbor.x},${neighbor.y}`, current);
+                        gScore[neighbor.y][neighbor.x] = tentative_gScore;
+                        fScore[neighbor.y][neighbor.x] = gScore[neighbor.y][neighbor.x] + heuristic(neighbor, end);
+
+                        if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+                            openSet.push(neighbor);
+                        }
+                    }
+                }
+            }
+
+            return [];
+        }
+
+        function getNeighbors(node, maze) {
+            let neighbors = [];
+            let directions = [
+                { x: 0, y: -1 },
+                { x: 1, y: 0 },
+                { x: 0, y: 1 },
+                { x: -1, y: 0 }
+            ];
+
+            for (let dir of directions) {
+                let x = node.x + dir.x;
+                let y = node.y + dir.y;
+                if (x >= 0 && x < cols && y >= 0 && y < rows && maze[y][x] === 0) {
+                    neighbors.push({ x, y });
+                }
+            }
+
+            return neighbors;
+        }
+
+        function drawMaze() {
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (maze[i][j] === 1) {
+                        ctx.drawImage(images.obstacle, j * gridSize, i * gridSize, gridSize, gridSize);
+                    }
+                }
+            }
+            // Draw start and end points
+            ctx.drawImage(images.start, start1.x * gridSize, start1.y * gridSize, gridSize, gridSize);
+            ctx.drawImage(images.start, start2.x * gridSize, start2.y * gridSize, gridSize, gridSize);
+
+            const column = currentFrame % 2;
+            const row = Math.floor(currentFrame / 2);
+
+            ctx.drawImage(
+                images.end,
+                column * frameWidth, row * frameHeight, // Source x, y
+                frameWidth, frameHeight,                // Source width, height
+                end.x * gridSize, end.y * gridSize,     // Destination x, y
+                gridSize, gridSize                      // Destination width, height
+            );
+
+            // Draw the paths
+            ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
+            for (let i = 0; i < path1.length - 1; i++) {
+                const node = path1[i];
+                ctx.fillRect(node.x * gridSize, node.y * gridSize, gridSize, gridSize);
+            }
+            for (let i = 0; i < path2.length - 1; i++) {
+                const node = path2[i];
+                ctx.fillRect(node.x * gridSize, node.y * gridSize, gridSize, gridSize);
+            }
+        }
+
+        const towers = [];
+        const enemies = [];
+        let gameInterval;
+        let spawnEnemiesInterval;
+
+        function initGame() {
+            generateMaze();
+            canvas.addEventListener('click', placeTower);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            gameInterval = setInterval(gameLoop, 50);  // Slower game loop interval
+            spawnEnemiesInterval = setInterval(spawnEnemies, spawnInterval);
+            setInterval(increaseDifficulty, 10000); // Slowed the rate of difficulty increase
+            upgradeRangeButton.addEventListener('click', upgradeTowerRange);
+            upgradeFireRateButton.addEventListener('click', upgradeTowerFireRate);
+        }
+
+        function placeTower(event) {
+            if (money >= towerCost) {
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor((event.clientX - rect.left) / gridSize) * gridSize + gridSize / 2;
+                const y = Math.floor((event.clientY - rect.top) / gridSize) * gridSize + gridSize / 2;
+
+                // Ensure the tower is not placed on a wall or in the path
+                if (maze[Math.floor(y / gridSize)][Math.floor(x / gridSize)] === 0) {
+                    towers.push(new Tower(x, y));
+                    money -= towerCost;
+                    updateInfoDisplay();
+                }
+            }
+        }
+
+        function upgradeTowerRange() {
+            if (money >= rangeUpgradeCost) {
+                money -= rangeUpgradeCost;
+                rangeUpgrades++;
+                towers.forEach(tower => tower.range += 50);
+                updateInfoDisplay();
+            }
+        }
+
+        function upgradeTowerFireRate() {
+            if (money >= fireRateUpgradeCost) {
+                money -= fireRateUpgradeCost;
+                fireRateUpgrades++;
+                towers.forEach(tower => tower.fireRate = Math.max(10, tower.fireRate - 10));
+                updateInfoDisplay();
+            }
+        }
+
+        function updateInfoDisplay() {
+            infoDisplay.textContent = `Money: $${money} | Health: ${health} | Range Upgrades: ${rangeUpgrades} ⚙️ | Fire Rate Upgrades: ${fireRateUpgrades} ⚙️`;
+            upgradeRangeButton.textContent = `Upgrade Tower Range ($${rangeUpgradeCost})`;
+            upgradeFireRateButton.textContent = `Upgrade Tower Fire Rate ($${fireRateUpgradeCost})`;
+        }
+
+        function spawnEnemies() {
+            for (let i = 0; i < spawnCount; i++) {
+                let health = 5 + Math.floor(enemiesKilled / 10);
+                let path = Math.random() < 0.5 ? path1 : path2;
+                if (path.length > 0) {
+                    enemies.push(new Enemy(path, enemySpeed, health));
+                }
+            }
+        }
+
+        function increaseDifficulty() {
+            spawnCount += 1;
+            enemySpeed += 0.05;  // Slower increment
+            if (spawnInterval > 500) {
+                clearInterval(spawnEnemiesInterval);
+                spawnInterval -= 100;
+                spawnEnemiesInterval = setInterval(spawnEnemies, spawnInterval);
+            }
+        }
+
+        function handleMouseMove(event) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            hoveredTower = null;
+            for (let tower of towers) {
+                if (mouseX >= tower.x - 10 && mouseX <= tower.x + 10 && mouseY >= tower.y - 10 && mouseY <= tower.y + 10) {
+                    hoveredTower = tower;
+                    break;
+                }
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (timestamp - lastFrameTime > frameDuration) {
+                currentFrame = (currentFrame + 1) % totalFrames;
+                lastFrameTime = timestamp;
+            }
+
+            drawMaze();
+
+            for (let i = towers.length - 1; i >= 0; i--) {
+                let tower = towers[i];
+                tower.draw();
+                tower.shoot(enemies);
+                tower.updateBullets();
+                tower.drawBullets();
+            }
+
+            for (let enemy of enemies) {
+                enemy.move();
+                enemy.draw();
+
+                if (enemy.hitsEnd()) {
+                    health -= 1;
+                    updateInfoDisplay();
+                    if (health <= 0) {
+                        gameOver = true;
+                        alert(`Game Over! You killed ${enemiesKilled} enemies.`);
+                        clearInterval(gameInterval);
+                        clearInterval(spawnEnemiesInterval);
+                        return;
+                    }
+                }
+
+                for (let i = towers.length - 1; i >= 0; i--) {
+                    let tower = towers[i];
+                    if (isColliding(enemy, tower)) {
+                        towers.splice(i, 1);
+                        updateInfoDisplay();
+                        break;
+                    }
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (enemies[i].isDead() || enemies[i].hitsEnd()) {
+                    enemies.splice(i, 1);
+                }
+            }
+        }
+
+        function isColliding(enemy, tower) {
+            return enemy.x >= tower.x - 20 && enemy.x <= tower.x + 20 && enemy.y >= tower.y - 20 && enemy.y <= tower.y + 20;
+        }
+
+        initGame();
+    </script>
+</body>
+</html>

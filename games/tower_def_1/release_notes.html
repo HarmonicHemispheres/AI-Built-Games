@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Release Notes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+        }
+        .card {
+            position: relative;
+            overflow: hidden;
+        }
+        .card:hover .overlay {
+            opacity: 1;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .overlay button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #fbbf24;
+            color: #1f2937;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .back-button {
+            display: inline-block;
+            background: #fbbf24;
+            color: #1f2937;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-decoration: none;
+        }
+        .image-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .description a {
+            color: #1e90ff;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-4">
+        <div class="flex justify-between items-center mb-8">
+            <a class="back-button" href="../../index.html">BACK</a>
+            <h1 class="text-3xl text-yellow-400">Tower Defense Example</h1>
+            <span class="bg-yellow-400 text-gray-900 px-2 py-1 rounded">RELEASE NOTES</span>
+        </div>
+        <div class="flex">
+            <div class="w-1/3 p-4">
+                <div class="bg-gray-700 h-40 mb-4 flex items-center justify-center rounded-lg border-2 border-yellow-400 image-container">
+                    <img src="./banner.png" alt="Game Banner">
+                </div>
+                <p class="text-sm description mb-4">
+                    This is a simple tower defense game made completely with ChatGPT-4o.
+                    <br><br>
+                    Find the latest game updates in the ChatGPT Thread: <a href="https://chatgpt.com/share/c29b9d34-591c-41f6-a45b-9ea217eadcf1">ChatGPT Dev Thread</a>
+                </p>
+            </div>
+            <div class="w-2/3 p-4 overflow-y-auto">
+                <div class="mb-8">
+                    <h2 class="text-xl text-yellow-400 mb-2">🚧 v1.1 - WHATS NEXT 🚧</h2>
+                    <p>
+                        ♻️ Update map generation so there is always a path to the target<br>
+                        🐞 fix issue with start portal assets being underneath path<br>
+                    </p>
+                </div>
+                <br>
+                <div class="mb-8">
+                    <h2 class="text-xl text-yellow-400 mb-2">v1.0</h2>
+                    <p class="list-disc list-inside">
+                        ⭐ Added release notes for project<br>
+                        🐞 Fixed issue with enemies moving too fast<br>
+                    </p>
+                </div>
+                <br>
+                <div class="mb-8">
+                    <h2 class="text-xl text-yellow-400 mb-2">v0.1 - Initial Version</h2>
+                    <p>
+                        ⭐ Added A* path finding for enemies <br>
+                        ⭐ Added upgrades system <br>
+                        ♻️ Used GPT-4 to generate pixel images for assets instead of simple shapes<br>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
