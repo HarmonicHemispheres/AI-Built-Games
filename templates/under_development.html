@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Under Development</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background: black;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+        .centered-back-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fbbf24;
+            color: #1f2937;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            display: block;
+        }
+        .banner-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fbbf24;
+            font-size: 2rem;
+            text-align: center;
+            animation: moveAndRotate 5s infinite linear;
+        }
+        @keyframes moveAndRotate {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+            50% {
+                transform: translate(-50%, -45%) rotate(5deg);
+            }
+            100% {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas-container">
+        <canvas id="animationCanvas"></canvas>
+        <div class="banner-text">Under Development</div>
+    </div>
+    <a class="centered-back-button" href="../index.html">BACK</a>
+
+    <script>
+        const canvas = document.getElementById('animationCanvas');
+        const ctx = canvas.getContext('2d');
+        let squares = [];
+        const squareSize = 20;
+        const gridSpacing = 40;
+        const fadeDuration = 500; // in milliseconds
+        const maxDepth = 4;
+        const delay = 100; // in milliseconds
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        function drawSquare(x, y, alpha) {
+            ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
+            ctx.fillRect(x - squareSize / 2, y - squareSize / 2, squareSize, squareSize);
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const now = Date.now();
+
+            squares = squares.filter(square => {
+                const age = now - square.timestamp;
+                const alpha = 1 - age / fadeDuration;
+                if (alpha > 0) {
+                    drawSquare(square.x, square.y, alpha);
+                    return true;
+                }
+                return false;
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        function spawnSquare(x, y, depth = 0) {
+            const gridX = Math.floor(x / gridSpacing) * gridSpacing;
+            const gridY = Math.floor(y / gridSpacing) * gridSpacing;
+            squares.push({ x: gridX, y: gridY, timestamp: Date.now() });
+
+            if (depth < maxDepth) {
+                const directions = [
+                    { dx: gridSpacing, dy: 0 },
+                    { dx: -gridSpacing, dy: 0 },
+                    { dx: 0, dy: gridSpacing },
+                    { dx: 0, dy: -gridSpacing }
+                ];
+
+                const branches = Math.floor(Math.random() * 3) + 1; // Random between 1 and 3 branches
+
+                for (let i = 0; i < branches; i++) {
+                    setTimeout(() => {
+                        const dir = directions[Math.floor(Math.random() * directions.length)];
+                        spawnSquare(gridX + dir.dx, gridY + dir.dy, depth + 1);
+                    }, delay * i);
+                }
+            }
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            spawnSquare(e.clientX, e.clientY);
+        });
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
