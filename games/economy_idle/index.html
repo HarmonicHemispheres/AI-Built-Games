@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Economy Idle Game</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(20, 100px);
+      grid-gap: 5px;
+      margin-top: 20px;
+    }
+    .grid-cell {
+      width: 100px;
+      height: 100px;
+      border: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-size: 24px;
+    }
+    .fade-text {
+      position: absolute;
+      animation: fadeOut 2s forwards;
+      top: -20px;
+      font-size: 18px;
+    }
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        top: -50px;
+      }
+    }
+    .item-stock {
+      font-size: 14px;
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex">
+  <div class="fixed left-0 top-0 w-64 h-full bg-white shadow-lg p-4 flex flex-col">
+    <div id="hand" class="flex flex-col space-y-4 mb-4"></div>
+    <div class="mt-auto text-xl font-bold">
+      Cash: <span id="cash">$500</span>
+    </div>
+  </div>
+  <div class="ml-64 p-4 overflow-auto w-full h-full">
+    <div id="game-board" class="grid-container"></div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
