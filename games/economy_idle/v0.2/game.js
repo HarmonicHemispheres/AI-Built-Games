@@ -1,12 +1,8 @@
 const initialCash = 500;
-const taxRate = 20;
-const timerDuration = 500;
 let cash = initialCash;
 let selectedTileIndex = 0;
 let upgradeCount = 0;
 let manufacturingUpgradeCount = 0;
-let timer = timerDuration;
-let level = 0;
 const hand = [];
 const grid = Array.from({ length: 20 }, () => Array(20).fill(null));
 const tileTypes = ["🏠", "🪙", "🏭", "🌳", "❌"];
@@ -21,11 +17,6 @@ const tileAttributes = {
 const gameBoard = document.getElementById("game-board");
 const handElement = document.getElementById("hand");
 const cashElement = document.getElementById("cash");
-const timerElement = document.getElementById("timer");
-const progressBarElement = document.getElementById("progress-bar");
-const taxAmountElement = document.getElementById("tax-amount");
-const levelElement = document.getElementById("level");
-const levelPremiumElement = document.getElementById("level-premium");
 const newHandButton = document.getElementById("new-hand-button");
 const upgradeButton = document.getElementById("upgrade-button");
 const upgradeCountElement = document.getElementById("upgrade-count");
@@ -40,7 +31,6 @@ function initializeGame() {
   renderCash();
   createGrid();
   setInterval(gameTick, 1000);
-  setInterval(updateTimer, 1000);
   newHandButton.addEventListener("click", drawNewHand);
   upgradeButton.addEventListener("click", upgradeResources);
   manufacturingUpgradeButton.addEventListener("click", upgradeManufacturing);
@@ -69,23 +59,6 @@ function selectTile(index) {
 
 function renderCash() {
   cashElement.innerText = `$${cash}`;
-}
-
-function renderTaxAmount() {
-  const numberOfTiles = grid.flat().filter(tile => tile !== null).length;
-  const levelPremium = numberOfTiles * taxRate * 0.2 * level;
-  const taxAmount = numberOfTiles * taxRate + levelPremium;
-  taxAmountElement.innerText = `$${taxAmount.toFixed(2)}`;
-  levelPremiumElement.innerText = `$${levelPremium.toFixed(2)}`;
-}
-
-function renderProgressBar() {
-  const progress = (timer / timerDuration) * 100;
-  progressBarElement.style.width = `${progress}%`;
-}
-
-function renderLevel() {
-  levelElement.innerText = level;
 }
 
 function createGrid() {
@@ -130,7 +103,6 @@ function placeTile(x, y) {
   addTileToHand();
   renderHand();
   renderCash();
-  renderTaxAmount(); // Update the tax amount whenever a tile is placed
 }
 
 function createTileElement(tile) {
@@ -329,28 +301,6 @@ function upgradeManufacturing() {
   } else {
     alert("Not enough cash to upgrade!");
   }
-}
-
-function updateTimer() {
-  timer--;
-  if (timer <= 0) {
-    applyTax();
-    timer = timerDuration;
-  }
-  timerElement.innerText = timer;
-  renderProgressBar();
-}
-
-function applyTax() {
-  const numberOfTiles = grid.flat().filter(tile => tile !== null).length;
-  const levelPremium = numberOfTiles * taxRate * 0.2 * level;
-  const taxAmount = numberOfTiles * taxRate + levelPremium;
-  cash -= taxAmount;
-  if (cash < 0) cash = 0; // Ensure cash does not go below 0
-  renderCash();
-  level++;
-  renderLevel();
-  renderTaxAmount(); // Update the tax amount display
 }
 
 initializeGame();
