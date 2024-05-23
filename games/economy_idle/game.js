@@ -1,28 +1,39 @@
 const initialCash = 500;
 let cash = initialCash;
 let selectedTileIndex = 0;
+let upgradeCount = 0;
+let manufacturingUpgradeCount = 0;
 const hand = [];
 const grid = Array.from({ length: 20 }, () => Array(20).fill(null));
-const tileTypes = ["🏠", "🪙", "🏭", "🌳"];
+const tileTypes = ["🏠", "🪙", "🏭", "🌳", "❌"];
 const tileAttributes = {
-  "🏠": {},
-  "🪙": { itemStock: 0, maxItemStock: 10, sellRate: 3 },
-  "🏭": { itemYield: 1, itemStock: 0 },
-  "🌳": { resourceCount: 200 }
+  "🏠": { cost: 20 },
+  "🪙": { itemStock: 0, maxItemStock: 10, sellRate: 3, cost: 30 },
+  "🏭": { itemYield: 1, itemStock: 0, cost: 40, upgradeLevel: 0 },
+  "🌳": { resources: 200, cost: 40 },
+  "❌": { cost: 0 } // Cost is 0 because it doesn't cost anything to use this tile
 };
 
 const gameBoard = document.getElementById("game-board");
 const handElement = document.getElementById("hand");
 const cashElement = document.getElementById("cash");
+const newHandButton = document.getElementById("new-hand-button");
+const upgradeButton = document.getElementById("upgrade-button");
+const upgradeCountElement = document.getElementById("upgrade-count");
+const manufacturingUpgradeButton = document.getElementById("manufacturing-upgrade-button");
+const manufacturingUpgradeCountElement = document.getElementById("manufacturing-upgrade-count");
 
 function initializeGame() {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     addTileToHand();
   }
   renderHand();
   renderCash();
   createGrid();
   setInterval(gameTick, 1000);
+  newHandButton.addEventListener("click", drawNewHand);
+  upgradeButton.addEventListener("click", upgradeResources);
+  manufacturingUpgradeButton.addEventListener("click", upgradeManufacturing);
 }
 
 function addTileToHand() {
@@ -35,7 +46,7 @@ function renderHand() {
   hand.forEach((tile, index) => {
     const tileElement = document.createElement("div");
     tileElement.className = `hand-tile p-4 border-4 ${index === selectedTileIndex ? 'border-yellow-500' : 'border-transparent'} cursor-pointer`;
-    tileElement.innerText = tile.type;
+    tileElement.innerHTML = `${tile.type} <div class="text-sm text-gray-600">Cost: $${tile.cost}</div>`;
     tileElement.addEventListener("click", () => selectTile(index));
     handElement.appendChild(tileElement);
   });
@@ -63,15 +74,31 @@ function createGrid() {
 }
 
 function placeTile(x, y) {
-  if (cash < 15) return alert("Not enough cash!");
-  if (grid[x][y]) return; // If cell is already occupied, do nothing
   const selectedTile = hand[selectedTileIndex];
+  if (selectedTile.type === "❌") {
+    if (grid[x][y]) {
+      grid[x][y] = null;
+      const cell = gameBoard.children[x * 20 + y];
+      cell.innerHTML = "";
+      cash += 25;
+      renderCash();
+    }
+    hand.splice(selectedTileIndex, 1);
+    addTileToHand();
+    renderHand();
+    return;
+  }
+  if (cash < selectedTile.cost) return alert("Not enough cash!");
+  if (grid[x][y]) return; // If cell is already occupied, do nothing
   const newTile = { ...selectedTile, x, y };
+  if (newTile.type === "🌳" && upgradeCount > 0) {
+    newTile.resources = 300;
+  }
   grid[x][y] = newTile;
   const tileElement = createTileElement(newTile);
   const targetCell = gameBoard.children[x * 20 + y];
   targetCell.appendChild(tileElement);
-  cash -= 15;
+  cash -= selectedTile.cost;
   hand.splice(selectedTileIndex, 1);
   addTileToHand();
   renderHand();
@@ -81,20 +108,36 @@ function placeTile(x, y) {
 function createTileElement(tile) {
   const tileElement = document.createElement("div");
   tileElement.className = "grid-cell";
-  tileElement.innerHTML = tile.type + (tile.itemStock !== undefined ? `<div class="item-stock">Stock: ${tile.itemStock}</div>` : "");
+  if (tile.type === "🌳") {
+    tileElement.style.backgroundColor = "lightgreen";
+  } else if (tile.type === "🏭") {
+    tileElement.style.backgroundColor = "lightcoral";
+  } else if (tile.type === "🪙") {
+    tileElement.style.backgroundColor = "lightblue";
+  }
+  tileElement.innerHTML = tile.type + (tile.itemStock !== undefined ? `<div class="item-stock">Stock: ${tile.itemStock}</div>` : "") + (tile.resources !== undefined ? `<div class="item-stock">Resources: ${tile.resources}</div>` : "");
   return tileElement;
 }
 
 function updateTileElement(tile) {
   const tileElement = gameBoard.children[tile.x * 20 + tile.y].firstChild;
   if (tileElement) {
-    tileElement.innerHTML = tile.type + (tile.itemStock !== undefined ? `<div class="item-stock">Stock: ${tile.itemStock}</div>` : "");
+    if (tile.type === "🌳") {
+      tileElement.style.backgroundColor = "lightgreen";
+    } else if (tile.type === "🏭") {
+      tileElement.style.backgroundColor = "lightcoral";
+    } else if (tile.type === "🪙") {
+      tileElement.style.backgroundColor = "lightblue";
+    } else {
+      tileElement.style.backgroundColor = "";
+    }
+    tileElement.innerHTML = tile.type + (tile.itemStock !== undefined ? `<div class="item-stock">Stock: ${tile.itemStock}</div>` : "") + (tile.resources !== undefined ? `<div class="item-stock">Resources: ${tile.resources}</div>` : "");
   }
 }
 
 function gameTick() {
-  grid.forEach(row => {
-    row.forEach(tile => {
+  grid.forEach((row, rowIndex) => {
+    row.forEach((tile, colIndex) => {
       if (tile) {
         if (tile.type === "🏭") {
           generateManufacturingItems(tile);
@@ -102,7 +145,11 @@ function gameTick() {
           moveItemsToCommercial(tile);
           generateRevenue(tile);
         }
-        if (tile.itemStock !== undefined) {
+        if (tile.resources !== undefined && tile.resources <= 0) {
+          grid[rowIndex][colIndex] = null;
+          const cell = gameBoard.children[rowIndex * 20 + colIndex];
+          cell.innerHTML = "";
+        } else {
           updateTileElement(tile);
         }
       }
@@ -115,9 +162,9 @@ function generateManufacturingItems(tile) {
     const nearbyResources = getNearbyTiles(tile, "🌳");
     if (nearbyResources.length > 0) {
       nearbyResources.forEach(resourceTile => {
-        if (resourceTile.resourceCount > 0) {
+        if (resourceTile.resources > 0) {
           tile.itemStock = Math.min(tile.itemStock + tile.itemYield, 10);
-          resourceTile.resourceCount--;
+          resourceTile.resources = Math.max(resourceTile.resources - (1 + tile.upgradeLevel), 0);
         }
       });
     }
@@ -175,6 +222,49 @@ function displayFadeText(tile, amount) {
   setTimeout(() => {
     fadeText.remove();
   }, 2000);
+}
+
+function drawNewHand() {
+  if (cash >= 50) {
+    cash -= 50;
+    hand.length = 0; // Clear current hand
+    for (let i = 0; i < 5; i++) {
+      addTileToHand();
+    }
+    renderHand();
+    renderCash();
+  } else {
+    alert("Not enough cash to draw a new hand!");
+  }
+}
+
+function upgradeResources() {
+  if (cash >= 100) {
+    cash -= 100;
+    upgradeCount++;
+    renderCash();
+    upgradeCountElement.innerText = upgradeCount;
+  } else {
+    alert("Not enough cash to upgrade!");
+  }
+}
+
+function upgradeManufacturing() {
+  if (cash >= 150) {
+    cash -= 150;
+    manufacturingUpgradeCount++;
+    renderCash();
+    manufacturingUpgradeCountElement.innerText = manufacturingUpgradeCount;
+    grid.forEach(row => {
+      row.forEach(tile => {
+        if (tile && tile.type === "🏭") {
+          tile.upgradeLevel = manufacturingUpgradeCount;
+        }
+      });
+    });
+  } else {
+    alert("Not enough cash to upgrade!");
+  }
 }
 
 initializeGame();

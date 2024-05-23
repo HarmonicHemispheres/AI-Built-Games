@@ -45,6 +45,15 @@
 <body class="bg-gray-100 flex">
   <div class="fixed left-0 top-0 w-64 h-full bg-white shadow-lg p-4 flex flex-col">
     <div id="hand" class="flex flex-col space-y-4 mb-4"></div>
+    <button id="new-hand-button" class="bg-red-500 text-white py-2 px-4 mb-4">Draw New Hand ($50)</button>
+    <button id="upgrade-button" class="bg-blue-500 text-white py-2 px-4 mb-4">Upgrade Natural Resources ($100)</button>
+    <div class="mb-4">
+      Natural Upgrades Used: <span id="upgrade-count">0</span>
+    </div>
+    <button id="manufacturing-upgrade-button" class="bg-green-500 text-white py-2 px-4 mb-4">Upgrade Manufacturing ($150)</button>
+    <div class="mb-4">
+      Manufacturing Upgrades Used: <span id="manufacturing-upgrade-count">0</span>
+    </div>
     <div class="mt-auto text-xl font-bold">
       Cash: <span id="cash">$500</span>
     </div>
