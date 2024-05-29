@@ -217,38 +217,20 @@
         function generateMaze() {
             maze = Array.from({ length: rows }, () => Array(cols).fill(0));
 
-            path1 = astar(start1, end, maze);
-            path2 = astar(start2, end, maze);
-
-            // Ensure paths exist
-            if (path1.length > 0 && path2.length > 0) {
-                // Place obstacles in non-path locations
-                for (let i = 0; i < rows; i++) {
-                    for (let j = 0; j < cols; j++) {
-                        if (!isPath(i, j, path1) && !isPath(i, j, path2) && Math.random() < 0.3) {
-                            maze[i][j] = 1; // 1 represents a wall
-                        }
+            // Generate impassable blocks randomly
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (Math.random() < 0.3 && !(i === start1.y && j === start1.x) && !(i === start2.y && j === start2.x) && !(i === end.y && j === end.x)) {
+                        maze[i][j] = 1; // 1 represents a wall
                     }
                 }
-            } else {
-                // Retry maze generation if paths are not valid
-                generateMaze();
             }
-        }
-
-        function isPath(row, col, path) {
-            return path.some(node => node.y === row && node.x === col);
+            path1 = astar(start1, end, maze);
+            path2 = astar(start2, end, maze);
         }
 
         function heuristic(a, b) {
             return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-        }
-
-        function shuffle(array) {
-            for (let i = array.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[j], array[i]];
-            }
         }
 
         function astar(start, end, maze) {
@@ -274,10 +256,7 @@
 
                 openSet = openSet.filter(node => node !== current);
 
-                let neighbors = getNeighbors(current, maze);
-                shuffle(neighbors);
-
-                for (let neighbor of neighbors) {
+                for (let neighbor of getNeighbors(current, maze)) {
                     let tentative_gScore = gScore[current.y][current.x] + 1;
 
                     if (tentative_gScore < gScore[neighbor.y][neighbor.x]) {
