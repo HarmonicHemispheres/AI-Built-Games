@@ -1,6 +1,6 @@
 <!-- Banner Image -->
 <p align="center">
-  <img src="https://your-domain.com/path-to-your-banner-image/banner.png" alt="Games Made with AI Banner" width="100%" />
+  <img src="./banner.png" alt="Games Made with AI Banner" width="100%" />
 </p>
 
 <!-- Project Title -->
@@ -24,7 +24,9 @@
 
 <!-- Project Description -->
 <p align="center">
-  Welcome to <b>Games Made with AI</b>! This repository showcases a collection of games developed using cutting-edge artificial intelligence technologies. Explore each game, learn about their features, and dive into the code to see how AI enhances gameplay experiences.
+  All the games in this project are made entirely with AI products like OpenAI's GPT-4o, o1 and o1-mini. 
+  The process involves using a chat interface like ChatGPT to generate and update the games content. 
+  After the primary content is generated, then I go into the code and update and add small elements i want changed, mostly variable values.
 </p>
 
 <!-- Table of Contents -->
