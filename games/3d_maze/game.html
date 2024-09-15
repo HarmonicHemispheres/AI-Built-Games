@@ -180,6 +180,9 @@
         var projectiles = [];
         var zombies = [];
 
+        // **Added: Minimum spawn distance for zombies**
+        var MIN_SPAWN_DISTANCE = 20; // Adjust as needed
+
         init();
 
         function init() {
@@ -689,14 +692,30 @@
 
             // **Zombie Spawning Mechanism**
             function spawnZombie() {
-                var spawnPos = getRandomOpenCell();
+                var spawnPos;
+                var attempts = 0;
+                var maxAttempts = 100;
+                var playerPos = yawObject.position.clone();
 
-                // Convert maze grid position to world coordinates
-                var worldPos = new THREE.Vector3(
-                    (spawnPos.x - mazeSize / 2) * cellSize + cellSize / 2,
-                    1, // Half of zombie height
-                    (spawnPos.y - mazeSize / 2) * cellSize + cellSize / 2
-                );
+                do {
+                    spawnPos = getRandomOpenCell();
+
+                    // Convert maze grid position to world coordinates
+                    var worldPos = new THREE.Vector3(
+                        (spawnPos.x - mazeSize / 2) * cellSize + cellSize / 2,
+                        1, // Half of zombie height
+                        (spawnPos.y - mazeSize / 2) * cellSize + cellSize / 2
+                    );
+
+                    var distance = worldPos.distanceTo(playerPos);
+                    attempts++;
+                } while (distance < MIN_SPAWN_DISTANCE && attempts < maxAttempts);
+
+                // If a suitable position wasn't found after maxAttempts, proceed anyway
+                if (attempts >= maxAttempts && distance < MIN_SPAWN_DISTANCE) {
+                    // Optionally, you can choose to not spawn the zombie
+                    // return;
+                }
 
                 var zombie = new Zombie(worldPos);
                 zombies.push(zombie);
