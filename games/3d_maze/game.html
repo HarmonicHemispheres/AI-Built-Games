@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Procedurally Generated Maze with Player-Oriented Movement</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+
+        #blocker {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: rgba( 0, 0, 0, 0.5 );
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 3; /* Ensure blocker is below the gameOverModal */
+        }
+
+        #instructions {
+            font-size: 40px;
+            color: #ffffff;
+            text-align: center;
+        }
+
+        #minimap {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 200px;
+            height: 200px;
+            border: 2px solid #000;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 1;
+        }
+
+        #minimap canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #000000;
+            font-size: 20px;
+            z-index: 2;
+            text-shadow: 1px 1px 2px #fff;
+        }
+
+        /* Modal Styles */
+        #gameOverModal {
+            position: fixed;
+            z-index: 4; /* Ensure modal is above all other elements */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto; /* Ensure modal can receive pointer events */
+        }
+
+        #gameOverContent {
+            background-color: #fff;
+            padding: 20px;
+            text-align: center;
+            border-radius: 10px;
+            max-width: 80%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        #gameOverContent p {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        #restartButton {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="blocker">
+        <div id="instructions">
+            Click to play<br>
+            Use W to move forward, A to strafe left, D to strafe right<br>
+            Move the mouse to look around<br>
+            Press "Q" to reveal/hide the entire map<br>
+            Hold "Shift" to move faster
+        </div>
+    </div>
+    <div id="minimap">
+        <canvas id="minimapCanvas" width="200" height="200"></canvas>
+    </div>
+    <div id="hud">
+        <div id="timer">Time Left: 30</div>
+        <div id="score">Score: 0</div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal">
+        <div id="gameOverContent">
+            <p id="gameOverMessage"></p>
+            <button id="restartButton">Restart Game</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+
+        var camera, scene, renderer;
+        var controlsEnabled = false;
+        var moveForward = false;
+        var moveLeft = false;
+        var moveRight = false;
+        var revealMap = false;
+
+        var boost = false; // **Added:** Flag to track if Shift is pressed
+
+        var prevTime = performance.now();
+        var velocity = new THREE.Vector3();
+        var direction = new THREE.Vector3();
+
+        var blocker = document.getElementById( 'blocker' );
+        var instructions = document.getElementById( 'instructions' );
+
+        var objects = [];
+        var wallBoundingBoxes = [];
+
+        var exitCube;
+        var exitBoundingBox;
+
+        var mazeSize = 51; // Should be odd for better room placement
+        var cellSize = 5; // Smaller cell size for rooms and hallways
+
+        var yawObject, pitchObject;
+
+        // Minimap variables
+        var minimapCanvas = document.getElementById('minimapCanvas');
+        var minimapContext = minimapCanvas.getContext('2d');
+        var minimapScale = minimapCanvas.width / (mazeSize * cellSize);
+
+        // Maze data
+        var maze = [];
+
+        // Visited cells tracking
+        var visitedCells = [];
+
+        // Timer and Score variables
+        var timerDuration = 30; // Duration of the timer in seconds
+        var timer = timerDuration; // Initialize timer
+        var score = 0; // Initialize score
+        var timerEnded = false; // To track if the timer has ended
+
+        // Game state variables
+        var gamePaused = false; // To control the game loop
+        var totalTimeSurvived = 0; // Total time the player has survived
+
+        // Current maximum number of rooms
+        var currentMaxRooms = 5; // Start with 5 rooms
+
+        // Day-Night Cycle variables
+        var dayNightCycleTime = 0; // Time within the current day-night cycle
+        var dayNightCycleDuration = 120; // Duration of the day-night cycle in seconds (2 minutes)
+
+        var ambientLight, directionalLight;
+
+        init();
+
+        function init() {
+
+            camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color( 0x87CEEB ); // Default sky color (daytime sky blue)
+
+            // Add ambient light
+            ambientLight = new THREE.AmbientLight( 0xFFFFFF, 0.5 ); // Soft white light
+            scene.add( ambientLight );
+
+            // Add directional light to cast shadows
+            directionalLight = new THREE.DirectionalLight( 0xFFFFFF, 1.0 );
+            directionalLight.position.set( 50, 50, 50 );
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 500;
+            scene.add( directionalLight );
+
+            // Set up shadow properties for the directional light
+            directionalLight.shadow.camera.left = -100;
+            directionalLight.shadow.camera.right = 100;
+            directionalLight.shadow.camera.top = 100;
+            directionalLight.shadow.camera.bottom = -100;
+
+            // Create floor
+            var floorGeometry = new THREE.PlaneGeometry( mazeSize * cellSize, mazeSize * cellSize );
+            var floorMaterial = new THREE.MeshLambertMaterial( { color: 0x228B22 } ); // Forest green
+            var floor = new THREE.Mesh( floorGeometry, floorMaterial );
+            floor.rotation.x = - Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add( floor );
+
+            // Generate procedural maze with random rooms and hallways
+            generateMaze( mazeSize, cellSize );
+
+            function onKeyDown( event ) {
+                switch ( event.code ) {
+
+                    case 'KeyW':
+                        moveForward = true;
+                        break;
+
+                    case 'KeyA':
+                        moveLeft = true;
+                        break;
+
+                    case 'KeyD':
+                        moveRight = true;
+                        break;
+
+                    case 'KeyQ':
+                        revealMap = !revealMap;
+                        break;
+
+                    case 'ShiftLeft': // **Added:** Handle Left Shift
+                    case 'ShiftRight': // **Added:** Handle Right Shift
+                        boost = true;
+                        break;
+                }
+            }
+
+            function onKeyUp( event ) {
+                switch ( event.code ) {
+
+                    case 'KeyW':
+                        moveForward = false;
+                        break;
+
+                    case 'KeyA':
+                        moveLeft = false;
+                        break;
+
+                    case 'KeyD':
+                        moveRight = false;
+                        break;
+
+                    case 'ShiftLeft': // **Added:** Handle Left Shift
+                    case 'ShiftRight': // **Added:** Handle Right Shift
+                        boost = false;
+                        break;
+                }
+            }
+
+            document.addEventListener( 'keydown', onKeyDown, false );
+            document.addEventListener( 'keyup', onKeyUp, false );
+
+            // Pointer lock controls
+            document.body.addEventListener( 'click', function () {
+
+                document.body.requestPointerLock();
+
+            }, false );
+
+            document.addEventListener( 'pointerlockchange', onPointerLockChange, false );
+            document.addEventListener( 'pointerlockerror', onPointerLockError, false );
+
+            function onPointerLockChange() {
+
+                if ( document.pointerLockElement === document.body ) {
+
+                    controlsEnabled = true;
+                    blocker.style.display = 'none';
+
+                } else {
+
+                    controlsEnabled = false;
+                    blocker.style.display = 'flex';
+
+                }
+
+            }
+
+            function onPointerLockError() {
+                instructions.style.display = '';
+            }
+
+            pitchObject = new THREE.Object3D();
+            pitchObject.add( camera );
+
+            yawObject = new THREE.Object3D();
+            yawObject.position.y = 2; // Adjust the player's height
+            // Set player's starting position in a random room
+            var startPos = getRandomOpenCell();
+            yawObject.position.x = ( startPos.x - mazeSize / 2 ) * cellSize + cellSize / 2;
+            yawObject.position.z = ( startPos.y - mazeSize / 2 ) * cellSize + cellSize / 2;
+            yawObject.add( pitchObject );
+            scene.add( yawObject );
+
+            // Create a small box to represent the player for shadow casting
+            var playerGeometry = new THREE.BoxGeometry( 1, 2, 1 );
+            var playerMaterial = new THREE.MeshLambertMaterial( { color: 0x0000ff } );
+            var playerMesh = new THREE.Mesh( playerGeometry, playerMaterial );
+            playerMesh.position.y = 1; // Half of player's height
+            playerMesh.castShadow = true;
+            playerMesh.material.transparent = true;
+            playerMesh.material.opacity = 0; // Make the player mesh invisible
+            yawObject.add( playerMesh );
+
+            document.addEventListener( 'mousemove', onMouseMove, false );
+
+            function onMouseMove( event ) {
+
+                if ( controlsEnabled === false ) return;
+                if ( gamePaused ) return;
+
+                var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+                var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+                yawObject.rotation.y -= movementX * 0.002;
+                pitchObject.rotation.x -= movementY * 0.002;
+
+                pitchObject.rotation.x = Math.max( - Math.PI / 2, Math.min( Math.PI / 2, pitchObject.rotation.x ) );
+
+            }
+
+            renderer = new THREE.WebGLRenderer( { antialias: true } );
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild( renderer.domElement );
+
+            window.addEventListener( 'resize', onWindowResize, false );
+
+            function onWindowResize() {
+
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+
+                renderer.setSize( window.innerWidth, window.innerHeight );
+
+            }
+
+            var playerBoundingBox = new THREE.Box3( new THREE.Vector3(), new THREE.Vector3() );
+
+            function animate() {
+
+                requestAnimationFrame( animate );
+
+                if ( controlsEnabled && !gamePaused ) {
+
+                    var time = performance.now();
+                    var delta = ( time - prevTime ) / 1000;
+
+                    // Update total time survived
+                    totalTimeSurvived += delta;
+
+                    // Update timer
+                    if (timer > 0) {
+                        timer -= delta;
+                        if (timer <= 0) {
+                            timer = 0;
+                            if (!timerEnded) {
+                                // Reset the player's score to zero
+                                score = 0;
+                                timerEnded = true;
+                                gameOver();
+                            }
+                        }
+                    }
+
+                    // Update day-night cycle time
+                    dayNightCycleTime = totalTimeSurvived % dayNightCycleDuration;
+
+                    // Adjust lighting based on day-night cycle
+                    updateLighting();
+
+                    // **Modified:** Adjust movement speed based on boost
+                    var baseSpeed = 40.0; // Slower default speed
+                    var boostSpeed = 100.0; // Faster speed when Shift is held
+                    var speed = boost ? boostSpeed * delta : baseSpeed * delta;
+
+                    // Save previous position
+                    var prevPosition = yawObject.position.clone();
+
+                    // Compute forward and right vectors
+                    var forward = new THREE.Vector3( 0, 0, -1 );
+                    forward.applyQuaternion( yawObject.quaternion ).normalize();
+
+                    var right = new THREE.Vector3( 1, 0, 0 );
+                    right.applyQuaternion( yawObject.quaternion ).normalize();
+
+                    // Build movement vector
+                    var movement = new THREE.Vector3();
+
+                    if ( moveForward ) movement.add( forward );
+                    if ( moveLeft ) movement.sub( right );
+                    if ( moveRight ) movement.add( right );
+
+                    if ( movement.lengthSq() > 0 ) {
+                        movement.normalize();
+                        movement.multiplyScalar( speed );
+
+                        // Attempt to move along X axis
+                        yawObject.position.x += movement.x;
+
+                        // Update player's bounding box
+                        playerBoundingBox.setFromCenterAndSize( yawObject.position.clone(), new THREE.Vector3( 1.0, 2, 1.0 ) );
+
+                        // Check for collisions in X direction
+                        var collisionX = false;
+                        for ( var i = 0; i < wallBoundingBoxes.length; i++ ) {
+                            var wallBoundingBox = wallBoundingBoxes[ i ];
+
+                            if ( playerBoundingBox.intersectsBox( wallBoundingBox ) ) {
+                                // Collision detected in X direction, revert X position
+                                yawObject.position.x = prevPosition.x;
+                                collisionX = true;
+                                break;
+                            }
+                        }
+
+                        // Attempt to move along Z axis
+                        yawObject.position.z += movement.z;
+
+                        // Update player's bounding box
+                        playerBoundingBox.setFromCenterAndSize( yawObject.position.clone(), new THREE.Vector3( 1.0, 2, 1.0 ) );
+
+                        // Check for collisions in Z direction
+                        var collisionZ = false;
+                        for ( var i = 0; i < wallBoundingBoxes.length; i++ ) {
+                            var wallBoundingBox = wallBoundingBoxes[ i ];
+
+                            if ( playerBoundingBox.intersectsBox( wallBoundingBox ) ) {
+                                // Collision detected in Z direction, revert Z position
+                                yawObject.position.z = prevPosition.z;
+                                collisionZ = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Rotate the exit cube
+                    exitCube.rotation.y += 0.01;
+                    exitCube.updateMatrixWorld( true );
+                    exitCube.geometry.computeBoundingBox();
+                    exitBoundingBox.copy( exitCube.geometry.boundingBox ).applyMatrix4( exitCube.matrixWorld );
+
+                    // Check for collision with exit cube
+                    if ( playerBoundingBox.intersectsBox( exitBoundingBox ) ) {
+                        // Player has reached the exit
+                        resetGame();
+                    }
+
+                    // Update visited cells
+                    updateVisitedCells();
+
+                    // Update minimap
+                    updateMinimap();
+
+                    // Update the HUD display
+                    document.getElementById('timer').textContent = 'Time Left: ' + Math.ceil(timer);
+                    document.getElementById('score').textContent = 'Score: ' + score;
+
+                    prevTime = time;
+
+                }
+
+                renderer.render( scene, camera );
+
+            }
+
+            animate();
+
+            // Restart button event listener
+            document.getElementById('restartButton').addEventListener('click', function() {
+                restartGame();
+            });
+
+        }
+
+        function generateMaze( mazeSize, cellSize ) {
+            maze = createMazeWithRandomRooms( mazeSize );
+            visitedCells = []; // Reset visited cells
+            var wallMaterial = new THREE.MeshLambertMaterial( { color: 0x888888 } );
+
+            // Build walls based on maze array
+            var wallGeometry = new THREE.BoxGeometry( cellSize, 5, cellSize );
+            for ( var i = 0; i < mazeSize; i++ ) {
+                visitedCells[ i ] = [];
+                for ( var j = 0; j < mazeSize; j++ ) {
+                    visitedCells[ i ][ j ] = false; // Initialize visited cells
+                    if ( maze[ i ][ j ] === 1 ) {
+                        var wall = new THREE.Mesh( wallGeometry, wallMaterial );
+                        wall.position.x = ( i - mazeSize / 2 ) * cellSize + cellSize / 2;
+                        wall.position.y = 2.5;
+                        wall.position.z = ( j - mazeSize / 2 ) * cellSize + cellSize / 2;
+
+                        wall.castShadow = true;
+                        wall.receiveShadow = true;
+
+                        wall.updateMatrixWorld( true );
+                        wall.geometry.computeBoundingBox();
+                        var wallBoundingBox = new THREE.Box3().setFromObject( wall );
+                        wallBoundingBoxes.push( wallBoundingBox );
+
+                        scene.add( wall );
+                        objects.push( wall );
+                    }
+                }
+            }
+
+            // Place the exit cube at a random open location
+            var exitPos = getRandomOpenCell();
+            var exitGeometry = new THREE.BoxGeometry( cellSize / 2, cellSize / 2, cellSize / 2 );
+            var exitMaterial = new THREE.MeshLambertMaterial( { color: 0xff0000 } );
+            exitCube = new THREE.Mesh( exitGeometry, exitMaterial );
+
+            exitCube.position.x = ( exitPos.x - mazeSize / 2 ) * cellSize + cellSize / 2;
+            exitCube.position.y = cellSize / 4; // Half of its height
+            exitCube.position.z = ( exitPos.y - mazeSize / 2 ) * cellSize + cellSize / 2;
+
+            exitCube.castShadow = true;
+            exitCube.receiveShadow = true;
+
+            exitCube.updateMatrixWorld( true );
+            exitCube.geometry.computeBoundingBox();
+            exitBoundingBox = new THREE.Box3().setFromObject( exitCube );
+
+            scene.add( exitCube );
+        }
+
+        function createMazeWithRandomRooms( size ) {
+            var mazeArray = [];
+            for ( var i = 0; i < size; i++ ) {
+                mazeArray[ i ] = [];
+                for ( var j = 0; j < size; j++ ) {
+                    mazeArray[ i ][ j ] = 1; // Initialize all cells as walls
+                }
+            }
+
+            var maxRooms = currentMaxRooms; // Use currentMaxRooms instead of a fixed number
+            var rooms = [];
+
+            // Create rooms
+            for ( var r = 0; r < maxRooms; r++ ) {
+                var roomWidth = getRandomOdd(3, 9); // Random odd number between 3 and 9
+                var roomHeight = getRandomOdd(3, 9);
+                var roomX = getRandomOdd(1, size - roomWidth - 1);
+                var roomY = getRandomOdd(1, size - roomHeight - 1);
+
+                var newRoom = { x: roomX, y: roomY, width: roomWidth, height: roomHeight };
+                var overlaps = false;
+
+                for ( var otherRoom of rooms ) {
+                    if ( roomsOverlap( newRoom, otherRoom ) ) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+
+                if ( !overlaps ) {
+                    createRoom( newRoom, mazeArray );
+                    rooms.push( newRoom );
+                }
+            }
+
+            // Connect rooms with hallways
+            for ( var i = 0; i < rooms.length - 1; i++ ) {
+                var roomA = rooms[ i ];
+                var roomB = rooms[ i + 1 ];
+                connectRooms( roomA, roomB, mazeArray );
+            }
+
+            // Ensure outer walls are solid
+            for ( var i = 0; i < size; i++ ) {
+                mazeArray[ i ][ 0 ] = 1;
+                mazeArray[ i ][ size - 1 ] = 1;
+                mazeArray[ 0 ][ i ] = 1;
+                mazeArray[ size - 1 ][ i ] = 1;
+            }
+
+            return mazeArray;
+        }
+
+        function createRoom( room, mazeArray ) {
+            for ( var i = room.x; i < room.x + room.width; i++ ) {
+                for ( var j = room.y; j < room.y + room.height; j++ ) {
+                    mazeArray[ i ][ j ] = 0; // Mark as open space
+                }
+            }
+        }
+
+        function connectRooms( roomA, roomB, mazeArray ) {
+            var pointA = { x: getRandomInt( roomA.x + 1, roomA.x + roomA.width - 2 ), y: getRandomInt( roomA.y + 1, roomA.y + roomA.height - 2 ) };
+            var pointB = { x: getRandomInt( roomB.x + 1, roomB.x + roomB.width - 2 ), y: getRandomInt( roomB.y + 1, roomB.y + roomB.height - 2 ) };
+
+            // Randomly decide whether to go horizontal then vertical or vice versa
+            if ( Math.random() < 0.5 ) {
+                carveHorizontalTunnel( mazeArray, pointA.x, pointB.x, pointA.y );
+                carveVerticalTunnel( mazeArray, pointA.y, pointB.y, pointB.x );
+            } else {
+                carveVerticalTunnel( mazeArray, pointA.y, pointB.y, pointA.x );
+                carveHorizontalTunnel( mazeArray, pointA.x, pointB.x, pointB.y );
+            }
+        }
+
+        function carveHorizontalTunnel( mazeArray, x1, x2, y ) {
+            for ( var x = Math.min( x1, x2 ); x <= Math.max( x1, x2 ); x++ ) {
+                mazeArray[ x ][ y ] = 0;
+            }
+        }
+
+        function carveVerticalTunnel( mazeArray, y1, y2, x ) {
+            for ( var y = Math.min( y1, y2 ); y <= Math.max( y1, y2 ); y++ ) {
+                mazeArray[ x ][ y ] = 0;
+            }
+        }
+
+        function roomsOverlap( roomA, roomB ) {
+            return ( roomA.x <= roomB.x + roomB.width &&
+                     roomA.x + roomA.width >= roomB.x &&
+                     roomA.y <= roomB.y + roomB.height &&
+                     roomA.y + roomA.height >= roomB.y );
+        }
+
+        function getRandomOdd( min, max ) {
+            var num = Math.floor( Math.random() * ( ( max - min ) / 2 + 1 ) ) * 2 + min;
+            if ( num % 2 === 0 ) num += 1;
+            // Ensure the number is within bounds
+            return Math.min( num, max - 1 );
+        }
+
+        function getRandomInt( min, max ) {
+            return Math.floor( Math.random() * ( max - min + 1 ) ) + min;
+        }
+
+        function getRandomOpenCell() {
+            var x, y;
+            do {
+                x = getRandomInt( 1, mazeSize - 2 );
+                y = getRandomInt( 1, mazeSize - 2 );
+            } while ( maze[ x ][ y ] !== 0 );
+            return { x: x, y: y };
+        }
+
+        function resetGame() {
+            // Remove walls from the scene
+            for ( var i = 0; i < objects.length; i++ ) {
+                scene.remove( objects[ i ] );
+            }
+            objects = [];
+            wallBoundingBoxes = [];
+
+            // Remove exit cube
+            scene.remove( exitCube );
+
+            // Increase the number of rooms by 1 or 2
+            currentMaxRooms += getRandomInt(1, 2);
+
+            // Generate new maze
+            generateMaze( mazeSize, cellSize );
+
+            // Reset player's position
+            var startPos = getRandomOpenCell();
+            yawObject.position.set(
+                ( startPos.x - mazeSize / 2 ) * cellSize + cellSize / 2,
+                2,
+                ( startPos.y - mazeSize / 2 ) * cellSize + cellSize / 2
+            );
+
+            // Reset velocity
+            velocity.set( 0, 0, 0 );
+
+            // Increment the score
+            score += 1;
+
+            // Reset the timer
+            timer = timerDuration;
+            timerEnded = false;
+        }
+
+        function gameOver() {
+            // **Added:** Release pointer lock to show the mouse cursor
+            document.exitPointerLock();
+
+            // Display the game over modal
+            document.getElementById('gameOverModal').style.display = 'flex';
+            document.getElementById('gameOverMessage').textContent = 'Time\'s up! You survived for ' + Math.floor(totalTimeSurvived) + ' seconds.';
+            gamePaused = true;
+            controlsEnabled = false;
+
+            // Optional: Focus the modal for accessibility
+            document.getElementById('gameOverContent').focus();
+        }
+
+        function restartGame() {
+            // Hide the game over modal
+            document.getElementById('gameOverModal').style.display = 'none';
+
+            // Reset game variables
+            timer = timerDuration;
+            score = 0;
+            totalTimeSurvived = 0;
+            timerEnded = false;
+            gamePaused = false;
+            controlsEnabled = false; // Will be set to true upon pointer lock
+
+            // Reset the number of rooms to starting value
+            currentMaxRooms = 5;
+
+            // Remove walls from the scene
+            for ( var i = 0; i < objects.length; i++ ) {
+                scene.remove( objects[ i ] );
+            }
+            objects = [];
+            wallBoundingBoxes = [];
+
+            // Remove exit cube
+            scene.remove( exitCube );
+
+            // Generate new maze
+            generateMaze( mazeSize, cellSize );
+
+            // Reset player's position
+            var startPos = getRandomOpenCell();
+            yawObject.position.set(
+                ( startPos.x - mazeSize / 2 ) * cellSize + cellSize / 2,
+                2,
+                ( startPos.y - mazeSize / 2 ) * cellSize + cellSize / 2
+            );
+
+            // Reset velocity
+            velocity.set( 0, 0, 0 );
+
+            // Reset pointer lock by prompting the user to click again
+            instructions.style.display = '';
+            blocker.style.display = 'flex';
+        }
+
+        function updateVisitedCells() {
+            var x = Math.floor( ( yawObject.position.x + ( mazeSize * cellSize ) / 2 ) / cellSize );
+            var z = Math.floor( ( yawObject.position.z + ( mazeSize * cellSize ) / 2 ) / cellSize );
+            if ( x >= 0 && x < mazeSize && z >= 0 && z < mazeSize ) {
+                visitedCells[ x ][ z ] = true;
+            }
+        }
+
+        function updateMinimap() {
+            // Clear the minimap
+            minimapContext.clearRect( 0, 0, minimapCanvas.width, minimapCanvas.height );
+
+            // Determine which cells to draw
+            for ( var i = 0; i < mazeSize; i++ ) {
+                for ( var j = 0; j < mazeSize; j++ ) {
+                    if ( revealMap || visitedCells[ i ][ j ] ) {
+                        // Draw floor
+                        minimapContext.fillStyle = '#eee';
+                        minimapContext.fillRect( i * cellSize * minimapScale, j * cellSize * minimapScale, cellSize * minimapScale, cellSize * minimapScale );
+
+                        // Draw walls
+                        if ( maze[ i ][ j ] === 1 ) {
+                            minimapContext.fillStyle = '#000';
+                            minimapContext.fillRect( i * cellSize * minimapScale, j * cellSize * minimapScale, cellSize * minimapScale, cellSize * minimapScale );
+                        }
+                    } else {
+                        // If not revealed, fill with background color
+                        minimapContext.fillStyle = '#aaa';
+                        minimapContext.fillRect( i * cellSize * minimapScale, j * cellSize * minimapScale, cellSize * minimapScale, cellSize * minimapScale );
+                    }
+                }
+            }
+
+            // Always draw the exit
+            minimapContext.fillStyle = '#f00';
+            minimapContext.fillRect(
+                ( ( exitCube.position.x + ( mazeSize * cellSize ) / 2 ) / cellSize ) * cellSize * minimapScale,
+                ( ( exitCube.position.z + ( mazeSize * cellSize ) / 2 ) / cellSize ) * cellSize * minimapScale,
+                cellSize * minimapScale,
+                cellSize * minimapScale
+            );
+
+            // Draw the player
+            minimapContext.fillStyle = '#00f';
+            var playerX = ( yawObject.position.x + ( mazeSize * cellSize ) / 2 ) * minimapScale;
+            var playerZ = ( yawObject.position.z + ( mazeSize * cellSize ) / 2 ) * minimapScale;
+            minimapContext.beginPath();
+            minimapContext.arc( playerX, playerZ, 5, 0, 2 * Math.PI );
+            minimapContext.fill();
+
+        }
+
+        function updateLighting() {
+            // Calculate the phase of the day-night cycle (from 0 to 1)
+            var cyclePhase = (dayNightCycleTime % dayNightCycleDuration) / dayNightCycleDuration;
+
+            // Calculate the angle for the sun's movement (from 0 to 2π)
+            var sunAngle = cyclePhase * Math.PI * 2;
+
+            // Update directional light position to simulate sun movement
+            directionalLight.position.set(
+                Math.sin(sunAngle) * 50,
+                Math.cos(sunAngle) * 50,
+                directionalLight.position.z
+            );
+
+            // Calculate light intensity using cosine for smooth transitions
+            var lightIntensity = Math.max(0, Math.cos(sunAngle));
+
+            // Adjust directional light intensity
+            directionalLight.intensity = lightIntensity;
+
+            // Adjust ambient light intensity (less intense than directional light)
+            ambientLight.intensity = 0.2 + 0.3 * lightIntensity;
+
+            // Define sky colors
+            var dayColor = new THREE.Color(0x87CEEB);      // Light Sky Blue
+            var twilightColor = new THREE.Color(0xFFA07A); // Light Salmon
+            var nightColor = new THREE.Color(0x0C1445);    // Deep Navy Blue
+
+            var skyColor;
+
+            if (lightIntensity > 0.5) {
+                // Interpolate between Twilight and Daytime
+                var t = (lightIntensity - 0.5) / 0.5; // Normalize t between 0 and 1
+                skyColor = twilightColor.clone().lerp(dayColor, t);
+            } else if (lightIntensity > 0) {
+                // Interpolate between Nighttime and Twilight
+                var t = lightIntensity / 0.5; // Normalize t between 0 and 1
+                skyColor = nightColor.clone().lerp(twilightColor, t);
+            } else {
+                // Night sky
+                skyColor = nightColor;
+            }
+
+            // Update the scene's background color
+            scene.background = skyColor;
+        }
+
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tower Defense Example - Release Notes</title>
+    <title>Game Release Notes</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -48,10 +48,6 @@
             border-radius: 5px;
             margin-bottom: 20px;
             text-decoration: none;
-            transition: background 0.3s ease;
-        }
-        .yellow-button:hover {
-            background: #f59e0b;
         }
         .image-container {
             width: 100%;
@@ -75,45 +71,19 @@
             font-size: 0.75rem; /* Smaller font size */
             max-width: 100%; /* Optional: limit the width */
         }
-        /* Additional styles for Release Notes */
-        .release-notes {
-            background-color: #2d3748;
-            padding: 20px;
-            border-radius: 8px;
-            overflow-y: auto;
-            max-height: 600px; /* Adjust as needed */
-        }
-        .release-notes h2 {
-            color: #fbbf24;
-            margin-bottom: 10px;
-        }
-        .release-notes p {
-            margin-bottom: 15px;
-        }
-        .release-notes ul {
-            list-style-type: none;
-            padding-left: 0;
-        }
-        .release-notes li {
-            margin-bottom: 5px;
-        }
-        .badge {
-            background-color: #fbbf24;
-            color: #1f2937;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.75rem;
-        }
     </style>
 </head>
 <body class="bg-gray-900 text-white">
     <div class="container mx-auto p-4 w-3/5">
         <!-- Header Section -->
         <div class="flex flex-col items-center mb-8">
-            <h1 class="text-3xl text-yellow-400 mb-4">Tower Defense Example</h1>
+            <h1 class="text-3xl text-yellow-400 mb-4">Wordl</h1>
+            <p class="text-sm description mb-4">
+                This is a simple javascript wordl game replicant.
+            </p>
             <div class="flex items-center space-x-4">
                 <a class="yellow-button" href="../../index.html">BACK</a>
-                <a class="yellow-button" href="game.html">PLAY</a>
+                <a class="yellow-button" href="index.html">PLAY</a>
             </div>
         </div>
 
@@ -131,37 +101,13 @@
                     </div>
                 </div>
             </div>
-            <p class="text-sm description mb-4">
-                This is a simple tower defense game made completely with ChatGPT-4o. <br><br>
-                Find the latest game updates in the ChatGPT Thread: <a href="https://chatgpt.com/share/c29b9d34-591c-41f6-a45b-9ea217eadcf1" target="_blank" rel="noopener noreferrer">ChatGPT Dev Thread</a>
-            </p>
-        </div>
-
-        <!-- Release Notes Section -->
-        <h1 class="text-xl text-yellow-400 mb-2">Release Notes</h1>
-        <div class="release-notes">
-            <div class="mb-8">
-                <h2 class="text-xl text-yellow-400 mb-2">v1.1</h2>
-                <ul>
-                    <li>♻️ Update map generation so there is always a path to the target</li>
-                    <li>🐞 Fix issue with start portal assets being underneath path</li>
-                </ul>
-            </div>
-            <div class="mb-8">
-                <h2 class="text-xl text-yellow-400 mb-2">v1.0</h2>
-                <ul>
-                    <li>⭐ Added release notes for project</li>
-                    <li>🐞 Fixed issue with enemies moving too fast</li>
-                </ul>
-            </div>
-            <div class="mb-8">
-                <h2 class="text-xl text-yellow-400 mb-2">v0.1 - Initial Version</h2>
-                <ul>
-                    <li>⭐ Added A* path finding for enemies</li>
-                    <li>⭐ Added upgrades system</li>
-                    <li>♻️ Used GPT-4 to generate pixel images for assets instead of simple shapes</li>
-                </ul>
-            </div>
+            <!-- <p class="text-sm description mb-4">
+                Commands:<br><br>
+                🕹️ W - move forward <br>
+                🕹️ A/S - strafe left and right <br>                
+                🕹️ Shift - move faster <br>                
+                🕹️ Q - unhide map <br>                
+            </p> -->
         </div>
     </div>
 </body>
