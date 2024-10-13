@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Release Notes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+        }
+        .card {
+            position: relative;
+            overflow: hidden;
+        }
+        .card:hover .overlay {
+            opacity: 1;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .overlay button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #fbbf24;
+            color: #1f2937;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .yellow-button {
+            display: inline-block;
+            background: #fbbf24;
+            color: #1f2937;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-decoration: none;
+        }
+        .image-container {
+            width: 100%;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .description a {
+            color: #1e90ff;
+        }
+        /* New styles for smaller AI card */
+        .ai-card {
+            padding: 4px 8px; /* Reduced padding */
+            font-size: 0.75rem; /* Smaller font size */
+            max-width: 100%; /* Optional: limit the width */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-4 w-3/5">
+        <!-- Header Section -->
+        <div class="flex flex-col items-center mb-8">
+            <h1 class="text-3xl text-yellow-400 mb-4">Circle Crush</h1>
+            <p class="text-sm description mb-4">
+                A callback to the old match-3 style games like candy crush. Click on circle groups of 3 or more with the same color and get as high a score as you can before theres no more moves left! 
+            </p>
+            <div class="flex items-center space-x-4">
+                <a class="yellow-button" href="../../index.html">BACK</a>
+                <a class="yellow-button" href="game.html">PLAY</a>
+            </div>
+        </div>
+
+        <!-- Details Section -->
+        <div class="mb-8">
+            <div class="bg-gray-700 h-60 mb-4 flex items-center justify-center rounded-lg border-2 border-yellow-400 image-container">
+                <img src="./banner.png" alt="Game Banner">
+            </div>
+            <br>
+            <!-- AI Model Card -->
+            <div class="flex flex-col items-center mb-8">
+                <div class="flex items-center space-x-4">
+                    <div class="yellow-button ai-card rounded shadow-md">
+                        Made With GPT-o1-preview
+                    </div>
+                </div>
+            </div>
+            <p class="text-sm description mb-4">
+                Circle Types:<br><br>
+                🕹️ Fire Bomb - removes all circles directly around it. Will chain with other fire bombs <br><br>
+                🕹️ Rock - can only be destroyed by a fire bomb <br><br>
+                🕹️ 2x - all colors have a 2x circle that will double the points gained from a match group<br><br>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

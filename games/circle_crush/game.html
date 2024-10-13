@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Match 3 Game with Multiplier Circles and Rocks</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #score {
+            font-size: 24px;
+            margin: 20px;
+        }
+        #grid {
+            position: relative;
+            width: 468px; /* 9 columns * 50px + 8 gaps * 2px */
+            height: 468px; /* 9 rows * 50px + 8 gaps * 2px */
+            margin: 0 auto;
+            overflow: hidden;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            position: absolute;
+            transition: transform 0.5s;
+            font-size: 18px;
+            line-height: 50px;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+        }
+        .color0 { background-color: red; }
+        .color1 { background-color: blue; }
+        .color2 { background-color: green; }
+        .color3 { background-color: yellow; color: black; }
+        .fire-cell { background-color: orange; }
+        .rock-cell { background-color: black; }
+        .multiplier-cell { /* Removed border */ }
+        .hidden {
+            visibility: hidden;
+        }
+        .fade-out {
+            animation: fadeOut 0.5s forwards;
+        }
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: scale(0);
+            }
+        }
+        .floating-text {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            color: gold;
+            animation: floatUp 1s forwards;
+            pointer-events: none;
+        }
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50; /* Green */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #restartButton:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <div id="grid"></div>
+    <button id="restartButton">Restart Game</button>
+    <script>
+        const rows = 9;
+        const cols = 9;
+        const colors = 4; // Number of regular colors
+        const specialColors = {
+            FIRE: colors,         // Assigns 4 to the fire emoji circle
+            ROCK: colors + 1      // Assigns 5 to the rock circle
+        };
+        const cellSize = 50;
+        const gapSize = 2;
+        let grid = [];
+        let score = 0;
+        let gameOver = false;
+        let cellElements = [];
+
+        const gridElement = document.getElementById('grid');
+        const scoreElement = document.getElementById('score');
+
+        // Initialize the grid
+        function initGrid() {
+            grid = [];
+            for (let row = 0; row < rows; row++) {
+                grid[row] = [];
+                for (let col = 0; col < cols; col++) {
+                    let rand = Math.random();
+                    let color;
+                    let isMultiplier = false;
+                    if (rand < 0.05) { // 5% chance to be a fire circle
+                        color = specialColors.FIRE;
+                    } else if (rand < 0.1) { // Next 5% chance to be a rock
+                        color = specialColors.ROCK;
+                    } else {
+                        color = Math.floor(Math.random() * colors);
+                        // 10% chance for each color to be a multiplier
+                        if (Math.random() < 0.1) {
+                            isMultiplier = true;
+                        }
+                    }
+                    grid[row][col] = { color: color, isMultiplier: isMultiplier, element: null };
+                }
+            }
+            renderGrid();
+        }
+
+        // Render the grid
+        function renderGrid() {
+            if (cellElements.length === 0) {
+                // Initial render
+                for (let row = 0; row < rows; row++) {
+                    for (let col = 0; col < cols; col++) {
+                        const cellData = grid[row][col];
+                        const cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        setCellAppearance(cell, cellData);
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+                        cell.style.left = col * (cellSize + gapSize) + 'px';
+                        cell.style.top = row * (cellSize + gapSize) + 'px';
+                        if (cellData.color !== specialColors.ROCK) {
+                            cell.addEventListener('click', onCellClick);
+                        }
+                        gridElement.appendChild(cell);
+                        cellData.element = cell;
+                        cellElements.push(cell);
+                    }
+                }
+            } else {
+                // Update positions and classes
+                for (let row = 0; row < rows; row++) {
+                    for (let col = 0; col < cols; col++) {
+                        const cellData = grid[row][col];
+                        const cell = cellData.element;
+                        setCellAppearance(cell, cellData);
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+                        cell.style.left = col * (cellSize + gapSize) + 'px';
+                        cell.style.top = row * (cellSize + gapSize) + 'px';
+                        // Apply transform for animation
+                        if (cellData.shift) {
+                            cell.style.transform = 'translateY(' + cellData.shift * (cellSize + gapSize) + 'px)';
+                            // Trigger reflow
+                            void cell.offsetWidth;
+                            cell.style.transform = 'translateY(0)';
+                        } else {
+                            cell.style.transform = 'translateY(0)';
+                        }
+                    }
+                }
+            }
+        }
+
+        // Set cell appearance based on color and multiplier
+        function setCellAppearance(cell, cellData) {
+            cell.className = 'cell';
+            cell.textContent = '';
+            const color = cellData.color;
+            if (color !== null && color !== -1) {
+                if (color < colors) {
+                    cell.classList.add(`color${color}`);
+                    if (cellData.isMultiplier) {
+                        // Removed border class
+                        cell.textContent = '2x';
+                    }
+                } else if (color === specialColors.FIRE) {
+                    cell.classList.add('fire-cell');
+                    cell.textContent = '🔥';
+                } else if (color === specialColors.ROCK) {
+                    cell.classList.add('rock-cell');
+                    cell.textContent = '🪨';
+                }
+            } else if (color === -1) {
+                cell.classList.add('fade-out');
+            } else {
+                cell.classList.add('hidden');
+            }
+        }
+
+        // Handle cell click
+        function onCellClick(event) {
+            if (gameOver) return;
+
+            const cell = event.target;
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            const cellData = grid[row][col];
+            const color = cellData.color;
+
+            if (color === specialColors.FIRE) {
+                // Handle fire circle click
+                removeSurroundingCells(row, col);
+                renderGrid();
+                updateScore(5); // Assign 5 points for using a fire circle
+                showFloatingText(row, col, '+5');
+
+                // Wait for fade-out animation to finish before proceeding
+                setTimeout(() => {
+                    removeMarkedCells();
+                    shiftCellsDown();
+                    fillEmptyCells();
+                    renderGrid();
+
+                    // Wait for shift animation to complete before checking for moves
+                    setTimeout(() => {
+                        if (!hasMoves()) {
+                            alert('Game Over! No more moves.');
+                            gameOver = true;
+                        }
+                    }, 500); // Duration of the shift animation
+                }, 500); // Duration of the fade-out animation
+            } else {
+                const connectedCells = getConnectedCells(row, col, color);
+
+                if (connectedCells.length >= 3) {
+                    // Check if any cell in the group is a multiplier
+                    let isMultiplierInGroup = connectedCells.some(([r, c]) => grid[r][c].isMultiplier);
+                    markCellsForRemoval(connectedCells);
+                    renderGrid();
+
+                    let pointsGained = connectedCells.length;
+                    if (isMultiplierInGroup) {
+                        pointsGained *= 2;
+                    }
+                    updateScore(pointsGained);
+                    let center = getCenterOfCells(connectedCells);
+                    showFloatingText(center.row, center.col, `+${pointsGained}`);
+
+                    // Wait for fade-out animation to finish before proceeding
+                    setTimeout(() => {
+                        removeMarkedCells();
+                        shiftCellsDown();
+                        fillEmptyCells();
+                        renderGrid();
+
+                        // Wait for shift animation to complete before checking for moves
+                        setTimeout(() => {
+                            if (!hasMoves()) {
+                                alert('Game Over! No more moves.');
+                                gameOver = true;
+                            }
+                        }, 500); // Duration of the shift animation
+                    }, 500); // Duration of the fade-out animation
+                }
+            }
+        }
+
+        // Remove surrounding cells of a fire circle, chain fire circles
+        function removeSurroundingCells(row, col) {
+            let stack = [[row, col]];
+            let visited = Array(rows).fill(null).map(() => Array(cols).fill(false));
+
+            while (stack.length > 0) {
+                let [r, c] = stack.pop();
+                if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+                if (visited[r][c]) continue;
+                visited[r][c] = true;
+                let cellColor = grid[r][c].color;
+
+                if (cellColor !== null && cellColor !== -1) {
+                    if (cellColor === specialColors.ROCK || cellColor < colors || cellColor === specialColors.FIRE) {
+                        grid[r][c].color = -1; // Mark for removal
+                        if (cellColor === specialColors.FIRE) {
+                            // Chain reaction
+                            for (let dr = -1; dr <= 1; dr++) {
+                                for (let dc = -1; dc <= 1; dc++) {
+                                    if (dr !== 0 || dc !== 0) {
+                                        stack.push([r + dr, c + dc]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Get connected cells of the same color
+        function getConnectedCells(row, col, color) {
+            const stack = [[row, col]];
+            const visited = Array(rows).fill(null).map(() => Array(cols).fill(false));
+            const connected = [];
+
+            while (stack.length > 0) {
+                const [r, c] = stack.pop();
+                if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+                if (visited[r][c]) continue;
+                if (grid[r][c].color !== color) continue;
+                visited[r][c] = true;
+                connected.push([r, c]);
+
+                stack.push([r - 1, c]); // up
+                stack.push([r + 1, c]); // down
+                stack.push([r, c - 1]); // left
+                stack.push([r, c + 1]); // right
+            }
+
+            return connected;
+        }
+
+        // Mark the connected cells for removal
+        function markCellsForRemoval(cells) {
+            for (const [row, col] of cells) {
+                grid[row][col].color = -1; // Mark as to be removed
+            }
+        }
+
+        // Remove the marked cells after animation
+        function removeMarkedCells() {
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    if (grid[row][col].color === -1) {
+                        // Remove element from DOM
+                        const cell = grid[row][col].element;
+                        gridElement.removeChild(cell);
+                        cellElements.splice(cellElements.indexOf(cell), 1);
+                        grid[row][col] = { color: null, isMultiplier: false, element: null };
+                    }
+                }
+            }
+        }
+
+        // Shift cells down
+        function shiftCellsDown() {
+            for (let col = 0; col < cols; col++) {
+                let nextRow = rows - 1;
+                for (let row = rows - 1; row >= 0; row--) {
+                    if (grid[row][col].color !== null) {
+                        if (row !== nextRow) {
+                            let cellData = grid[row][col];
+                            cellData.shift = nextRow - row;
+                            grid[nextRow][col] = cellData;
+
+                            // Update the element's dataset and position
+                            cellData.element.dataset.row = nextRow;
+                            cellData.element.style.top = nextRow * (cellSize + gapSize) + 'px';
+
+                            grid[row][col] = { color: null, isMultiplier: false, element: null };
+                        } else {
+                            grid[row][col].shift = 0;
+                        }
+                        nextRow--;
+                    }
+                }
+                // Fill remaining cells with null
+                for (let row = nextRow; row >= 0; row--) {
+                    grid[row][col] = { color: null, isMultiplier: false, element: null };
+                }
+            }
+        }
+
+        // Fill empty cells at the top
+        function fillEmptyCells() {
+            for (let col = 0; col < cols; col++) {
+                for (let row = 0; row < rows; row++) {
+                    if (grid[row][col].color === null) {
+                        let rand = Math.random();
+                        let newColor;
+                        let isMultiplier = false;
+                        if (rand < 0.05) {
+                            newColor = specialColors.FIRE;
+                        } else if (rand < 0.1) {
+                            newColor = specialColors.ROCK;
+                        } else {
+                            newColor = Math.floor(Math.random() * colors);
+                            // 10% chance for each color to be a multiplier
+                            if (Math.random() < 0.1) {
+                                isMultiplier = true;
+                            }
+                        }
+                        let cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        setCellAppearance(cell, { color: newColor, isMultiplier: isMultiplier });
+                        cell.dataset.row = row;
+                        cell.dataset.col = col;
+                        cell.style.left = col * (cellSize + gapSize) + 'px';
+                        cell.style.top = row * (cellSize + gapSize) + 'px';
+                        cell.style.transform = 'translateY(' + (-cellSize - gapSize) + 'px)';
+                        if (newColor !== specialColors.ROCK) {
+                            cell.addEventListener('click', onCellClick);
+                        }
+                        gridElement.appendChild(cell);
+                        cellElements.push(cell);
+
+                        grid[row][col] = {
+                            color: newColor,
+                            isMultiplier: isMultiplier,
+                            element: cell,
+                            shift: 0
+                        };
+
+                        // Trigger reflow for the transition to work
+                        void cell.offsetWidth;
+                        cell.style.transform = 'translateY(0)';
+                    } else {
+                        // Reset shift
+                        grid[row][col].shift = 0;
+                    }
+                }
+            }
+        }
+
+        // Update the score
+        function updateScore(points) {
+            score += points;
+            scoreElement.textContent = `Score: ${score}`;
+        }
+
+        // Show floating text
+        function showFloatingText(row, col, text) {
+            const floatingText = document.createElement('div');
+            floatingText.classList.add('floating-text');
+            floatingText.textContent = text;
+            floatingText.style.left = col * (cellSize + gapSize) + cellSize / 2 - 10 + 'px';
+            floatingText.style.top = row * (cellSize + gapSize) + cellSize / 2 - 20 + 'px';
+            gridElement.appendChild(floatingText);
+            setTimeout(() => {
+                gridElement.removeChild(floatingText);
+            }, 1000); // Duration of the floatUp animation
+        }
+
+        // Get center of a group of cells
+        function getCenterOfCells(cells) {
+            let sumRow = 0;
+            let sumCol = 0;
+            for (let [row, col] of cells) {
+                sumRow += row;
+                sumCol += col;
+            }
+            let avgRow = sumRow / cells.length;
+            let avgCol = sumCol / cells.length;
+            return { row: avgRow, col: avgCol };
+        }
+
+        // Check if there are any moves left
+        function hasMoves() {
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const cellData = grid[row][col];
+                    const color = cellData.color;
+                    if (color !== null && color < colors) {
+                        const connectedCells = getConnectedCells(row, col, color);
+                        if (connectedCells.length >= 3) {
+                            return true;
+                        }
+                    }
+                    if (color === specialColors.FIRE) {
+                        return true; // Fire circles always provide a move
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Restart game
+        document.getElementById('restartButton').addEventListener('click', () => {
+            // Remove all existing cells
+            gridElement.innerHTML = '';
+            cellElements = [];
+            score = 0;
+            gameOver = false;
+            scoreElement.textContent = `Score: ${score}`;
+            initGrid();
+        });
+
+        // Start the game
+        initGrid();
+    </script>
+</body>
+</html>
