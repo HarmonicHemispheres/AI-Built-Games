@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Match 3 Game with Multiplier Circles and Rocks</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -13,20 +14,14 @@
         }
         #grid {
             position: relative;
-            width: 468px; /* 9 columns * 50px + 8 gaps * 2px */
-            height: 468px; /* 9 rows * 50px + 8 gaps * 2px */
             margin: 0 auto;
             overflow: hidden;
         }
         .cell {
-            width: 50px;
-            height: 50px;
+            position: absolute;
             border-radius: 50%;
             cursor: pointer;
-            position: absolute;
             transition: transform 0.5s;
-            font-size: 18px;
-            line-height: 50px;
             text-align: center;
             color: white;
             font-weight: bold;
@@ -52,7 +47,6 @@
         }
         .floating-text {
             position: absolute;
-            font-size: 24px;
             font-weight: bold;
             color: gold;
             animation: floatUp 1s forwards;
@@ -95,8 +89,8 @@
             FIRE: colors,         // Assigns 4 to the fire emoji circle
             ROCK: colors + 1      // Assigns 5 to the rock circle
         };
-        const cellSize = 50;
-        const gapSize = 2;
+        let cellSize;
+        let gapSize;
         let grid = [];
         let score = 0;
         let gameOver = false;
@@ -104,9 +98,11 @@
 
         const gridElement = document.getElementById('grid');
         const scoreElement = document.getElementById('score');
+        const restartButton = document.getElementById('restartButton');
 
         // Initialize the grid
         function initGrid() {
+            calculateCellAndGapSize();
             grid = [];
             for (let row = 0; row < rows; row++) {
                 grid[row] = [];
@@ -131,6 +127,30 @@
             renderGrid();
         }
 
+        // Calculate cell and gap sizes based on viewport
+        function calculateCellAndGapSize() {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight - scoreElement.offsetHeight - restartButton.offsetHeight - 40; // Adjust for margins
+
+            let maxGridWidth = viewportWidth * 0.95; // Use 95% of viewport width
+            let maxGridHeight = viewportHeight * 0.95; // Use 95% of viewport height
+
+            let cellSizeWidth = Math.floor(maxGridWidth / cols);
+            let cellSizeHeight = Math.floor(maxGridHeight / rows);
+
+            cellSize = Math.min(cellSizeWidth, cellSizeHeight);
+
+            gapSize = Math.floor(cellSize * 0.04); // 4% of cellSize
+
+            // Recalculate cellSize considering gapSize
+            cellSize = Math.floor((maxGridWidth - (cols - 1) * gapSize) / cols);
+            cellSizeHeight = Math.floor((maxGridHeight - (rows - 1) * gapSize) / rows);
+            cellSize = Math.min(cellSize, cellSizeHeight);
+
+            gridElement.style.width = (cols * cellSize + (cols - 1) * gapSize) + 'px';
+            gridElement.style.height = (rows * cellSize + (rows - 1) * gapSize) + 'px';
+        }
+
         // Render the grid
         function renderGrid() {
             if (cellElements.length === 0) {
@@ -145,6 +165,10 @@
                         cell.dataset.col = col;
                         cell.style.left = col * (cellSize + gapSize) + 'px';
                         cell.style.top = row * (cellSize + gapSize) + 'px';
+                        cell.style.width = cellSize + 'px';
+                        cell.style.height = cellSize + 'px';
+                        cell.style.lineHeight = cellSize + 'px';
+                        cell.style.fontSize = cellSize * 0.36 + 'px'; // Adjust font size
                         if (cellData.color !== specialColors.ROCK) {
                             cell.addEventListener('click', onCellClick);
                         }
@@ -164,6 +188,10 @@
                         cell.dataset.col = col;
                         cell.style.left = col * (cellSize + gapSize) + 'px';
                         cell.style.top = row * (cellSize + gapSize) + 'px';
+                        cell.style.width = cellSize + 'px';
+                        cell.style.height = cellSize + 'px';
+                        cell.style.lineHeight = cellSize + 'px';
+                        cell.style.fontSize = cellSize * 0.36 + 'px'; // Adjust font size
                         // Apply transform for animation
                         if (cellData.shift) {
                             cell.style.transform = 'translateY(' + cellData.shift * (cellSize + gapSize) + 'px)';
@@ -251,7 +279,7 @@
                     }
                     updateScore(pointsGained);
                     let center = getCenterOfCells(connectedCells);
-                    showFloatingText(center.row, center.col, `+${pointsGained}`);
+                    showFloatingText(Math.floor(center.row), Math.floor(center.col), `+${pointsGained}`);
 
                     // Wait for fade-out animation to finish before proceeding
                     setTimeout(() => {
@@ -402,6 +430,10 @@
                         cell.dataset.col = col;
                         cell.style.left = col * (cellSize + gapSize) + 'px';
                         cell.style.top = row * (cellSize + gapSize) + 'px';
+                        cell.style.width = cellSize + 'px';
+                        cell.style.height = cellSize + 'px';
+                        cell.style.lineHeight = cellSize + 'px';
+                        cell.style.fontSize = cellSize * 0.36 + 'px'; // Adjust font size
                         cell.style.transform = 'translateY(' + (-cellSize - gapSize) + 'px)';
                         if (newColor !== specialColors.ROCK) {
                             cell.addEventListener('click', onCellClick);
@@ -438,8 +470,9 @@
             const floatingText = document.createElement('div');
             floatingText.classList.add('floating-text');
             floatingText.textContent = text;
-            floatingText.style.left = col * (cellSize + gapSize) + cellSize / 2 - 10 + 'px';
-            floatingText.style.top = row * (cellSize + gapSize) + cellSize / 2 - 20 + 'px';
+            floatingText.style.left = (col * (cellSize + gapSize) + cellSize / 2 - cellSize * 0.2) + 'px';
+            floatingText.style.top = (row * (cellSize + gapSize) + cellSize / 2 - cellSize * 0.4) + 'px';
+            floatingText.style.fontSize = cellSize * 0.48 + 'px'; // Adjust font size
             gridElement.appendChild(floatingText);
             setTimeout(() => {
                 gridElement.removeChild(floatingText);
