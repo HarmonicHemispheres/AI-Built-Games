@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Infinite Procedural Rooms & Hallways</title>
+<style>
+body, html {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+  font-family: sans-serif;
+  color: #fff;
+}
+
+#gameCanvas {
+  display: block;
+  margin: 0 auto;
+  background: #000;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+}
+
+#hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 14px;
+  color: #fff;
+}
+
+#hud .lives {
+  margin-top:5px;
+}
+
+#hud .zombieCount {
+  margin-top:5px;
+}
+
+#hud .tripleShotsCount {
+  margin-top:5px;
+}
+
+#hud .skullCount {
+  margin-top:5px;
+}
+
+#hud .skullHint {
+  margin-top:5px;
+  font-size:12px;
+  color:#aaa;
+}
+
+#gameOverModal {
+  display:none;
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(0,0,0,0.8);
+  color:#fff;
+  padding:20px;
+  text-align:center;
+  border:2px solid #999;
+  z-index:9999;
+}
+
+#gameOverModal button {
+  margin-top:10px;
+  padding:5px 10px;
+  background:#333;
+  color:#fff;
+  border:none;
+  cursor:pointer;
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="hud">
+  <div class="pos">Position: <span id="posDisplay">0,0</span></div>
+  <div class="lives">Health: <span id="healthDisplay">3</span></div>
+  <div class="zombieCount">Zombies Destroyed: <span id="zombiesDestroyedDisplay">0</span></div>
+  <div class="tripleShotsCount">Triple Shots Left: <span id="tripleShotsDisplay">0</span></div>
+  <div class="skullCount">Skulls: <span id="skullCountDisplay">0</span></div>
+  <div class="skullHint">Press 'E' to use Skull Ability</div>
+</div>
+
+<div id="gameOverModal">
+  <h1>Game Over</h1>
+  <p>Your health has reached zero.</p>
+  <button id="restartBtn">Restart</button>
+</div>
+
+<script>
+// Changes:
+// 1. Player fires with Left Mouse Button instead of Space key.
+// 2. Skull emoji ability triggered by pressing 'E' instead of Spacebar.
+//    If skullCharges>0, pressing 'E' activates the skull ability.
+// 3. Display skullCharges in HUD and a hint to press E.
+//
+// We'll remove the space key logic for shooting.
+// On mousedown left button, we shoot.
+// On keydown 'KeyE', if skullCharges>0 and no skullActive, activate skull.
+//
+// The rest of the code is similar to the previous iteration.
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let W = window.innerWidth;
+let H = window.innerHeight;
+canvas.width = W;
+canvas.height = H;
+
+window.addEventListener('resize',()=>{
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+});
+
+let keys = {};
+window.addEventListener('keydown',(e)=>{keys[e.code]=true;});
+window.addEventListener('keyup',(e)=>{keys[e.code]=false;});
+
+// Shooting
+// Event listener for key presses
+window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+
+    // Check if the pressed key is the Spacebar
+    if (e.code === 'Space') {
+        shoot();
+    }
+});
+
+// Left mouse to shoot
+let mouseX = 0;
+let mouseY = 0;
+canvas.addEventListener('mousemove', (e)=>{
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+let mouseDown = false;
+canvas.addEventListener('mousedown', (e)=>{
+  if(e.button===0){ // left button
+    shoot();
+  }
+});
+
+
+
+
+const player = {
+  x: 0,
+  y: 0,
+  baseSpeed: 3,
+  size: 20,
+  health: 3
+};
+
+function getPlayerSpeed() {
+  return (keys['ShiftLeft']||keys['ShiftRight']) ? player.baseSpeed*2 : player.baseSpeed;
+}
+
+let bullets = [];
+let lastShot = 0;
+
+let zombies = []; 
+let frameCount = 0;
+const BFS_INTERVAL = 10;
+
+let chunkCache = {};
+let gameOver = false;
+let zombiesDestroyed = 0;
+
+const hearts = []; 
+const bolts = [];  
+const skulls = []; 
+
+let tripleShots = 0;
+let skullCharges = 0; 
+
+let skullActive = false;
+let skullActivationTime = 0;
+const SKULL_RADIUS_TILES = 10;
+const SKULL_RADIUS = SKULL_RADIUS_TILES*50; 
+const SKULL_DELAY = 1500; 
+
+let skipZombiesForThisRoom = true;
+let visitedRooms = new Set();
+
+const gameOverModal = document.getElementById('gameOverModal');
+const restartBtn = document.getElementById('restartBtn');
+restartBtn.addEventListener('click', restartGame);
+
+window.addEventListener('keydown',(e)=>{
+  if(e.code==='KeyE' && skullCharges>0 && !skullActive){
+    activateSkull();
+  }
+});
+
+function restartGame(){
+  player.x = 0; player.y = 0; player.health = 3;
+  zombies = [];
+  bullets = [];
+  chunkCache = {};
+  hearts.length=0;
+  bolts.length=0;
+  skulls.length=0;
+  zombiesDestroyed=0;
+  tripleShots=0;
+  skullCharges=0;
+  skullActive=false;
+  gameOver = false;
+  gameOverModal.style.display='none';
+  skipZombiesForThisRoom = true;
+  placePlayerAtStart();
+  loop();
+}
+
+function endGame(){
+  gameOver = true;
+  gameOverModal.style.display='block';
+}
+
+const TILE_SIZE = 50;
+const CHUNK_SIZE = 40; 
+const CHUNK_WORLD_SIZE = CHUNK_SIZE * TILE_SIZE; 
+
+function getChunkKey(cx, cy) {
+  return cx+"_"+cy;
+}
+
+function ensureChunkGenerated(cx, cy) {
+  let key = getChunkKey(cx, cy);
+  if(!chunkCache[key]) {
+    chunkCache[key] = generateChunk(cx, cy);
+    chunkCache[key].generated = true;
+  }
+}
+
+function createAllWallMap() {
+  let m = [];
+  for(let i=0;i<CHUNK_SIZE;i++){
+    m[i]=[];
+    for(let j=0;j<CHUNK_SIZE;j++){
+      m[i][j]=0;
+    }
+  }
+  return m;
+}
+
+function carveRoom(map, rx, ry, rw, rh) {
+  for(let x=rx; x<rx+rw; x++){
+    for(let y=ry; y<ry+rh; y++){
+      map[y][x] = 1; // floor
+    }
+  }
+}
+
+function connectRooms(map, r1, r2){
+  let x1 = r1.x + Math.floor(r1.w/2);
+  let y1 = r1.y + Math.floor(r1.h/2);
+  let x2 = r2.x + Math.floor(r2.w/2);
+  let y2 = r2.y + Math.floor(r2.h/2);
+  
+  let sx = Math.min(x1,x2);
+  let ex = Math.max(x1,x2);
+  for(let x=sx; x<=ex; x++){
+    map[y1][x] = 1; 
+  }
+  
+  let sy = Math.min(y1,y2);
+  let ey = Math.max(y1,y2);
+  for(let y=sy; y<=ey; y++){
+    map[y][x2] = 1; 
+  }
+}
+
+function findCorridorEndpoints(map) {
+  let points = [];
+  for(let x=0; x<CHUNK_SIZE; x++){
+    for(let y=0; y<CHUNK_SIZE; y++){
+      if(map[y][x]===1){
+        if(x===0||x===CHUNK_SIZE-1||y===0||y===CHUNK_SIZE-1){
+          points.push({x:x,y:y});
+        }
+      }
+    }
+  }
+  return points;
+}
+
+function getChunk(cx, cy){
+  let key = getChunkKey(cx,cy);
+  if(!chunkCache[key]){
+    return {map:createAllWallMap(), rooms:[], corridors:[], generated:false};
+  }
+  return chunkCache[key];
+}
+
+function getTile(x, y) {
+  let cx = Math.floor(x/(CHUNK_WORLD_SIZE));
+  let cy = Math.floor(y/(CHUNK_WORLD_SIZE));
+  let chunkData = getChunk(cx, cy);
+  let chunk = chunkData.map;
+  
+  let localX = Math.floor((x - cx*CHUNK_WORLD_SIZE)/TILE_SIZE);
+  let localY = Math.floor((y - cy*CHUNK_WORLD_SIZE)/TILE_SIZE);
+
+  if(localX<0||localY<0||localX>=CHUNK_SIZE||localY>=CHUNK_SIZE) return 0; 
+  return chunk[localY][localX];
+}
+
+function canMoveTo(nx, ny) {
+  let r = player.size/2;
+  let checkPoints = [
+    [nx, ny],
+    [nx-r, ny],
+    [nx+r, ny],
+    [nx, ny-r],
+    [nx, ny+r]
+  ];
+  
+  for(let i=0; i<checkPoints.length; i++){
+    let px = checkPoints[i][0];
+    let py = checkPoints[i][1];
+    if(getTile(px,py) === 0) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function worldToLocalTile(x,y) {
+  let cx = Math.floor(x/(CHUNK_WORLD_SIZE));
+  let cy = Math.floor(y/(CHUNK_WORLD_SIZE));
+  let localX = Math.floor((x - cx*CHUNK_WORLD_SIZE)/TILE_SIZE);
+  let localY = Math.floor((y - cy*CHUNK_WORLD_SIZE)/TILE_SIZE);
+  return {cx,cy,x:localX,y:localY};
+}
+
+function checkForChunkUnlock() {
+  let cx = Math.floor(player.x/CHUNK_WORLD_SIZE);
+  let cy = Math.floor(player.y/CHUNK_WORLD_SIZE);
+  let chunkData = getChunk(cx, cy);
+  if(!chunkData.generated) return;
+
+  let local = worldToLocalTile(player.x, player.y);
+  for(let c of chunkData.corridors) {
+    if(c.x===local.x && c.y===local.y){
+      let targetCX = cx;
+      let targetCY = cy;
+      if(c.x===0) targetCX = cx-1;
+      else if(c.x===CHUNK_SIZE-1) targetCX = cx+1;
+      else if(c.y===0) targetCY = cy-1;
+      else if(c.y===CHUNK_SIZE-1) targetCY = cy+1;
+
+      ensureChunkGenerated(targetCX, targetCY);
+    }
+  }
+}
+
+function checkRoomEntry() {
+  let cx = Math.floor(player.x/CHUNK_WORLD_SIZE);
+  let cy = Math.floor(player.y/CHUNK_WORLD_SIZE);
+  let chunkData = getChunk(cx, cy);
+  if(!chunkData.generated) return;
+
+  let local = worldToLocalTile(player.x, player.y);
+  if(getTile(player.x, player.y)===1) {
+    for(let i=0; i<chunkData.rooms.length; i++){
+      let R = chunkData.rooms[i];
+      if(local.x>=R.x && local.x<R.x+R.w && local.y>=R.y && local.y<R.y+R.h) {
+        let roomKey = cx+"_"+cy+"_"+i;
+        if(!visitedRooms.has(roomKey)){
+          visitedRooms.add(roomKey);
+          generateNewHallwayFromRoom(cx, cy, i);
+          if(!skipZombiesForThisRoom){
+            spawnZombiesInRoom(cx, cy, R);
+          } else {
+            skipZombiesForThisRoom=false;
+          }
+          spawnHeartInRoom(cx, cy, R);
+          spawnBoltInRoom(cx, cy, R);
+          spawnSkullInRoom(cx, cy, R);
+        }
+      }
+    }
+  }
+}
+
+function spawnZombiesInRoom(cx, cy, R) {
+  let pTile = worldToLocalTile(player.x, player.y);
+  let count = 3+Math.floor(Math.random()*3);
+  for(let i=0; i<count; i++){
+    let tries=0;
+    let zx, zy;
+    do {
+      zx = R.x + Math.floor(Math.random()*R.w);
+      zy = R.y + Math.floor(Math.random()*R.h);
+      tries++;
+    } while((zx===pTile.x && zy===pTile.y && cx===pTile.cx && cy===pTile.cy) && tries<100);
+    let zxPos = cx*CHUNK_WORLD_SIZE + zx*TILE_SIZE + TILE_SIZE/2;
+    let zyPos = cy*CHUNK_WORLD_SIZE + zy*TILE_SIZE + TILE_SIZE/2;
+    zombies.push({cx:cx,cy:cy,x:zx,y:zy,xPos:zxPos,yPos:zyPos,targetX:zx,targetY:zy});
+  }
+}
+
+function spawnHeartInRoom(cx, cy, R) {
+  if(Math.random()<0.3){
+    let hx = R.x + Math.floor(Math.random()*R.w);
+    let hy = R.y + Math.floor(Math.random()*R.h);
+    let hxPos = cx*CHUNK_WORLD_SIZE + hx*TILE_SIZE + TILE_SIZE/2;
+    let hyPos = cy*CHUNK_WORLD_SIZE + hy*TILE_SIZE + TILE_SIZE/2;
+    hearts.push({xPos:hxPos,yPos:hyPos});
+  }
+}
+
+function spawnBoltInRoom(cx, cy, R) {
+  if(Math.random()<0.15){
+    let bx = R.x + Math.floor(Math.random()*R.w);
+    let by = R.y + Math.floor(Math.random()*R.h);
+    let bxPos = cx*CHUNK_WORLD_SIZE + bx*TILE_SIZE + TILE_SIZE/2;
+    let byPos = cy*CHUNK_WORLD_SIZE + by*TILE_SIZE + TILE_SIZE/2;
+    bolts.push({xPos:bxPos,yPos:byPos});
+  }
+}
+
+function spawnSkullInRoom(cx, cy, R) {
+  if(Math.random()<0.1){
+    let sx = R.x + Math.floor(Math.random()*R.w);
+    let sy = R.y + Math.floor(Math.random()*R.h);
+    let sxPos = cx*CHUNK_WORLD_SIZE + sx*TILE_SIZE + TILE_SIZE/2;
+    let syPos = cy*CHUNK_WORLD_SIZE + sy*TILE_SIZE + TILE_SIZE/2;
+    skulls.push({xPos:sxPos,yPos:syPos});
+  }
+}
+
+function adjustTileCoords(cx, cy, x, y) {
+  while(x<0) { x+=CHUNK_SIZE; cx-=1; }
+  while(x>=CHUNK_SIZE) { x-=CHUNK_SIZE; cx+=1; }
+  while(y<0) { y+=CHUNK_SIZE; cy-=1; }
+  while(y>=CHUNK_SIZE) { y-=CHUNK_SIZE; cy+=1; }
+  return {cxN:cx,cyN:cy,xN:x,yN:y};
+}
+
+function carveCorridorLine(cx, cy, startX, startY, length, dx, dy) {
+  let carved = [];
+  let curX = startX;
+  let curY = startY;
+  let curCX = cx;
+  let curCY = cy;
+
+  for(let i=0; i<length; i++){
+    let {cxN, cyN, xN, yN} = adjustTileCoords(curCX, curCY, curX, curY);
+    ensureChunkGenerated(cxN, cyN);
+    let targetChunk = getChunk(cxN, cyN);
+    targetChunk.map[yN][xN] = 1;
+
+    carved.push({cx:cxN, cy:cyN, x:xN, y:yN});
+
+    curCX = cxN; curCY = cyN;
+    curX = xN + dx;
+    curY = yN + dy;
+  }
+
+  return carved;
+}
+
+function carveRoomAt(cx, cy, centerX, centerY) {
+  ensureChunkGenerated(cx,cy);
+  let chunkData = getChunk(cx,cy);
+  let map = chunkData.map;
+
+  let rw=5; let rh=5;
+  let rx = Math.max(1,Math.min(CHUNK_SIZE-rw-1, centerX - Math.floor(rw/2)));
+  let ry = Math.max(1,Math.min(CHUNK_SIZE-rh-1, centerY - Math.floor(rh/2)));
+  carveRoom(map, rx, ry, rw, rh);
+  chunkData.rooms.push({x:rx,y:ry,w:rw,h:rh});
+}
+
+function carveCorridorAndRoom(cx, cy, startX, startY, dx, dy, corridorLength) {
+  let corridorTiles = carveCorridorLine(cx, cy, startX, startY, corridorLength, dx, dy);
+  if(corridorTiles.length===0) return corridorTiles;
+  let endTile = corridorTiles[corridorTiles.length-1];
+
+  carveRoomAt(endTile.cx, endTile.cy, endTile.x, endTile.y);
+  return corridorTiles;
+}
+
+function carveBranchCorridor(midTile, dx, dy) {
+  let corridorLength = 3+Math.floor(Math.random()*4);
+  let corridorTiles = carveCorridorLine(midTile.cx, midTile.cy, midTile.x+dx, midTile.y+dy, corridorLength, dx, dy);
+  if(corridorTiles.length===0) return;
+  let endTile = corridorTiles[corridorTiles.length-1];
+  carveRoomAt(endTile.cx, endTile.cy, endTile.x, endTile.y);
+}
+
+function generateChunk(cx, cy) {
+  let map = createAllWallMap();
+  
+  let roomCount = 2 + Math.floor(Math.random()*4);
+  let rooms = [];
+  
+  for(let r=0; r<roomCount; r++){
+    let rw = 5+Math.floor(Math.random()*10);  
+    let rh = 5+Math.floor(Math.random()*10);  
+    let rx = Math.floor(Math.random()*(CHUNK_SIZE - rw -1)) + 1; 
+    let ry = Math.floor(Math.random()*(CHUNK_SIZE - rh -1)) + 1;
+    carveRoom(map, rx, ry, rw, rh);
+    rooms.push({x:rx,y:ry,w:rw,h:rh});
+  }
+  
+  if(rooms.length > 1) {
+    for(let i=0; i<rooms.length; i++){
+      let target = rooms[Math.floor(Math.random()*rooms.length)];
+      if(target !== rooms[i]) {
+        connectRooms(map, rooms[i], target);
+      }
+    }
+  }
+
+  let corridors = findCorridorEndpoints(map);
+  return {map, rooms, corridors, generated:true};
+}
+
+function generateNewHallwayFromRoom(cx, cy, roomIndex) {
+  let chunkData = getChunk(cx,cy);
+  let R = chunkData.rooms[roomIndex];
+  let map = chunkData.map;
+
+  let wallCandidates = [];
+  for(let x=R.x; x<R.x+R.w; x++){
+    if(R.y>0 && map[R.y-1][x]===0 && map[R.y][x]===1) {
+      wallCandidates.push({x:x,y:R.y-1,dx:0,dy:-1});
+    }
+    if(R.y+R.h<CHUNK_SIZE && map[R.y+R.h][x]===0 && map[R.y+R.h-1][x]===1) {
+      wallCandidates.push({x:x,y:R.y+R.h,dx:0,dy:1});
+    }
+  }
+  for(let y=R.y; y<R.y+R.h; y++){
+    if(R.x>0 && map[y][R.x-1]===0 && map[y][R.x]===1) {
+      wallCandidates.push({x:R.x-1,y:y,dx:-1,dy:0});
+    }
+    if(R.x+R.w<CHUNK_SIZE && map[y][R.x+R.w]===0 && map[y][R.x+R.w-1]===1) {
+      wallCandidates.push({x:R.x+R.w,y:y,dx:1,dy:0});
+    }
+  }
+
+  if(wallCandidates.length===0) return; 
+  let chosen = wallCandidates[Math.floor(Math.random()*wallCandidates.length)];
+
+  let corridorLength = 10+Math.floor(Math.random()*11);
+  let corridorTiles = carveCorridorAndRoom(cx, cy, chosen.x, chosen.y, chosen.dx, chosen.dy, corridorLength);
+
+  if(corridorTiles.length>2){
+    let midTile = corridorTiles[Math.floor(corridorTiles.length/2)];
+    let dirs = [{dx:chosen.dy,dy:-chosen.dx},{dx:-chosen.dy,dy:chosen.dx}];
+    let branchDir = dirs[Math.floor(Math.random()*dirs.length)];
+    carveBranchCorridor(midTile, branchDir.dx, branchDir.dy);
+  }
+}
+
+function zombieSpeedCalc() {
+  return 1 + Math.floor(zombiesDestroyed/100)*0.5;
+}
+
+function doZombiePathfinding() {
+  if(frameCount % BFS_INTERVAL !== 0) return; 
+
+  let px = Math.floor(player.x/TILE_SIZE);
+  let py = Math.floor(player.y/TILE_SIZE);
+
+  let left = player.x - W/2;
+  let right = player.x + W/2;
+  let top = player.y - H/2;
+  let bottom = player.y + H/2;
+  
+  let cxl = Math.floor(left/CHUNK_WORLD_SIZE);
+  let cxr = Math.floor(right/CHUNK_WORLD_SIZE);
+  let cyt = Math.floor(top/CHUNK_WORLD_SIZE);
+  let cyb = Math.floor(bottom/CHUNK_WORLD_SIZE);
+
+  let distMap = {};
+  function distKey(cx,cy,x,y) { return cx+"_"+cy+"_"+x+"_"+y; }
+
+  let start = worldToLocalTile(player.x,player.y);
+  let queue = [];
+  distMap[distKey(start.cx,start.cy,start.x,start.y)]=0;
+  queue.push({cx:start.cx,cy:start.cy,x:start.x,y:start.y});
+
+  while(queue.length>0) {
+    let tile = queue.shift();
+    let d = distMap[distKey(tile.cx,tile.cy,tile.x,tile.y)];
+    let neighbors = [[1,0],[-1,0],[0,1],[0,-1]];
+    for(let n of neighbors){
+      let nx=tile.x+n[0], ny=tile.y+n[1];
+      let {cxN,cyN,xN,yN} = adjustTileCoords(tile.cx,tile.cy,nx,ny);
+      if(cxN<cxl||cxN>cxr||cyN<cyt||cyN>cyb) continue;
+      let chunkData = getChunk(cxN,cyN);
+      if(!chunkData.generated) continue;
+      let map = chunkData.map;
+      if(map[yN][xN]===1) {
+        let nk = distKey(cxN,cyN,xN,yN);
+        if(distMap[nk]==null){
+          distMap[nk]=d+1;
+          queue.push({cx:cxN,cy:cyN,x:xN,y:yN});
+        }
+      }
+    }
+  }
+
+  for(let i=zombies.length-1; i>=0; i--){
+    let z = zombies[i];
+    let zk = distKey(z.cx,z.cy,z.x,z.y);
+    if(distMap[zk]!=null){
+      let bestD=distMap[zk];
+      let bestMove=null;
+      let moves = [[1,0],[-1,0],[0,1],[0,-1]];
+      for(let m of moves){
+        let nx=z.x+m[0],ny=z.y+m[1];
+        let {cxN,cyN,xN,yN}=adjustTileCoords(z.cx,z.cy,nx,ny);
+        let nk=distKey(cxN,cyN,xN,yN);
+        if(distMap[nk]!=null && distMap[nk]<bestD){
+          bestD=distMap[nk];
+          bestMove={cx:cxN,cy:cyN,x:xN,y:yN};
+        }
+      }
+      if(bestMove) {
+        z.cxTarget=bestMove.cx; z.cyTarget=bestMove.cy; z.xTarget=bestMove.x; z.yTarget=bestMove.y;
+      } else {
+        z.cxTarget=z.cx; z.cyTarget=z.cy; z.xTarget=z.x; z.yTarget=z.y;
+      }
+    } else {
+      z.cxTarget=z.cx; z.cyTarget=z.cy; z.xTarget=z.x; z.yTarget=z.y;
+    }
+  }
+}
+
+function moveZombies() {
+  let speed = zombieSpeedCalc();
+  for(let z of zombies){
+    if(z.cxTarget===undefined) {
+      z.cxTarget=z.cx; z.cyTarget=z.cy; z.xTarget=z.x; z.yTarget=z.y;
+    }
+    let targetXPos = z.cxTarget*CHUNK_WORLD_SIZE + z.xTarget*TILE_SIZE + TILE_SIZE/2;
+    let targetYPos = z.cyTarget*CHUNK_WORLD_SIZE + z.yTarget*TILE_SIZE + TILE_SIZE/2;
+    let dx = targetXPos - z.xPos;
+    let dy = targetYPos - z.yPos;
+    let dist = Math.sqrt(dx*dx+dy*dy);
+    if(dist>speed){
+      dx*=speed/dist;
+      dy*=speed/dist;
+      z.xPos += dx;
+      z.yPos += dy;
+    } else {
+      z.xPos = targetXPos;
+      z.yPos = targetYPos;
+      z.cx=z.cxTarget; z.cy=z.cyTarget; z.x=z.xTarget; z.y=z.yTarget;
+    }
+  }
+}
+
+function placePlayerAtStart(){
+  ensureChunkGenerated(0,0);
+  let cdata = chunkCache["0_0"];
+  let rooms = cdata.rooms;
+  if(rooms.length>0){
+    let startRoom = rooms[0];
+    let centerX = (startRoom.x + Math.floor(startRoom.w/2))*TILE_SIZE + TILE_SIZE/2;
+    let centerY = (startRoom.y + Math.floor(startRoom.h/2))*TILE_SIZE + TILE_SIZE/2;
+    player.x = centerX;
+    player.y = centerY;
+  } else {
+    player.x = CHUNK_WORLD_SIZE/2;
+    player.y = CHUNK_WORLD_SIZE/2;
+  }
+}
+
+function shoot(){
+  let now = performance.now();
+  if(now - lastShot > 200){
+    let wx = player.x + (mouseX - W/2);
+    let wy = player.y + (mouseY - H/2);
+    let dx = wx - player.x;
+    let dy = wy - player.y;
+    let dist = Math.sqrt(dx*dx+dy*dy);
+    if(dist>0){
+      dx/=dist; dy/=dist;
+      if(tripleShots>0){
+        tripleShots--;
+        bullets.push({x:player.x,y:player.y,vx:dx*8,vy:dy*8,life:100});
+        let angle = Math.atan2(dy,dx);
+        let leftAngle = angle - Math.PI/6; 
+        let rightAngle = angle + Math.PI/6;
+        let ldx = Math.cos(leftAngle);
+        let ldy = Math.sin(leftAngle);
+        let rdx = Math.cos(rightAngle);
+        let rdy = Math.sin(rightAngle);
+        bullets.push({x:player.x,y:player.y,vx:ldx*8,vy:ldy*8,life:100});
+        bullets.push({x:player.x,y:player.y,vx:rdx*8,vy:rdy*8,life:100});
+      } else {
+        bullets.push({
+          x: player.x,
+          y: player.y,
+          vx: dx*8,
+          vy: dy*8,
+          life: 100
+        });
+      }
+    }
+    lastShot = now;
+  }
+}
+
+function activateSkull(){
+  skullCharges--;
+  skullActive = true;
+  skullActivationTime = performance.now() + SKULL_DELAY;
+}
+
+function bulletZombieCollision() {
+  for(let i=bullets.length-1; i>=0; i--){
+    let b=bullets[i];
+    for(let j=zombies.length-1; j>=0; j--){
+      let z=zombies[j];
+      let dx=b.x - z.xPos;
+      let dy=b.y - z.yPos;
+      if(dx*dx+dy*dy<(10+5)*(10+5)) {
+        zombies.splice(j,1);
+        bullets.splice(i,1);
+        zombiesDestroyed++;
+        break;
+      }
+    }
+  }
+}
+
+function checkZombiePlayerCollision(){
+  for(let i=zombies.length-1; i>=0; i--){
+    let z=zombies[i];
+    let dx=z.xPos - player.x;
+    let dy=z.yPos - player.y;
+    let dist = dx*dx+dy*dy;
+    if(dist<(10+player.size/2)*(10+player.size/2)) {
+      player.health--;
+      if(player.health<=0 && !gameOver){
+        endGame();
+      }
+      zombies.splice(i,1);
+    }
+  }
+}
+
+function checkHeartPickup(){
+  for(let i=hearts.length-1; i>=0; i--){
+    let h=hearts[i];
+    let dx=h.xPos - player.x;
+    let dy=h.yPos - player.y;
+    let dist = dx*dx+dy*dy;
+    if(dist<(player.size/2+10)*(player.size/2+10)){
+      player.health++;
+      hearts.splice(i,1);
+    }
+  }
+}
+
+function checkBoltPickup(){
+  for(let i=bolts.length-1; i>=0; i--){
+    let b=bolts[i];
+    let dx=b.xPos - player.x;
+    let dy=b.yPos - player.y;
+    let dist = dx*dx+dy*dy;
+    if(dist<(player.size/2+10)*(player.size/2+10)){
+      tripleShots=10; 
+      bolts.splice(i,1);
+    }
+  }
+}
+
+function checkSkullPickup(){
+  for(let i=skulls.length-1; i>=0; i--){
+    let s=skulls[i];
+    let dx=s.xPos - player.x;
+    let dy=s.yPos - player.y;
+    let dist = dx*dx+dy*dy;
+    if(dist<(player.size/2+10)*(player.size/2+10)){
+      skullCharges++;
+      skulls.splice(i,1);
+    }
+  }
+}
+
+function doSkullEffect() {
+  if(skullActive && performance.now()>skullActivationTime){
+    for(let i=zombies.length-1; i>=0; i--){
+      let z=zombies[i];
+      let dx=z.xPos - player.x;
+      let dy=z.yPos - player.y;
+      if(dx*dx+dy*dy<=SKULL_RADIUS*SKULL_RADIUS){
+        zombies.splice(i,1);
+        zombiesDestroyed++;
+      }
+    }
+    skullActive=false;
+  }
+}
+
+function update() {
+  if(gameOver) return;
+
+  frameCount++;
+  let spd = getPlayerSpeed();
+  let vx = 0;
+  let vy = 0;
+  
+  if(keys['KeyW']) vy -= spd;
+  if(keys['KeyS']) vy += spd;
+  if(keys['KeyA']) vx -= spd;
+  if(keys['KeyD']) vx += spd;
+
+  let nx = player.x + vx;
+  let ny = player.y + vy;
+
+  if(canMoveTo(nx, ny)){
+    player.x = nx;
+    player.y = ny;
+  } else {
+    if(canMoveTo(nx, player.y)) player.x = nx;
+    if(canMoveTo(player.x, ny)) player.y = ny;
+  }
+
+  for(let i=bullets.length-1; i>=0; i--){
+    let b = bullets[i];
+    b.x += b.vx;
+    b.y += b.vy;
+    b.life--;
+    if(b.life<=0||getTile(b.x,b.y)===0){
+      bullets.splice(i,1);
+    }
+  }
+
+  checkForChunkUnlock();
+  checkRoomEntry();
+  doZombiePathfinding();
+  moveZombies();
+  bulletZombieCollision();
+  checkZombiePlayerCollision();
+  checkHeartPickup();
+  checkBoltPickup();
+  checkSkullPickup();
+  doSkullEffect();
+
+  document.getElementById('healthDisplay').textContent = player.health;
+  document.getElementById('zombiesDestroyedDisplay').textContent = zombiesDestroyed;
+  document.getElementById('tripleShotsDisplay').textContent = tripleShots;
+  document.getElementById('skullCountDisplay').textContent = skullCharges;
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.translate(-player.x, -player.y);
+
+  let left = player.x - W/2;
+  let right = player.x + W/2;
+  let top = player.y - H/2;
+  let bottom = player.y + H/2;
+
+  let cxl = Math.floor(left/CHUNK_WORLD_SIZE);
+  let cxr = Math.floor(right/CHUNK_WORLD_SIZE);
+  let cyt = Math.floor(top/CHUNK_WORLD_SIZE);
+  let cyb = Math.floor(bottom/CHUNK_WORLD_SIZE);
+
+  for(let cx=cxl; cx<=cxr; cx++){
+    for(let cy=cyt; cy<=cyb; cy++){
+      let chunkData = getChunk(cx,cy);
+      let chunk = chunkData.map;
+      for(let y=0; y<CHUNK_SIZE; y++){
+        for(let x=0; x<CHUNK_SIZE; x++){
+          if(chunk[y][x] === 1) {
+            ctx.fillStyle = '#003300'; 
+          } else {
+            ctx.fillStyle = '#000000';
+          }
+          ctx.fillRect(cx*CHUNK_WORLD_SIZE + x*TILE_SIZE,
+                       cy*CHUNK_WORLD_SIZE + y*TILE_SIZE,
+                       TILE_SIZE,TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  ctx.fillStyle = '#ffffff';
+  for(let b of bullets){
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,5,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#00ff00';
+  for(let z of zombies) {
+    ctx.beginPath();
+    ctx.arc(z.xPos, z.yPos, 10, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  let bob = Math.sin(frameCount*0.1)*5; 
+  for(let h of hearts){
+    let hx = h.xPos;
+    let hy = h.yPos + bob;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.arc(hx-5, hy, 5, Math.PI*0.1, Math.PI*1.3, false);
+    ctx.arc(hx+5, hy, 5, Math.PI*1.85, Math.PI*0.6, false);
+    ctx.lineTo(hx, hy+10);
+    ctx.closePath();
+    ctx.fillStyle = '#ff0000';
+    ctx.fill();
+    ctx.strokeStyle='#fff';
+    ctx.stroke();
+  }
+
+  for(let bolt of bolts){
+    let bx = bolt.xPos;
+    let by = bolt.yPos + bob;
+    ctx.font = '20px sans-serif';
+    ctx.fillStyle = '#ffff00';
+    ctx.fillText('⚡', bx-10, by+10); 
+  }
+
+  for(let s of skulls){
+    let sx = s.xPos;
+    let sy = s.yPos + bob;
+    ctx.font = '20px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('💀', sx-10, sy+10);
+  }
+
+  if(skullActive){
+    ctx.strokeStyle = 'rgba(255,0,0,0.5)';
+    ctx.lineWidth=5;
+    ctx.beginPath();
+    ctx.arc(player.x,player.y, SKULL_RADIUS,0,Math.PI*2);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#ff0000';
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.size/2, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+
+  document.getElementById('posDisplay').textContent = Math.floor(player.x)+","+Math.floor(player.y);
+}
+
+function loop() {
+  update();
+  draw();
+  if(!gameOver){
+    requestAnimationFrame(loop);
+  }
+}
+
+placePlayerAtStart();
+loop();
+</script>
+</body>
+</html>
