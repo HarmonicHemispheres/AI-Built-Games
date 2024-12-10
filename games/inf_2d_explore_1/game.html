@@ -22,34 +22,30 @@ body, html {
   top: 0; left: 0; right: 0; bottom: 0;
 }
 
-#hud {
+/* Redesigned HUD with small cards */
+#hudBar {
   position: absolute;
   top: 10px;
-  left: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  z-index: 999;
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.1);
+  padding: 5px 10px;
+  border-radius: 8px;
   font-size: 14px;
-  color: #fff;
-}
-
-#hud .lives {
-  margin-top:5px;
-}
-
-#hud .zombieCount {
-  margin-top:5px;
-}
-
-#hud .tripleShotsCount {
-  margin-top:5px;
-}
-
-#hud .skullCount {
-  margin-top:5px;
-}
-
-#hud .skullHint {
-  margin-top:5px;
-  font-size:12px;
-  color:#aaa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  min-width: 50px;
+  text-align: center;
+  user-select: none; /* Prevents text selection */
 }
 
 #gameOverModal {
@@ -74,17 +70,76 @@ body, html {
   border:none;
   cursor:pointer;
 }
+
+#upgradeModal {
+  display:none;
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(0,0,0,0.9);
+  color:#fff;
+  padding:20px;
+  border:2px solid #999;
+  z-index:9999;
+  width:300px;
+}
+#upgradeModal h2 {
+  text-align:center;
+}
+.upgrade-container {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-top:10px;
+}
+.upgrade-card {
+  background:#222;
+  padding:10px;
+  border:1px solid #555;
+}
+.upgrade-card h3 {
+  margin:0 0 5px 0;
+  font-size:16px;
+}
+.upgrade-card p {
+  margin:0 0 5px 0;
+  font-size:14px;
+}
+.upgrade-card button {
+  background:#444;
+  color:#fff;
+  border:none;
+  padding:5px;
+  cursor:pointer;
+  font-size:14px;
+}
+#upgradeModal p.no-upgrades {
+  text-align:center;
+  font-size:14px;
+  color:#aaa;
+}
+#upgradeModal p.close-hint {
+  text-align:center;
+  margin-top:10px;
+  font-size:14px;
+  color:#aaa;
+}
 </style>
 </head>
 <body>
 <canvas id="gameCanvas"></canvas>
-<div id="hud">
-  <div class="pos">Position: <span id="posDisplay">0,0</span></div>
-  <div class="lives">Health: <span id="healthDisplay">3</span></div>
-  <div class="zombieCount">Zombies Destroyed: <span id="zombiesDestroyedDisplay">0</span></div>
-  <div class="tripleShotsCount">Triple Shots Left: <span id="tripleShotsDisplay">0</span></div>
-  <div class="skullCount">Skulls: <span id="skullCountDisplay">0</span></div>
-  <div class="skullHint">Press 'E' to use Skull Ability</div>
+
+<!-- New HUD layout -->
+<div id="hudBar">
+  <div class="stat-card" id="healthCard">💖 3</div>
+  <div class="stat-card" id="goldCard">💰 0</div>
+  <div class="stat-card" id="speedCard">SPEED: +0%</div>
+  <div class="stat-card" id="freezerCard">FREEZER: OFF</div>
+  <div class="stat-card" id="rofCard">ROF: +0%</div>
+  <div class="stat-card" id="sniperCard">SNIPER: OFF</div>
+  <div class="stat-card" id="skullBombCard">💀 0</div>
+  <div class="stat-card" id="levelCard">🧟 0</div>
 </div>
 
 <div id="gameOverModal">
@@ -93,18 +148,148 @@ body, html {
   <button id="restartBtn">Restart</button>
 </div>
 
+<div id="upgradeModal">
+  <h2>Upgrades</h2>
+  <div class="upgrade-container" id="upgradeContainer"></div>
+  <p class="no-upgrades" id="noUpgradesMsg" style="display:none;">No upgrades available.<br/>Find a gift box!</p>
+  <p class="close-hint">Press "Tab" to Close</p>
+</div>
+
 <script>
-// Changes:
-// 1. Player fires with Left Mouse Button instead of Space key.
-// 2. Skull emoji ability triggered by pressing 'E' instead of Spacebar.
-//    If skullCharges>0, pressing 'E' activates the skull ability.
-// 3. Display skullCharges in HUD and a hint to press E.
-//
-// We'll remove the space key logic for shooting.
-// On mousedown left button, we shoot.
-// On keydown 'KeyE', if skullCharges>0 and no skullActive, activate skull.
-//
-// The rest of the code is similar to the previous iteration.
+// Updated code as requested
+
+// Player upgrades data
+let gold = 0;
+
+let sniperActive = false; // Draw line to cursor if bought
+let speedRacerBonus = 100; // percentage increase in speed when shift is pressed
+let freezerChance = 0; // chance to freeze enemies
+let freezerAmount = 0; // number of enemies frozen
+let freezerDuration = 0; 
+let freezeRadius = 0; 
+let rateOfFireBonus = 1; // multiplier for bullet speed
+
+// Gift and upgrades logic
+let hasGift = false; 
+let upgradeModalOpen = false;
+let currentUpgrades = []; 
+// Once player collects a gift, generate 3 random upgrades. Until then, no new upgrades.
+// Pressing TAB now only toggles the modal without generating new ones.
+// If player buys all 3 or none are available, they must find a new gift.
+
+// Upgrades pool
+const availableUpgrades = [
+  {name:"SNIPER",desc:"Show a line from player to mouse.",apply:()=>{sniperActive=true;}, costRange:[5,20], effectRange:[0,0]},
+  {name:"SPEED RACER",desc:"Shift speed +X% faster.",apply:(val)=>{speedRacerBonus+=val;}, costRange:[5,20], effectRange:[10,30]},
+  {name:"FREEZER",desc:"Occasionally freeze enemies.",apply:(val)=>{
+    freezerChance += 0.05; 
+    freezerAmount += Math.floor(val/10); 
+    freezerDuration += Math.floor(val/10); 
+  }, costRange:[10,45], effectRange:[10,50]},
+  {
+    name:"RATE OF FIRE",
+    desc:"Projectiles go X% faster.",
+    apply:(val)=>{rateOfFireBonus+=val/100;}, 
+    costRange:[5,20], 
+    effectRange:[10,50]
+  },
+  // {
+  //   name:"FREEZE RADS", 
+  //   desc:"Shows a thin blue circle for freeze radius.", 
+  //   apply:(val)=>{ /* you can assign a variable freezeRadius = val and display a blue circle in draw */ 
+  //     freezeRadius = val;
+  //   }, 
+  //   costRange:[5,20], 
+  //   effectRange:[50,200]
+  // }
+  {
+    name: "EXTRA HEARTS",
+    desc: "Gain up to X additional hearts (max 3).",
+    apply: (val) => {
+      // val will determine how many extra hearts to add
+      // For example, if player.health < 3, we can add up to 'val' hearts but not exceed 3
+      player.health += Math.min(player.health + val, 3);
+      document.getElementById('healthCard').textContent = "💖 "+player.health;
+    },
+    costRange: [15, 50],
+    effectRange: [1,3] // For example, 1 or 3 extra hearts
+  }
+];
+
+function randBetween(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+function generateRandomUpgrades(count){
+  let chosen = [];
+  for(let i=0; i<count; i++){
+    let u = availableUpgrades[Math.floor(Math.random()*availableUpgrades.length)];
+    let cost = randBetween(u.costRange[0],u.costRange[1]);
+    let effect = randBetween(u.effectRange[0],u.effectRange[1]);
+    chosen.push({name:u.name,desc:u.desc,apply:u.apply,cost:cost,effect:effect});
+  }
+  return chosen;
+}
+
+function showUpgrades(){
+  const container = document.getElementById('upgradeContainer');
+  const noUpgradesMsg = document.getElementById('noUpgradesMsg');
+  container.innerHTML = '';
+
+  if(currentUpgrades.length===0) {
+    noUpgradesMsg.style.display='block';
+  } else {
+    noUpgradesMsg.style.display='none';
+    for(let i=0; i<currentUpgrades.length; i++){
+      const up = currentUpgrades[i];
+      const card = document.createElement('div');
+      card.className='upgrade-card';
+      card.innerHTML=`
+        <h3>${up.name}</h3>
+        <p>${up.desc}</p>
+        <p>Cost: ${up.cost} Gold</p>
+        ${up.effect>0 ? `<p>Effect Value: ${up.effect}</p>` : ``}
+        <button data-idx="${i}">Buy</button>
+      `;
+      card.querySelector('button').addEventListener('click',()=>{
+        if(gold>=up.cost){
+          gold-=up.cost;
+          up.apply(up.effect);
+          currentUpgrades.splice(i,1);
+          document.getElementById('goldCard').textContent = "G: "+gold;
+          showUpgrades();
+          updateHudCards();
+        } else {
+          alert('Not enough gold!');
+        }
+      });
+      container.appendChild(card);
+    }
+  }
+}
+
+function toggleUpgradeModal() {
+  upgradeModalOpen = !upgradeModalOpen;
+  const modal = document.getElementById('upgradeModal');
+  if(upgradeModalOpen){
+    showUpgrades();
+    modal.style.display='block';
+  } else {
+    modal.style.display='none';
+  }
+}
+
+// Freeze mechanism
+function attemptFreezeEnemies(){
+  if(freezerChance>0 && Math.random()<freezerChance && zombies.length>0){
+    let toFreeze = Math.max(zombies.length, freezerAmount);
+    for(let i=0; i<toFreeze; i++){
+      let z = zombies[Math.floor(Math.random()*zombies.length)];
+      if(!z.frozen){
+        z.frozen = true;
+        z.freezeEnd = performance.now()+freezerDuration*1000;
+      }
+    }
+  }
+}
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -124,18 +309,15 @@ let keys = {};
 window.addEventListener('keydown',(e)=>{keys[e.code]=true;});
 window.addEventListener('keyup',(e)=>{keys[e.code]=false;});
 
-// Shooting
-// Event listener for key presses
 window.addEventListener('keydown', (e) => {
-    keys[e.code] = true;
-
-    // Check if the pressed key is the Spacebar
-    if (e.code === 'Space') {
-        shoot();
-    }
+  if(e.code==='Tab'){
+    e.preventDefault();
+    // Only show/hide upgrades. Do not generate new ones here.
+    toggleUpgradeModal();
+  }
+  keys[e.code] = true;
 });
 
-// Left mouse to shoot
 let mouseX = 0;
 let mouseY = 0;
 canvas.addEventListener('mousemove', (e)=>{
@@ -143,15 +325,11 @@ canvas.addEventListener('mousemove', (e)=>{
   mouseY = e.clientY;
 });
 
-let mouseDown = false;
 canvas.addEventListener('mousedown', (e)=>{
-  if(e.button===0){ // left button
+  if(e.button===0 && !upgradeModalOpen){ 
     shoot();
   }
 });
-
-
-
 
 const player = {
   x: 0,
@@ -162,7 +340,9 @@ const player = {
 };
 
 function getPlayerSpeed() {
-  return (keys['ShiftLeft']||keys['ShiftRight']) ? player.baseSpeed*2 : player.baseSpeed;
+  let speedMult = (keys['ShiftLeft']||keys['ShiftRight']) ? (2 + speedRacerBonus/100*2) : player.baseSpeed;
+  if(!(keys['ShiftLeft']||keys['ShiftRight'])) speedMult = player.baseSpeed;
+  return speedMult;
 }
 
 let bullets = [];
@@ -176,9 +356,10 @@ let chunkCache = {};
 let gameOver = false;
 let zombiesDestroyed = 0;
 
-const hearts = []; 
-const bolts = [];  
-const skulls = []; 
+const hearts = [];  
+const bolts = [];   
+const skulls = [];  
+const gifts = []; 
 
 let tripleShots = 0;
 let skullCharges = 0; 
@@ -197,7 +378,7 @@ const restartBtn = document.getElementById('restartBtn');
 restartBtn.addEventListener('click', restartGame);
 
 window.addEventListener('keydown',(e)=>{
-  if(e.code==='KeyE' && skullCharges>0 && !skullActive){
+  if(e.code==='KeyE' && skullCharges>0 && !skullActive && !upgradeModalOpen){
     activateSkull();
   }
 });
@@ -210,12 +391,25 @@ function restartGame(){
   hearts.length=0;
   bolts.length=0;
   skulls.length=0;
+  gifts.length=0;
   zombiesDestroyed=0;
   tripleShots=0;
   skullCharges=0;
   skullActive=false;
+  gold=0;
+  sniperActive=false;
+  speedRacerBonus=0;
+  freezerChance=0;
+  freezerAmount=0;
+  freezerDuration=0;
+  rateOfFireBonus=1;
+  hasGift=false;
+  currentUpgrades=[];
+  upgradeModalOpen=false;
   gameOver = false;
   gameOverModal.style.display='none';
+  document.getElementById('goldCard').textContent = "G: "+gold;
+  updateHudCards();
   skipZombiesForThisRoom = true;
   placePlayerAtStart();
   loop();
@@ -256,7 +450,7 @@ function createAllWallMap() {
 function carveRoom(map, rx, ry, rw, rh) {
   for(let x=rx; x<rx+rw; x++){
     for(let y=ry; y<ry+rh; y++){
-      map[y][x] = 1; // floor
+      map[y][x] = 1; 
     }
   }
 }
@@ -388,6 +582,7 @@ function checkRoomEntry() {
           spawnHeartInRoom(cx, cy, R);
           spawnBoltInRoom(cx, cy, R);
           spawnSkullInRoom(cx, cy, R);
+          spawnGiftInRoom(cx, cy, R);
         }
       }
     }
@@ -407,7 +602,7 @@ function spawnZombiesInRoom(cx, cy, R) {
     } while((zx===pTile.x && zy===pTile.y && cx===pTile.cx && cy===pTile.cy) && tries<100);
     let zxPos = cx*CHUNK_WORLD_SIZE + zx*TILE_SIZE + TILE_SIZE/2;
     let zyPos = cy*CHUNK_WORLD_SIZE + zy*TILE_SIZE + TILE_SIZE/2;
-    zombies.push({cx:cx,cy:cy,x:zx,y:zy,xPos:zxPos,yPos:zyPos,targetX:zx,targetY:zy});
+    zombies.push({cx:cx,cy:cy,x:zx,y:zy,xPos:zxPos,yPos:zyPos});
   }
 }
 
@@ -441,6 +636,16 @@ function spawnSkullInRoom(cx, cy, R) {
   }
 }
 
+function spawnGiftInRoom(cx, cy, R) {
+  if(Math.random()<0.1){
+    let gx = R.x + Math.floor(Math.random()*R.w);
+    let gy = R.y + Math.floor(Math.random()*R.h);
+    let gxPos = cx*CHUNK_WORLD_SIZE + gx*TILE_SIZE + TILE_SIZE/2;
+    let gyPos = cy*CHUNK_WORLD_SIZE + gy*TILE_SIZE + TILE_SIZE/2;
+    gifts.push({xPos:gxPos,yPos:gyPos});
+  }
+}
+
 function adjustTileCoords(cx, cy, x, y) {
   while(x<0) { x+=CHUNK_SIZE; cx-=1; }
   while(x>=CHUNK_SIZE) { x-=CHUNK_SIZE; cx+=1; }
@@ -462,7 +667,7 @@ function carveCorridorLine(cx, cy, startX, startY, length, dx, dy) {
     let targetChunk = getChunk(cxN, cyN);
     targetChunk.map[yN][xN] = 1;
 
-    carved.push({cx:cxN, cy:cyN, x:xN, y:yN});
+    carved.push({cx:cxN,cy:cyN,x:xN,y:yN});
 
     curCX = cxN; curCY = cyN;
     curX = xN + dx;
@@ -491,14 +696,6 @@ function carveCorridorAndRoom(cx, cy, startX, startY, dx, dy, corridorLength) {
 
   carveRoomAt(endTile.cx, endTile.cy, endTile.x, endTile.y);
   return corridorTiles;
-}
-
-function carveBranchCorridor(midTile, dx, dy) {
-  let corridorLength = 3+Math.floor(Math.random()*4);
-  let corridorTiles = carveCorridorLine(midTile.cx, midTile.cy, midTile.x+dx, midTile.y+dy, corridorLength, dx, dy);
-  if(corridorTiles.length===0) return;
-  let endTile = corridorTiles[corridorTiles.length-1];
-  carveRoomAt(endTile.cx, endTile.cy, endTile.x, endTile.y);
 }
 
 function generateChunk(cx, cy) {
@@ -566,15 +763,20 @@ function generateNewHallwayFromRoom(cx, cy, roomIndex) {
   }
 }
 
+function carveBranchCorridor(midTile, dx, dy) {
+  let corridorLength = 3+Math.floor(Math.random()*4);
+  let corridorTiles = carveCorridorLine(midTile.cx, midTile.cy, midTile.x+dx, midTile.y+dy, corridorLength, dx, dy);
+  if(corridorTiles.length===0) return;
+  let endTile = corridorTiles[corridorTiles.length-1];
+  carveRoomAt(endTile.cx, endTile.cy, endTile.x, endTile.y);
+}
+
 function zombieSpeedCalc() {
   return 1 + Math.floor(zombiesDestroyed/100)*0.5;
 }
 
 function doZombiePathfinding() {
   if(frameCount % BFS_INTERVAL !== 0) return; 
-
-  let px = Math.floor(player.x/TILE_SIZE);
-  let py = Math.floor(player.y/TILE_SIZE);
 
   let left = player.x - W/2;
   let right = player.x + W/2;
@@ -617,6 +819,12 @@ function doZombiePathfinding() {
 
   for(let i=zombies.length-1; i>=0; i--){
     let z = zombies[i];
+    if(z.frozen && performance.now()>z.freezeEnd){
+      z.frozen=false;
+    }
+
+    if(z.frozen) continue; 
+
     let zk = distKey(z.cx,z.cy,z.x,z.y);
     if(distMap[zk]!=null){
       let bestD=distMap[zk];
@@ -645,6 +853,7 @@ function doZombiePathfinding() {
 function moveZombies() {
   let speed = zombieSpeedCalc();
   for(let z of zombies){
+    if(z.frozen) continue;
     if(z.cxTarget===undefined) {
       z.cxTarget=z.cx; z.cyTarget=z.cy; z.xTarget=z.x; z.yTarget=z.y;
     }
@@ -692,9 +901,10 @@ function shoot(){
     let dist = Math.sqrt(dx*dx+dy*dy);
     if(dist>0){
       dx/=dist; dy/=dist;
+      let bulletSpeed = 8 * rateOfFireBonus;
       if(tripleShots>0){
         tripleShots--;
-        bullets.push({x:player.x,y:player.y,vx:dx*8,vy:dy*8,life:100});
+        bullets.push({x:player.x,y:player.y,vx:dx*bulletSpeed,vy:dy*bulletSpeed,life:100});
         let angle = Math.atan2(dy,dx);
         let leftAngle = angle - Math.PI/6; 
         let rightAngle = angle + Math.PI/6;
@@ -702,14 +912,14 @@ function shoot(){
         let ldy = Math.sin(leftAngle);
         let rdx = Math.cos(rightAngle);
         let rdy = Math.sin(rightAngle);
-        bullets.push({x:player.x,y:player.y,vx:ldx*8,vy:ldy*8,life:100});
-        bullets.push({x:player.x,y:player.y,vx:rdx*8,vy:rdy*8,life:100});
+        bullets.push({x:player.x,y:player.y,vx:ldx*bulletSpeed,vy:ldy*bulletSpeed,life:100});
+        bullets.push({x:player.x,y:player.y,vx:rdx*bulletSpeed,vy:rdy*bulletSpeed,life:100});
       } else {
         bullets.push({
           x: player.x,
           y: player.y,
-          vx: dx*8,
-          vy: dy*8,
+          vx: dx*bulletSpeed,
+          vy: dy*bulletSpeed,
           life: 100
         });
       }
@@ -735,6 +945,8 @@ function bulletZombieCollision() {
         zombies.splice(j,1);
         bullets.splice(i,1);
         zombiesDestroyed++;
+        gold++;
+        document.getElementById('goldCard').textContent = "G: "+gold;
         break;
       }
     }
@@ -744,6 +956,7 @@ function bulletZombieCollision() {
 function checkZombiePlayerCollision(){
   for(let i=zombies.length-1; i>=0; i--){
     let z=zombies[i];
+    if(z.frozen) continue;
     let dx=z.xPos - player.x;
     let dy=z.yPos - player.y;
     let dist = dx*dx+dy*dy;
@@ -796,6 +1009,21 @@ function checkSkullPickup(){
   }
 }
 
+function checkGiftPickup(){
+  for(let i=gifts.length-1; i>=0; i--){
+    let g=gifts[i];
+    let dx=g.xPos - player.x;
+    let dy=g.yPos - player.y;
+    let dist = dx*dx+dy*dy;
+    if(dist<(player.size/2+10)*(player.size/2+10)){
+      hasGift=true;
+      // Generate new 3 random upgrades
+      currentUpgrades = generateRandomUpgrades(3);
+      gifts.splice(i,1);
+    }
+  }
+}
+
 function doSkullEffect() {
   if(skullActive && performance.now()>skullActivationTime){
     for(let i=zombies.length-1; i>=0; i--){
@@ -805,14 +1033,33 @@ function doSkullEffect() {
       if(dx*dx+dy*dy<=SKULL_RADIUS*SKULL_RADIUS){
         zombies.splice(i,1);
         zombiesDestroyed++;
+        gold++;
+        document.getElementById('goldCard').textContent = "G: "+gold;
       }
     }
     skullActive=false;
   }
 }
 
+function updateHudCards(){
+  document.getElementById('healthCard').textContent = "💖 "+player.health;
+  document.getElementById('goldCard').textContent = "💰 "+gold;
+  document.getElementById('skullBombCard').textContent = "💀 " + skullCharges;
+  document.getElementById('sniperCard').textContent = "SNIPER: "+(sniperActive?"ON":"OFF");
+  document.getElementById('speedCard').textContent = "SPEED: +"+speedRacerBonus+"%";
+  if(freezerChance>0){
+    document.getElementById('freezerCard').textContent = "FREEZER: "+Math.round(freezerChance*100)+"%/" + freezerAmount + "e/" + freezerDuration+"s";
+  } else {
+    document.getElementById('freezerCard').textContent = "FREEZER: OFF";
+  }
+  let rofBonusPct = Math.round((rateOfFireBonus-1)*100);
+  document.getElementById('rofCard').textContent = "ROF: +"+rofBonusPct+"%";
+  document.getElementById('levelCard').textContent = "🧟 " + zombiesDestroyed;
+}
+
 function update() {
   if(gameOver) return;
+  if(upgradeModalOpen) return; 
 
   frameCount++;
   let spd = getPlayerSpeed();
@@ -854,12 +1101,15 @@ function update() {
   checkHeartPickup();
   checkBoltPickup();
   checkSkullPickup();
+  checkGiftPickup();
   doSkullEffect();
 
-  document.getElementById('healthDisplay').textContent = player.health;
-  document.getElementById('zombiesDestroyedDisplay').textContent = zombiesDestroyed;
-  document.getElementById('tripleShotsDisplay').textContent = tripleShots;
-  document.getElementById('skullCountDisplay').textContent = skullCharges;
+  // Occasionally attempt freeze
+  if(frameCount%300===0 && freezerChance>0){
+    attemptFreezeEnemies();
+  }
+
+  updateHudCards();
 }
 
 function draw() {
@@ -898,6 +1148,16 @@ function draw() {
     }
   }
 
+  if(sniperActive){
+    let wx = player.x + (mouseX - W/2);
+    let wy = player.y + (mouseY - H/2);
+    ctx.strokeStyle='rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.moveTo(player.x,player.y);
+    ctx.lineTo(wx,wy);
+    ctx.stroke();
+  }
+
   ctx.fillStyle = '#ffffff';
   for(let b of bullets){
     ctx.beginPath();
@@ -905,43 +1165,45 @@ function draw() {
     ctx.fill();
   }
 
-  ctx.fillStyle = '#00ff00';
   for(let z of zombies) {
     ctx.beginPath();
+    if(z.frozen){
+      ctx.fillStyle='rgba(0,255,255,0.7)';
+    } else {
+      ctx.fillStyle = '#00ff00';
+    }
     ctx.arc(z.xPos, z.yPos, 10, 0, Math.PI*2);
     ctx.fill();
   }
 
   let bob = Math.sin(frameCount*0.1)*5; 
+
+  ctx.font = '20px sans-serif';
+  ctx.fillStyle = '#ffff00';
   for(let h of hearts){
     let hx = h.xPos;
     let hy = h.yPos + bob;
-    ctx.beginPath();
-    ctx.moveTo(hx, hy);
-    ctx.arc(hx-5, hy, 5, Math.PI*0.1, Math.PI*1.3, false);
-    ctx.arc(hx+5, hy, 5, Math.PI*1.85, Math.PI*0.6, false);
-    ctx.lineTo(hx, hy+10);
-    ctx.closePath();
-    ctx.fillStyle = '#ff0000';
-    ctx.fill();
-    ctx.strokeStyle='#fff';
-    ctx.stroke();
+    ctx.fillText('💖', hx-10, hy+10); 
   }
 
   for(let bolt of bolts){
     let bx = bolt.xPos;
     let by = bolt.yPos + bob;
-    ctx.font = '20px sans-serif';
-    ctx.fillStyle = '#ffff00';
     ctx.fillText('⚡', bx-10, by+10); 
   }
 
+  ctx.fillStyle = '#ffffff';
   for(let s of skulls){
     let sx = s.xPos;
     let sy = s.yPos + bob;
-    ctx.font = '20px sans-serif';
-    ctx.fillStyle = '#ffffff';
     ctx.fillText('💀', sx-10, sy+10);
+  }
+
+  ctx.fillStyle = '#ffa500';
+  for(let g of gifts){
+    let gx = g.xPos;
+    let gy = g.yPos + bob;
+    ctx.fillText('🎁', gx-10, gy+10);
   }
 
   if(skullActive){
@@ -952,14 +1214,19 @@ function draw() {
     ctx.stroke();
   }
 
+  // if (freezeRadius > 0) {
+  //   ctx.strokeStyle = 'rgba(0,0,255,0.5)';
+  //   ctx.beginPath();
+  //   ctx.arc(player.x, player.y, freezeRadius, 0, Math.PI*2);
+  //   ctx.stroke();
+  // }
+
   ctx.fillStyle = '#ff0000';
   ctx.beginPath();
   ctx.arc(player.x, player.y, player.size/2, 0, Math.PI*2);
   ctx.fill();
 
   ctx.restore();
-
-  document.getElementById('posDisplay').textContent = Math.floor(player.x)+","+Math.floor(player.y);
 }
 
 function loop() {
