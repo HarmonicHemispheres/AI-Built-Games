@@ -117,7 +117,7 @@
     </div>
     <div id="settings-modal" class="modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
+            <span class="close">×</span>
             <h2>Settings</h2>
             <label>
                 <input type="checkbox" id="last-move-icon-toggle" checked>
@@ -134,6 +134,12 @@
             <button data-piece="n">Knight</button>
         </div>
     </div>
+    <div id="game-over-dialog" class="modal">
+        <div class="modal-content">
+            <p id="game-over-message"></p>
+            <button id="restart-button">Restart</button>
+        </div>
+    </div>
     <script>
         const boardElement = document.getElementById('board');
         const statusElement = document.getElementById('status');
@@ -144,13 +150,16 @@
         const closeModal = document.querySelector('#settings-modal .close');
         const lastMoveIconToggle = document.getElementById('last-move-icon-toggle');
         const promotionDialog = document.getElementById('promotion-dialog');
-
+        const gameOverDialog = document.getElementById('game-over-dialog');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const restartButton = document.getElementById('restart-button');
+    
         const pieceUnicode = {
             'P': '♙', 'p': '♟', 'N': '♘', 'n': '♞',
             'B': '♗', 'b': '♝', 'R': '♖', 'r': '♜',
             'Q': '♕', 'q': '♛', 'K': '♔', 'k': '♚'
         };
-
+    
         let board = [];
         let currentTurn = 'white';
         let selectedPiece = null;
@@ -158,7 +167,8 @@
         let whiteCaptured = 0;
         let blackCaptured = 0;
         let showLastMoveIcon = true;
-
+        let isGameOver = false;
+    
         function initBoard() {
             board = [
                 ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -178,8 +188,9 @@
             renderBoard();
             updateStatus();
             updateCapturedPieces();
+            isGameOver = false;
         }
-
+    
         function renderBoard() {
             boardElement.innerHTML = '';
             for (let row = 0; row < 8; row++) {
@@ -203,8 +214,9 @@
                 }
             }
         }
-
+    
         function handleClick(row, col) {
+            if (isGameOver) return;
             if (selectedPiece) {
                 const legalMoves = getLegalMoves(selectedPiece.row, selectedPiece.col);
                 const move = legalMoves.find(m => m.toRow === row && m.toCol === col);
@@ -213,6 +225,7 @@
                     selectedPiece = null;
                     clearHighlights();
                     switchTurn();
+                    checkGameOver();
                 } else {
                     selectedPiece = null;
                     clearHighlights();
@@ -224,27 +237,45 @@
                 highlightLegalMoves(row, col);
             }
         }
-
+    
         function getLegalMoves(row, col) {
             const piece = board[row][col];
             if (!piece || getColor(piece) !== currentTurn) return [];
-            return getPseudoLegalMoves(row, col); // Simplified for this example
+            const pseudoMoves = getPseudoLegalMoves(row, col);
+            const legalMoves = [];
+            const color = getColor(piece);
+            for (const move of pseudoMoves) {
+                const { toRow, toCol } = move;
+                const tempBoard = cloneBoard(board);
+                tempBoard[toRow][toCol] = tempBoard[row][col];
+                tempBoard[row][col] = null;
+                const kingPos = findKingOnBoard(tempBoard, color);
+                const opponentColor = color === 'white' ? 'black' : 'white';
+                if (!isSquareUnderAttackOnBoard(tempBoard, kingPos.row, kingPos.col, opponentColor)) {
+                    legalMoves.push(move);
+                }
+            }
+            return legalMoves;
         }
-
+    
         function getPseudoLegalMoves(row, col) {
             const piece = board[row][col].toLowerCase();
             switch (piece) {
                 case 'p': return getPawnMoves(row, col);
                 case 'n': return getKnightMoves(row, col);
                 case 'r': return getRookMoves(row, col);
+                case 'b': return getBishopMoves(row, col);
+                case 'q': return [...getRookMoves(row, col), ...getBishopMoves(row, col)];
+                case 'k': return getKingMoves(row, col);
                 default: return [];
             }
         }
-
+    
         function getPawnMoves(row, col) {
             const moves = [];
-            const direction = getColor(board[row][col]) === 'white' ? -1 : 1;
-            const startRow = getColor(board[row][col]) === 'white' ? 6 : 1;
+            const pieceColor = getColor(board[row][col]);
+            const direction = pieceColor === 'white' ? -1 : 1;
+            const startRow = pieceColor === 'white' ? 6 : 1;
             if (isEmpty(row + direction, col)) {
                 moves.push({ toRow: row + direction, toCol: col });
                 if (row === startRow && isEmpty(row + 2 * direction, col)) {
@@ -258,15 +289,17 @@
             });
             return moves;
         }
-
+    
         function getKnightMoves(row, col) {
+            const pieceColor = getColor(board[row][col]);
             const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
             return deltas.map(([dr, dc]) => ({ toRow: row + dr, toCol: col + dc }))
                 .filter(m => isOnBoard(m.toRow, m.toCol) && !isFriendlyPiece(m.toRow, m.toCol));
         }
-
+    
         function getRookMoves(row, col) {
             const moves = [];
+            const pieceColor = getColor(board[row][col]);
             const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
             for (const [dr, dc] of directions) {
                 for (let step = 1; step <= 7; step++) {
@@ -282,11 +315,52 @@
             }
             return moves;
         }
-
+    
+        function getBishopMoves(row, col) {
+            const moves = [];
+            const pieceColor = getColor(board[row][col]);
+            const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+            for (const [dr, dc] of directions) {
+                for (let step = 1; step <= 7; step++) {
+                    const r = row + dr * step;
+                    const c = col + dc * step;
+                    if (!isOnBoard(r, c)) break;
+                    if (isEmpty(r, c)) moves.push({ toRow: r, toCol: c });
+                    else if (isOpponentPiece(r, c)) {
+                        moves.push({ toRow: r, toCol: c });
+                        break;
+                    } else break;
+                }
+            }
+            return moves;
+        }
+    
+        function getKingMoves(row, col) {
+            const moves = [];
+            const pieceColor = getColor(board[row][col]);
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const r = row + dr;
+                    const c = col + dc;
+                    if (isOnBoard(r, c) && !isFriendlyPiece(r, c)) {
+                        moves.push({ toRow: r, toCol: c });
+                    }
+                }
+            }
+            return moves;
+        }
+    
         function movePiece(fromRow, fromCol, toRow, toCol) {
             const piece = board[fromRow][fromCol];
             const capturedPiece = board[toRow][toCol];
             if (capturedPiece) {
+                if (capturedPiece.toLowerCase() === 'k') {
+                    const winner = getColor(piece) === 'white' ? 'White' : 'Black';
+                    showGameOverDialog(`King captured! ${winner} wins!`);
+                    isGameOver = true;
+                    return;
+                }
                 if (getColor(capturedPiece) === 'white') blackCaptured++;
                 else whiteCaptured++;
             }
@@ -300,7 +374,7 @@
                 updateCapturedPieces();
             }
         }
-
+    
         function showPromotionDialog(row, col) {
             promotionDialog.style.display = 'block';
             const buttons = promotionDialog.querySelectorAll('button');
@@ -314,35 +388,36 @@
                     renderBoard();
                     updateCapturedPieces();
                     switchTurn();
+                    checkGameOver();
                 };
             });
         }
-
+    
         function switchTurn() {
             currentTurn = currentTurn === 'white' ? 'black' : 'white';
             updateStatus();
         }
-
+    
         function getColor(piece) {
             return piece === piece.toUpperCase() ? 'white' : 'black';
         }
-
+    
         function isEmpty(row, col) {
             return isOnBoard(row, col) && !board[row][col];
         }
-
+    
         function isFriendlyPiece(row, col) {
             return isOnBoard(row, col) && board[row][col] && getColor(board[row][col]) === currentTurn;
         }
-
+    
         function isOpponentPiece(row, col) {
             return isOnBoard(row, col) && board[row][col] && getColor(board[row][col]) !== currentTurn;
         }
-
+    
         function isOnBoard(row, col) {
             return row >= 0 && row < 8 && col >= 0 && col < 8;
         }
-
+    
         function highlightLegalMoves(row, col) {
             clearHighlights();
             const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
@@ -352,40 +427,270 @@
                     .classList.add('highlight');
             });
         }
-
+    
         function clearHighlights() {
             document.querySelectorAll('.square').forEach(s => s.classList.remove('selected', 'highlight'));
         }
-
+    
         function updateStatus() {
             statusElement.innerText = `${currentTurn.charAt(0).toUpperCase() + currentTurn.slice(1)}'s turn`;
         }
-
+    
         function updateCapturedPieces() {
             whiteCapturedElement.innerText = `White captured: ${whiteCaptured}`;
             blackCapturedElement.innerText = `Black captured: ${blackCaptured}`;
         }
-
-        // Settings Modal Logic
+    
+        function cloneBoard(board) {
+            return board.map(row => row.slice());
+        }
+    
+        function findKing(color) {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece && getColor(piece) === color && piece.toLowerCase() === 'k') {
+                        return { row, col };
+                    }
+                }
+            }
+            throw new Error('King not found!');
+        }
+    
+        function findKingOnBoard(board, color) {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece && getColor(piece) === color && piece.toLowerCase() === 'k') {
+                        return { row, col };
+                    }
+                }
+            }
+            throw new Error('King not found!');
+        }
+    
+        function isSquareUnderAttack(targetRow, targetCol, attackerColor) {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece && getColor(piece) === attackerColor) {
+                        const attacks = getAttackingMoves(row, col);
+                        if (attacks.some(m => m.toRow === targetRow && m.toCol === targetCol)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+    
+        function isSquareUnderAttackOnBoard(board, targetRow, targetCol, attackerColor) {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece && getColor(piece) === attackerColor) {
+                        const attacks = getAttackingMovesOnBoard(board, row, col);
+                        if (attacks.some(m => m.toRow === targetRow && m.toCol === targetCol)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+    
+        function getAttackingMoves(row, col) {
+            const piece = board[row][col];
+            const pieceType = piece.toLowerCase();
+            if (pieceType === 'p') {
+                const color = getColor(piece);
+                const direction = color === 'white' ? -1 : 1;
+                const attacks = [];
+                if (isOnBoard(row + direction, col - 1)) attacks.push({ toRow: row + direction, toCol: col - 1 });
+                if (isOnBoard(row + direction, col + 1)) attacks.push({ toRow: row + direction, toCol: col + 1 });
+                return attacks;
+            }
+            return getPseudoLegalMoves(row, col);
+        }
+    
+        function getAttackingMovesOnBoard(board, row, col) {
+            const piece = board[row][col];
+            const pieceType = piece.toLowerCase();
+            if (pieceType === 'p') {
+                const color = getColor(piece);
+                const direction = color === 'white' ? -1 : 1;
+                const attacks = [];
+                if (isOnBoard(row + direction, col - 1)) attacks.push({ toRow: row + direction, toCol: col - 1 });
+                if (isOnBoard(row + direction, col + 1)) attacks.push({ toRow: row + direction, toCol: col + 1 });
+                return attacks;
+            }
+            return getPseudoLegalMovesOnBoard(board, row, col);
+        }
+    
+        function getPseudoLegalMovesOnBoard(board, row, col) {
+            const piece = board[row][col].toLowerCase();
+            switch (piece) {
+                case 'p': return getPawnMovesOnBoard(board, row, col);
+                case 'n': return getKnightMovesOnBoard(board, row, col);
+                case 'r': return getRookMovesOnBoard(board, row, col);
+                case 'b': return getBishopMovesOnBoard(board, row, col);
+                case 'q': return [...getRookMovesOnBoard(board, row, col), ...getBishopMovesOnBoard(board, row, col)];
+                case 'k': return getKingMovesOnBoard(board, row, col);
+                default: return [];
+            }
+        }
+    
+        function getPawnMovesOnBoard(board, row, col) {
+            const moves = [];
+            const pieceColor = getColor(board[row][col]);
+            const direction = pieceColor === 'white' ? -1 : 1;
+            const startRow = pieceColor === 'white' ? 6 : 1;
+            if (isEmptyOnBoard(board, row + direction, col)) {
+                moves.push({ toRow: row + direction, toCol: col });
+                if (row === startRow && isEmptyOnBoard(board, row + 2 * direction, col)) {
+                    moves.push({ toRow: row + 2 * direction, toCol: col });
+                }
+            }
+            [-1, 1].forEach(dc => {
+                if (isOpponentPieceOnBoard(board, row + direction, col + dc, pieceColor)) {
+                    moves.push({ toRow: row + direction, toCol: col + dc });
+                }
+            });
+            return moves;
+        }
+    
+        function getKnightMovesOnBoard(board, row, col) {
+            const pieceColor = getColor(board[row][col]);
+            const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+            return deltas.map(([dr, dc]) => ({ toRow: row + dr, toCol: col + dc }))
+                .filter(m => isOnBoard(m.toRow, m.toCol) && !isFriendlyPieceOnBoard(board, m.toRow, m.toCol, pieceColor));
+        }
+    
+        function getRookMovesOnBoard(board, row, col) {
+            const moves = [];
+            const pieceColor = getColor(board[row][col]);
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dr, dc] of directions) {
+                for (let step = 1; step <= 7; step++) {
+                    const r = row + dr * step;
+                    const c = col + dc * step;
+                    if (!isOnBoard(r, c)) break;
+                    if (isEmptyOnBoard(board, r, c)) moves.push({ toRow: r, toCol: c });
+                    else if (isOpponentPieceOnBoard(board, r, c, pieceColor)) {
+                        moves.push({ toRow: r, toCol: c });
+                        break;
+                    } else break;
+                }
+            }
+            return moves;
+        }
+    
+        function getBishopMovesOnBoard(board, row, col) {
+            const moves = [];
+            const pieceColor = getColor(board[row][col]);
+            const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+            for (const [dr, dc] of directions) {
+                for (let step = 1; step <= 7; step++) {
+                    const r = row + dr * step;
+                    const c = col + dc * step;
+                    if (!isOnBoard(r, c)) break;
+                    if (isEmptyOnBoard(board, r, c)) moves.push({ toRow: r, toCol: c });
+                    else if (isOpponentPieceOnBoard(board, r, c, pieceColor)) {
+                        moves.push({ toRow: r, toCol: c });
+                        break;
+                    } else break;
+                }
+            }
+            return moves;
+        }
+    
+        function getKingMovesOnBoard(board, row, col) {
+            const moves = [];
+            const pieceColor = getColor(board[row][col]);
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const r = row + dr;
+                    const c = col + dc;
+                    if (isOnBoard(r, c) && !isFriendlyPieceOnBoard(board, r, c, pieceColor)) {
+                        moves.push({ toRow: r, toCol: c });
+                    }
+                }
+            }
+            return moves;
+        }
+    
+        function isEmptyOnBoard(board, row, col) {
+            return isOnBoard(row, col) && !board[row][col];
+        }
+    
+        function isFriendlyPieceOnBoard(board, row, col, color) {
+            return isOnBoard(row, col) && board[row][col] && getColor(board[row][col]) === color;
+        }
+    
+        function isOpponentPieceOnBoard(board, row, col, color) {
+            return isOnBoard(row, col) && board[row][col] && getColor(board[row][col]) !== color;
+        }
+    
+        function isKingInCheck(color) {
+            const kingPos = findKing(color);
+            const opponentColor = color === 'white' ? 'black' : 'white';
+            return isSquareUnderAttack(kingPos.row, kingPos.col, opponentColor);
+        }
+    
+        function hasLegalMoves(color) {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    if (board[row][col] && getColor(board[row][col]) === color) {
+                        const moves = getLegalMoves(row, col);
+                        if (moves.length > 0) return true;
+                    }
+                }
+            }
+            return false;
+        }
+    
+        function checkGameOver() {
+            if (!hasLegalMoves(currentTurn)) {
+                if (isKingInCheck(currentTurn)) {
+                    const winner = currentTurn === 'white' ? 'Black' : 'White';
+                    showGameOverDialog(`${currentTurn.charAt(0).toUpperCase() + currentTurn.slice(1)} is in checkmate! ${winner} wins!`);
+                } else {
+                    showGameOverDialog('Stalemate! The game is a draw.');
+                }
+                isGameOver = true;
+            }
+        }
+    
+        function showGameOverDialog(message) {
+            gameOverMessage.innerText = message;
+            gameOverDialog.style.display = 'block';
+        }
+    
         settingsIcon.addEventListener('click', () => {
             settingsModal.style.display = 'block';
         });
-
+    
         closeModal.addEventListener('click', () => {
             settingsModal.style.display = 'none';
         });
-
+    
         window.addEventListener('click', (event) => {
             if (event.target == settingsModal) {
                 settingsModal.style.display = 'none';
             }
         });
-
+    
         lastMoveIconToggle.addEventListener('change', () => {
             showLastMoveIcon = lastMoveIconToggle.checked;
             renderBoard();
         });
-
+    
+        restartButton.addEventListener('click', () => {
+            gameOverDialog.style.display = 'none';
+            initBoard();
+        });
+    
         initBoard();
     </script>
 </body>
