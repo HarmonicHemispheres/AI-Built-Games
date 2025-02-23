@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            flex-direction: column;
+            position: relative;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 80px);
+            grid-template-rows: repeat(8, 80px);
+            gap: 0;
+        }
+        .square {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 50px;
+            cursor: pointer;
+            position: relative;
+        }
+        .light {
+            background-color: #f0d9b5;
+        }
+        .dark {
+            background-color: #b58863;
+        }
+        .selected {
+            background-color: yellow;
+        }
+        .highlight {
+            background-color: lightgreen;
+        }
+        .last-move::after {
+            content: '🔹';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 16px;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 20px;
+            text-align: center;
+        }
+        #captured-pieces {
+            margin-top: 10px;
+            font-size: 18px;
+            text-align: center;
+        }
+        .white-piece {
+            color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+        .black-piece {
+            color: black;
+        }
+        #settings-icon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 400px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <span id="settings-icon">⚙️</span>
+    <div id="board"></div>
+    <div id="status"></div>
+    <div id="captured-pieces">
+        <span id="white-captured">White captured: 0</span> | 
+        <span id="black-captured">Black captured: 0</span>
+    </div>
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Settings</h2>
+            <label>
+                <input type="checkbox" id="last-move-icon-toggle" checked>
+                Show last move icon
+            </label>
+        </div>
+    </div>
+    <div id="promotion-dialog" class="modal">
+        <div class="modal-content">
+            <p>Choose promotion:</p>
+            <button data-piece="q">Queen</button>
+            <button data-piece="r">Rook</button>
+            <button data-piece="b">Bishop</button>
+            <button data-piece="n">Knight</button>
+        </div>
+    </div>
+    <script>
+        const boardElement = document.getElementById('board');
+        const statusElement = document.getElementById('status');
+        const whiteCapturedElement = document.getElementById('white-captured');
+        const blackCapturedElement = document.getElementById('black-captured');
+        const settingsIcon = document.getElementById('settings-icon');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeModal = document.querySelector('#settings-modal .close');
+        const lastMoveIconToggle = document.getElementById('last-move-icon-toggle');
+        const promotionDialog = document.getElementById('promotion-dialog');
+
+        const pieceUnicode = {
+            'P': '♙', 'p': '♟', 'N': '♘', 'n': '♞',
+            'B': '♗', 'b': '♝', 'R': '♖', 'r': '♜',
+            'Q': '♕', 'q': '♛', 'K': '♔', 'k': '♚'
+        };
+
+        let board = [];
+        let currentTurn = 'white';
+        let selectedPiece = null;
+        let lastMovedPiece = null;
+        let whiteCaptured = 0;
+        let blackCaptured = 0;
+        let showLastMoveIcon = true;
+
+        function initBoard() {
+            board = [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+            ];
+            currentTurn = 'white';
+            selectedPiece = null;
+            lastMovedPiece = null;
+            whiteCaptured = 0;
+            blackCaptured = 0;
+            renderBoard();
+            updateStatus();
+            updateCapturedPieces();
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    const piece = board[row][col];
+                    if (piece) {
+                        const pieceElement = document.createElement('span');
+                        pieceElement.innerText = pieceUnicode[piece];
+                        pieceElement.className = getColor(piece) === 'white' ? 'white-piece' : 'black-piece';
+                        square.appendChild(pieceElement);
+                    }
+                    if (showLastMoveIcon && lastMovedPiece && lastMovedPiece.row === row && lastMovedPiece.col === col) {
+                        square.classList.add('last-move');
+                    }
+                    square.addEventListener('click', () => handleClick(row, col));
+                    boardElement.appendChild(square);
+                }
+            }
+        }
+
+        function handleClick(row, col) {
+            if (selectedPiece) {
+                const legalMoves = getLegalMoves(selectedPiece.row, selectedPiece.col);
+                const move = legalMoves.find(m => m.toRow === row && m.toCol === col);
+                if (move) {
+                    movePiece(selectedPiece.row, selectedPiece.col, row, col);
+                    selectedPiece = null;
+                    clearHighlights();
+                    switchTurn();
+                } else {
+                    selectedPiece = null;
+                    clearHighlights();
+                }
+            }
+            const piece = board[row][col];
+            if (piece && getColor(piece) === currentTurn) {
+                selectedPiece = { row, col };
+                highlightLegalMoves(row, col);
+            }
+        }
+
+        function getLegalMoves(row, col) {
+            const piece = board[row][col];
+            if (!piece || getColor(piece) !== currentTurn) return [];
+            return getPseudoLegalMoves(row, col); // Simplified for this example
+        }
+
+        function getPseudoLegalMoves(row, col) {
+            const piece = board[row][col].toLowerCase();
+            switch (piece) {
+                case 'p': return getPawnMoves(row, col);
+                case 'n': return getKnightMoves(row, col);
+                case 'r': return getRookMoves(row, col);
+                default: return [];
+            }
+        }
+
+        function getPawnMoves(row, col) {
+            const moves = [];
+            const direction = getColor(board[row][col]) === 'white' ? -1 : 1;
+            const startRow = getColor(board[row][col]) === 'white' ? 6 : 1;
+            if (isEmpty(row + direction, col)) {
+                moves.push({ toRow: row + direction, toCol: col });
+                if (row === startRow && isEmpty(row + 2 * direction, col)) {
+                    moves.push({ toRow: row + 2 * direction, toCol: col });
+                }
+            }
+            [-1, 1].forEach(dc => {
+                if (isOpponentPiece(row + direction, col + dc)) {
+                    moves.push({ toRow: row + direction, toCol: col + dc });
+                }
+            });
+            return moves;
+        }
+
+        function getKnightMoves(row, col) {
+            const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+            return deltas.map(([dr, dc]) => ({ toRow: row + dr, toCol: col + dc }))
+                .filter(m => isOnBoard(m.toRow, m.toCol) && !isFriendlyPiece(m.toRow, m.toCol));
+        }
+
+        function getRookMoves(row, col) {
+            const moves = [];
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dr, dc] of directions) {
+                for (let step = 1; step <= 7; step++) {
+                    const r = row + dr * step;
+                    const c = col + dc * step;
+                    if (!isOnBoard(r, c)) break;
+                    if (isEmpty(r, c)) moves.push({ toRow: r, toCol: c });
+                    else if (isOpponentPiece(r, c)) {
+                        moves.push({ toRow: r, toCol: c });
+                        break;
+                    } else break;
+                }
+            }
+            return moves;
+        }
+
+        function movePiece(fromRow, fromCol, toRow, toCol) {
+            const piece = board[fromRow][fromCol];
+            const capturedPiece = board[toRow][toCol];
+            if (capturedPiece) {
+                if (getColor(capturedPiece) === 'white') blackCaptured++;
+                else whiteCaptured++;
+            }
+            board[toRow][toCol] = piece;
+            board[fromRow][fromCol] = null;
+            lastMovedPiece = { row: toRow, col: toCol };
+            if (piece.toLowerCase() === 'p' && (toRow === 0 || toRow === 7)) {
+                showPromotionDialog(toRow, toCol);
+            } else {
+                renderBoard();
+                updateCapturedPieces();
+            }
+        }
+
+        function showPromotionDialog(row, col) {
+            promotionDialog.style.display = 'block';
+            const buttons = promotionDialog.querySelectorAll('button');
+            buttons.forEach(button => {
+                button.onclick = () => {
+                    const piece = getColor(board[row][col]) === 'white'
+                        ? button.dataset.piece.toUpperCase()
+                        : button.dataset.piece;
+                    board[row][col] = piece;
+                    promotionDialog.style.display = 'none';
+                    renderBoard();
+                    updateCapturedPieces();
+                    switchTurn();
+                };
+            });
+        }
+
+        function switchTurn() {
+            currentTurn = currentTurn === 'white' ? 'black' : 'white';
+            updateStatus();
+        }
+
+        function getColor(piece) {
+            return piece === piece.toUpperCase() ? 'white' : 'black';
+        }
+
+        function isEmpty(row, col) {
+            return isOnBoard(row, col) && !board[row][col];
+        }
+
+        function isFriendlyPiece(row, col) {
+            return isOnBoard(row, col) && board[row][col] && getColor(board[row][col]) === currentTurn;
+        }
+
+        function isOpponentPiece(row, col) {
+            return isOnBoard(row, col) && board[row][col] && getColor(board[row][col]) !== currentTurn;
+        }
+
+        function isOnBoard(row, col) {
+            return row >= 0 && row < 8 && col >= 0 && col < 8;
+        }
+
+        function highlightLegalMoves(row, col) {
+            clearHighlights();
+            const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+            square.classList.add('selected');
+            getLegalMoves(row, col).forEach(move => {
+                document.querySelector(`.square[data-row="${move.toRow}"][data-col="${move.toCol}"]`)
+                    .classList.add('highlight');
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.square').forEach(s => s.classList.remove('selected', 'highlight'));
+        }
+
+        function updateStatus() {
+            statusElement.innerText = `${currentTurn.charAt(0).toUpperCase() + currentTurn.slice(1)}'s turn`;
+        }
+
+        function updateCapturedPieces() {
+            whiteCapturedElement.innerText = `White captured: ${whiteCaptured}`;
+            blackCapturedElement.innerText = `Black captured: ${blackCaptured}`;
+        }
+
+        // Settings Modal Logic
+        settingsIcon.addEventListener('click', () => {
+            settingsModal.style.display = 'block';
+        });
+
+        closeModal.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target == settingsModal) {
+                settingsModal.style.display = 'none';
+            }
+        });
+
+        lastMoveIconToggle.addEventListener('change', () => {
+            showLastMoveIcon = lastMoveIconToggle.checked;
+            renderBoard();
+        });
+
+        initBoard();
+    </script>
+</body>
+</html>

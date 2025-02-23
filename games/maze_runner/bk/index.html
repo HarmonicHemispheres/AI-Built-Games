@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maze Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #24252A;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border: 1px solid white;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-family: Arial, sans-serif;
+            font-size: 32px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info"></div>
+    <div id="gameOver">Game Over</div>
+    <canvas id="gameCanvas" width="1024" height="768"></canvas>
+    <script src="game.js"></script>
+</body>
+</html>
