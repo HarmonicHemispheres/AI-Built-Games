@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Game</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        #game-area {
+            position: relative;
+            background: white;
+        }
+        .wall {
+            position: absolute;
+            background: black;
+        }
+        #player {
+            position: absolute;
+            background: red;
+            width: 10px;
+            height: 10px;
+        }
+        .blue-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: blue;
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        .yellow-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: yellow;
+            border-radius: 50%;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="flex flex-col items-center justify-center min-h-screen">
+        <div class="mb-4">
+            <div id="timer" class="text-xl font-bold"></div>
+            <div id="levels" class="text-xl font-bold"></div>
+            <div id="message" class="text-red-500"></div>
+        </div>
+        <div id="game-container" class="relative">
+            <div id="game-area"></div>
+        </div>
+        <button id="settings-button" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Settings</button>
+        <div id="settings-popup" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden">
+            <div class="bg-white p-6 rounded shadow-lg">
+                <h3 class="text-lg font-bold mb-4">Settings</h3>
+                <label for="maze-size" class="block mb-2">Maze Size (width):</label>
+                <input type="range" id="maze-size" min="5" max="30" step="1" value="20" class="w-full mb-4">
+                <span id="maze-size-value" class="block mb-4">20</span>
+                <button id="apply-button" class="bg-green-500 text-white px-4 py-2 rounded">Apply and Restart</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Global variables
+        let currentWidth = 20; // Default maze size
+        let WIDTH;
+        let HEIGHT;
+        let BASE_TIME;
+        let NUM_BLUE_DOTS;
+        const CELL_SIZE = 20;
+        const WALL_THICKNESS = 2;
+        const PLAYER_SIZE = 10;
+        const DOT_SIZE = 10;
+        const EXTRA_TIME = 10;
+        let levelsCompleted = 0;
+
+        let gameArea = document.getElementById('game-area');
+        let timerDiv = document.getElementById('timer');
+        let levelsDiv = document.getElementById('levels');
+        let messageDiv = document.getElementById('message');
+        let settingsPopup = document.getElementById('settings-popup');
+        let playerDiv;
+        let yellowPos;
+        let blueDotDivs = [];
+        let horizontal_passages;
+        let vertical_passages;
+        let px = 0;
+        let py = 0;
+        let remainingTime;
+        let gameOver = false;
+        let timerInterval;
+
+        // Utility function to shuffle an array
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+            let j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // Recursive backtracking to carve maze passages
+        function carve_passages_from(cx, cy, visited) {
+            visited[cy][cx] = true;
+            let directions = [[0,1], [1,0], [0,-1], [-1,0]];
+            shuffle(directions);
+            for (let [dx, dy] of directions) {
+                let nx = cx + dx;
+                let ny = cy + dy;
+                if (nx >= 0 && nx < WIDTH && ny >= 0 && ny < HEIGHT && !visited[ny][nx]) {
+                    if (dx == 1) vertical_passages[cy][cx] = true;
+                    else if (dx == -1) vertical_passages[cy][cx-1] = true;
+                    else if (dy == 1) horizontal_passages[cy][cx] = true;
+                    else if (dy == -1) horizontal_passages[cy-1][cx] = true;
+                    carve_passages_from(nx, ny, visited);
+                }
+            }
+        }
+
+        // Generate the maze
+        function generateMaze() {
+            gameArea.innerHTML = '';
+            horizontal_passages = Array(HEIGHT - 1).fill().map(() => Array(WIDTH).fill(false));
+            vertical_passages = Array(HEIGHT).fill().map(() => Array(WIDTH - 1).fill(false));
+            let visited = Array(HEIGHT).fill().map(() => Array(WIDTH).fill(false));
+            carve_passages_from(0, 0, visited);
+
+            // Outer walls
+            let topWall = document.createElement('div');
+            topWall.className = 'wall';
+            topWall.style.left = '0px';
+            topWall.style.top = '0px';
+            topWall.style.width = (WIDTH * CELL_SIZE) + 'px';
+            topWall.style.height = WALL_THICKNESS + 'px';
+            gameArea.appendChild(topWall);
+
+            let bottomWall = document.createElement('div');
+            bottomWall.className = 'wall';
+            bottomWall.style.left = '0px';
+            bottomWall.style.top = (HEIGHT * CELL_SIZE - WALL_THICKNESS) + 'px';
+            bottomWall.style.width = (WIDTH * CELL_SIZE) + 'px';
+            bottomWall.style.height = WALL_THICKNESS + 'px';
+            gameArea.appendChild(bottomWall);
+
+            let leftWall = document.createElement('div');
+            leftWall.className = 'wall';
+            leftWall.style.left = '0px';
+            leftWall.style.top = '0px';
+            leftWall.style.width = WALL_THICKNESS + 'px';
+            leftWall.style.height = (HEIGHT * CELL_SIZE) + 'px';
+            gameArea.appendChild(leftWall);
+
+            let rightWall = document.createElement('div');
+            rightWall.className = 'wall';
+            rightWall.style.left = (WIDTH * CELL_SIZE - WALL_THICKNESS) + 'px';
+            rightWall.style.top = '0px';
+            rightWall.style.width = WALL_THICKNESS + 'px';
+            rightWall.style.height = (HEIGHT * CELL_SIZE) + 'px';
+            gameArea.appendChild(rightWall);
+
+            // Internal horizontal walls
+            for (let r = 0; r < HEIGHT - 1; r++) {
+                for (let c = 0; c < WIDTH; c++) {
+                    if (!horizontal_passages[r][c]) {
+                        let wall = document.createElement('div');
+                        wall.className = 'wall';
+                        wall.style.left = (c * CELL_SIZE) + 'px';
+                        wall.style.top = ((r + 1) * CELL_SIZE - WALL_THICKNESS / 2) + 'px';
+                        wall.style.width = CELL_SIZE + 'px';
+                        wall.style.height = WALL_THICKNESS + 'px';
+                        gameArea.appendChild(wall);
+                    }
+                }
+            }
+
+            // Internal vertical walls
+            for (let r = 0; r < HEIGHT; r++) {
+                for (let c = 0; c < WIDTH - 1; c++) {
+                    if (!vertical_passages[r][c]) {
+                        let wall = document.createElement('div');
+                        wall.className = 'wall';
+                        wall.style.left = ((c + 1) * CELL_SIZE - WALL_THICKNESS / 2) + 'px';
+                        wall.style.top = (r * CELL_SIZE) + 'px';
+                        wall.style.width = WALL_THICKNESS + 'px';
+                        wall.style.height = CELL_SIZE + 'px';
+                        gameArea.appendChild(wall);
+                    }
+                }
+            }
+
+            // Place player
+            px = 0;
+            py = 0;
+            playerDiv = document.createElement('div');
+            playerDiv.id = 'player';
+            updatePlayerPosition();
+            gameArea.appendChild(playerDiv);
+
+            // Place yellow dot
+            let positions = [];
+            for (let y = 0; y < HEIGHT; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    if (!(x == 0 && y == 0)) positions.push([x, y]);
+                }
+            }
+            shuffle(positions);
+            yellowPos = positions[0];
+            let yellowDotDiv = document.createElement('div');
+            yellowDotDiv.className = 'yellow-dot';
+            yellowDotDiv.style.left = (yellowPos[0] * CELL_SIZE + (CELL_SIZE - DOT_SIZE) / 2) + 'px';
+            yellowDotDiv.style.top = (yellowPos[1] * CELL_SIZE + (CELL_SIZE - DOT_SIZE) / 2) + 'px';
+            gameArea.appendChild(yellowDotDiv);
+
+            // Place blue dots
+            blueDotDivs = [];
+            let bluePositions = positions.slice(1, 1 + NUM_BLUE_DOTS);
+            for (let bluePos of bluePositions) {
+                let dotDiv = document.createElement('div');
+                dotDiv.className = 'blue-dot';
+                dotDiv.style.left = (bluePos[0] * CELL_SIZE + (CELL_SIZE - DOT_SIZE) / 2) + 'px';
+                dotDiv.style.top = (bluePos[1] * CELL_SIZE + (CELL_SIZE - DOT_SIZE) / 2) + 'px';
+                gameArea.appendChild(dotDiv);
+                blueDotDivs.push({pos: bluePos, div: dotDiv});
+            }
+        }
+
+        // Update player position on the screen
+        function updatePlayerPosition() {
+            playerDiv.style.left = (px * CELL_SIZE + (CELL_SIZE - PLAYER_SIZE) / 2) + 'px';
+            playerDiv.style.top = (py * CELL_SIZE + (CELL_SIZE - PLAYER_SIZE) / 2) + 'px';
+        }
+
+        // Check for dot collection
+        function checkForDots() {
+            for (let i = 0; i < blueDotDivs.length; i++) {
+                let dot = blueDotDivs[i];
+                if (dot.pos[0] == px && dot.pos[1] == py) {
+                    gameArea.removeChild(dot.div);
+                    blueDotDivs.splice(i, 1);
+                    remainingTime += EXTRA_TIME;
+                    break;
+                }
+            }
+            if (px == yellowPos[0] && py == yellowPos[1]) {
+                levelsCompleted++;
+                levelsDiv.innerText = 'Levels Completed: ' + levelsCompleted;
+                remainingTime += BASE_TIME;
+                generateMaze();
+            }
+        }
+
+        // Start or restart the game with specified width
+        function startGame(width) {
+            if (timerInterval) clearInterval(timerInterval);
+            gameOver = false;
+            messageDiv.innerText = '';
+            WIDTH = width;
+            HEIGHT = width; // Square maze
+            BASE_TIME = 6 * WIDTH; // 6 seconds per width unit
+            NUM_BLUE_DOTS = Math.floor(WIDTH / 2);
+            gameArea.style.width = (WIDTH * CELL_SIZE) + 'px';
+            gameArea.style.height = (HEIGHT * CELL_SIZE) + 'px';
+            generateMaze();
+            remainingTime = BASE_TIME;
+            timerDiv.innerText = "Time: " + remainingTime;
+            levelsCompleted = 0;
+            levelsDiv.innerText = 'Levels Completed: ' + levelsCompleted;
+            timerInterval = setInterval(() => {
+                remainingTime--;
+                if (remainingTime <= 0) {
+                    clearInterval(timerInterval);
+                    messageDiv.innerText = "Time's up! You lose.";
+                    gameOver = true;
+                } else {
+                    timerDiv.innerText = "Time: " + remainingTime;
+                }
+            }, 1000);
+        }
+
+        // Player movement with arrow keys
+        document.addEventListener('keydown', (event) => {
+            if (gameOver || !settingsPopup.classList.contains('hidden')) return;
+            if (event.key == 'ArrowRight') {
+                if (px < WIDTH - 1 && vertical_passages[py][px]) px++;
+            } else if (event.key == 'ArrowLeft') {
+                if (px > 0 && vertical_passages[py][px - 1]) px--;
+            } else if (event.key == 'ArrowDown') {
+                if (py < HEIGHT - 1 && horizontal_passages[py][px]) py++;
+            } else if (event.key == 'ArrowUp') {
+                if (py > 0 && horizontal_passages[py - 1][px]) py--;
+            }
+            updatePlayerPosition();
+            checkForDots();
+        });
+
+        // Settings popup event handlers
+        let settingsButton = document.getElementById('settings-button');
+        let mazeSizeSlider = document.getElementById('maze-size');
+        let mazeSizeValue = document.getElementById('maze-size-value');
+        let applyButton = document.getElementById('apply-button');
+
+        settingsButton.addEventListener('click', () => {
+            mazeSizeSlider.value = currentWidth;
+            mazeSizeValue.innerText = currentWidth;
+            settingsPopup.classList.remove('hidden');
+        });
+
+        mazeSizeSlider.addEventListener('input', () => {
+            mazeSizeValue.innerText = mazeSizeSlider.value;
+        });
+
+        applyButton.addEventListener('click', () => {
+            currentWidth = parseInt(mazeSizeSlider.value);
+            settingsPopup.classList.add('hidden');
+            startGame(currentWidth);
+        });
+
+        // Start the game with default size
+        startGame(currentWidth);
+    </script>
+</body>
+</html>

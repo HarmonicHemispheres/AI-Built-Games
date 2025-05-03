@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Match Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .card {
+            width: 80px;
+            height: 110px;
+            perspective: 1000px; /* For 3D flip effect */
+            cursor: pointer;
+            border-radius: 8px;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            position: relative; /* Needed for absolute positioning of front/back */
+            /* Add margin for spacing */
+            margin: 5px;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            border-radius: 8px; /* Rounded corners for inner part too */
+        }
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden; /* Safari */
+            backface-visibility: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5rem; /* Larger emoji/icon */
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            /* Make sure content doesn't overflow */
+            overflow: hidden;
+        }
+        .card-front {
+            background-color: #ffffff; /* White card face */
+            color: #333;
+            transform: rotateY(180deg); /* Initially hidden */
+        }
+        .card-back {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6); /* Blue gradient */
+            color: white;
+            font-size: 2rem; /* Question mark size */
+        }
+        /* Style for the Grid ID */
+        .card-grid-id {
+            position: absolute;
+            top: 3px;
+            right: 5px;
+            font-size: 0.6rem; /* Small font */
+            font-weight: 600; /* Semi-bold */
+            line-height: 1;
+            pointer-events: none; /* Don't interfere with clicks */
+            z-index: 1; /* Ensure it's above background but below main content if needed */
+        }
+        .card-front .card-grid-id {
+             color: rgba(0, 0, 0, 0.4); /* Darker, semi-transparent on white */
+        }
+         .card-back .card-grid-id {
+             color: rgba(255, 255, 255, 0.6); /* Lighter, semi-transparent on blue */
+         }
+
+        .card.matched {
+            transform: scale(0.95); /* Slightly shrink matched cards */
+            opacity: 0.6;
+            cursor: default;
+        }
+        .card.highlight {
+            outline: 3px solid #fbbf24; /* Yellow outline for hint */
+            outline-offset: 2px;
+        }
+        .card.reveal-temp {
+             /* Temporary reveal uses the standard flip */
+        }
+        /* Ensure grid adapts */
+        .game-board {
+            display: grid;
+            /* Use auto-fit for better responsiveness */
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); /* Increased minmax slightly for margin */
+            gap: 0.5rem; /* Reduced gap as margin is added to cards */
+            max-width: 900px; /* Increased max width slightly */
+            margin: auto; /* Center the board */
+            padding: 10px; /* Add padding around the board */
+            justify-content: center; /* Center grid items if they don't fill the row */
+        }
+        /* Message Box Styling */
+        #message-box {
+            transition: opacity 0.5s ease-in-out;
+        }
+        /* Form Styling */
+        label {
+            @apply block text-sm font-medium text-gray-700 mb-1;
+        }
+        input[type="number"] {
+            @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm;
+        }
+        button {
+            @apply px-4 py-2 rounded-md shadow-sm font-medium transition-colors duration-150;
+        }
+        .btn-primary {
+            @apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+        }
+        .btn-secondary {
+            @apply bg-gray-200 text-gray-700 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="container mx-auto max-w-4xl bg-white p-6 rounded-lg shadow-lg">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-6">Memory Match Game</h1>
+
+        <form id="setup-form" class="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">New Game Setup</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label for="num-matches">Number of Matches (Pairs):</label>
+                    <input type="number" id="num-matches" name="num-matches" min="2" max="20" value="8" required>
+                     <p class="text-xs text-gray-500 mt-1">How many pairs of matching cards (2-20).</p>
+                </div>
+                <div>
+                    <label for="num-special">Number of Special Cards:</label>
+                    <input type="number" id="num-special" name="num-special" min="0" max="10" value="1" required>
+                     <p class="text-xs text-gray-500 mt-1">How many special action cards (0-10).</p>
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="btn-primary w-full md:w-auto">Start Game</button>
+                </div>
+            </div>
+             <p id="setup-error" class="text-red-500 text-sm mt-2 hidden"></p>
+        </form>
+
+        <div id="game-area" class="hidden">
+            <div class="flex flex-wrap justify-between items-center gap-y-2 mb-4 p-3 bg-blue-100 rounded-md">
+                <div class="text-blue-800">
+                    <span class="font-medium">Matches Found:</span> <span id="matches-found">0</span> / <span id="total-matches">0</span>
+                </div>
+                <div class="text-blue-800">
+                    <span class="font-medium">Turns Taken:</span> <span id="turns-taken">0</span>
+                </div>
+                 <button id="new-game-button" class="btn-primary text-sm">New Game Setup</button>
+            </div>
+
+            <div id="message-box" class="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded-md text-center font-medium opacity-0 transition-opacity duration-500 h-10 flex items-center justify-center">
+                <span id="message-text"></span>
+            </div>
+
+            <div id="game-board" class="game-board mb-6">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const setupForm = document.getElementById('setup-form');
+        const numMatchesInput = document.getElementById('num-matches');
+        const numSpecialInput = document.getElementById('num-special');
+        const setupError = document.getElementById('setup-error');
+        const gameArea = document.getElementById('game-area');
+        const gameBoard = document.getElementById('game-board');
+        const matchesFoundDisplay = document.getElementById('matches-found');
+        const totalMatchesDisplay = document.getElementById('total-matches');
+        const turnsTakenDisplay = document.getElementById('turns-taken');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const newGameButton = document.getElementById('new-game-button');
+
+        // --- Game State Variables ---
+        let cards = []; // Array to hold card objects { id, value, type ('normal'/'special'), specialAction?, matched, revealed, element, gridId }
+        let flippedCards = []; // Holds the 1 or 2 currently flipped cards
+        let matchesFound = 0;
+        let totalMatches = 0;
+        let turnsTaken = 0;
+        let canFlip = true; // Prevent flipping during delays or animations
+        let specialCardPending = null; // Holds info if a special card effect is waiting for the next flip
+        let calculatedNumCols = 6; // Default/fallback number of columns for ID calculation
+
+        // --- Card Content ---
+        // Added more emojis to support up to 20 pairs
+        const regularCardEmojis = [
+            '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
+            '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦄'
+            ];
+        // Special card representations and actions
+        const specialCardsData = [
+            { value: '💨', action: 'disappear', description: 'Next pair disappears!' }, // Disappear
+            { value: '👀', action: 'reveal', description: 'Revealing 4 cards!' },    // Reveal 4
+            { value: '💡', action: 'hint', description: 'Hint activated!' },       // Hint
+        ];
+
+        // --- Event Listeners ---
+        setupForm.addEventListener('submit', handleFormSubmit);
+        newGameButton.addEventListener('click', showSetupForm);
+
+        // --- Functions ---
+
+        /**
+         * Handles the submission of the setup form.
+         * Validates input and starts the game.
+         */
+        function handleFormSubmit(event) {
+            event.preventDefault(); // Prevent page reload
+            const numMatches = parseInt(numMatchesInput.value);
+            const numSpecial = parseInt(numSpecialInput.value);
+
+            // --- Input Validation ---
+            setupError.classList.add('hidden');
+            setupError.textContent = '';
+
+            // Updated validation limits
+            if (isNaN(numMatches) || numMatches < 2 || numMatches > 20) {
+                showSetupError('Number of matches must be between 2 and 20.');
+                return;
+            }
+            if (isNaN(numSpecial) || numSpecial < 0 || numSpecial > 10) {
+                showSetupError('Number of special cards must be between 0 and 10.');
+                return;
+            }
+            // Check if enough unique emojis are available
+             if (numMatches > regularCardEmojis.length) {
+                 showSetupError(`Not enough unique card types for ${numMatches} matches. Max available: ${regularCardEmojis.length}.`);
+                 return;
+             }
+             // No longer need to check numSpecial against specialCardsData.length as duplicates are allowed
+
+
+            // --- Start Game ---
+            totalMatches = numMatches;
+            setupForm.classList.add('hidden');
+            gameArea.classList.remove('hidden');
+            startGame(numMatches, numSpecial);
+        }
+
+        /**
+         * Displays an error message on the setup form.
+         */
+        function showSetupError(message) {
+            setupError.textContent = message;
+            setupError.classList.remove('hidden');
+        }
+
+         /**
+         * Shows the setup form and hides the game area.
+         */
+        function showSetupForm() {
+            gameArea.classList.add('hidden');
+            setupForm.classList.remove('hidden');
+            gameBoard.innerHTML = ''; // Clear previous game board
+            hideMessage(); // Hide any lingering messages
+        }
+
+
+        /**
+         * Initializes and starts a new game.
+         * @param {number} numMatches - Number of pairs of regular cards.
+         * @param {number} numSpecial - Number of special cards.
+         */
+        function startGame(numMatches, numSpecial) {
+            // Reset game state
+            cards = [];
+            flippedCards = [];
+            matchesFound = 0;
+            turnsTaken = 0;
+            canFlip = true;
+            specialCardPending = null;
+            gameBoard.innerHTML = ''; // Clear previous board
+            hideMessage();
+
+            // Update displays
+            matchesFoundDisplay.textContent = matchesFound;
+            totalMatchesDisplay.textContent = totalMatches;
+            turnsTakenDisplay.textContent = turnsTaken;
+
+            // --- Generate Card Data ---
+            let cardValues = [];
+            // Add regular card pairs
+            const emojisToUse = regularCardEmojis.slice(0, numMatches);
+            emojisToUse.forEach(emoji => {
+                cardValues.push({ value: emoji, type: 'normal' });
+                cardValues.push({ value: emoji, type: 'normal' });
+            });
+
+            // Add special cards - randomly selected with potential duplicates
+            for (let i = 0; i < numSpecial; i++) {
+                // Randomly select one of the available special card types
+                const randomIndex = Math.floor(Math.random() * specialCardsData.length);
+                const randomSpecial = specialCardsData[randomIndex];
+                cardValues.push({
+                    value: randomSpecial.value,
+                    type: 'special',
+                    specialAction: randomSpecial.action,
+                    description: randomSpecial.description
+                });
+            }
+
+            // Shuffle cards
+            shuffleArray(cardValues);
+
+            // --- Calculate Grid Dimensions for IDs ---
+            const numCards = cardValues.length;
+            // Aim for a grid that's slightly wider, max ~7-8 columns might be needed for more cards
+            calculatedNumCols = Math.min(8, Math.max(4, Math.ceil(Math.sqrt(numCards * 1.2))));
+
+
+            // Create card objects with unique IDs, grid IDs, and elements
+            cards = cardValues.map((cardData, index) => {
+                // Calculate grid position based on index and calculated columns
+                const rowIndex = Math.floor(index / calculatedNumCols);
+                const colIndex = index % calculatedNumCols;
+                const colLetter = String.fromCharCode(65 + colIndex); // 65 is ASCII for 'A'
+                const rowNumber = rowIndex + 1;
+                const cardGridId = `${colLetter}${rowNumber}`;
+
+                return {
+                    id: index,
+                    value: cardData.value,
+                    type: cardData.type,
+                    specialAction: cardData.specialAction,
+                    description: cardData.description,
+                    matched: false,
+                    revealed: false,
+                    gridId: cardGridId, // Store the calculated grid ID
+                    element: createCardElement(index, cardData.value, cardGridId) // Pass grid ID to element creation
+                };
+            });
+
+            // --- Display Cards ---
+            cards.forEach(card => {
+                gameBoard.appendChild(card.element);
+                // Add click listener to each card
+                card.element.addEventListener('click', () => handleCardClick(card));
+            });
+        }
+
+        /**
+         * Creates the HTML element for a single card, including the grid ID.
+         * @param {number} id - The unique ID of the card.
+         * @param {string} value - The emoji or symbol for the card face.
+         * @param {string} gridId - The calculated grid identifier (e.g., "A1").
+         * @returns {HTMLElement} The card element.
+         */
+        function createCardElement(id, value, gridId) {
+            const card = document.createElement('div');
+            card.classList.add('card');
+            card.dataset.id = id;
+
+            const cardInner = document.createElement('div');
+            cardInner.classList.add('card-inner');
+
+            // --- Create Grid ID Element ---
+            const idSpan = document.createElement('span');
+            idSpan.classList.add('card-grid-id');
+            idSpan.textContent = gridId;
+
+            // --- Create Front Face ---
+            const cardFront = document.createElement('div');
+            cardFront.classList.add('card-face', 'card-front');
+            cardFront.textContent = value; // Emoji/Symbol on the front
+            cardFront.appendChild(idSpan.cloneNode(true)); // Add grid ID to front
+
+            // --- Create Back Face ---
+            const cardBack = document.createElement('div');
+            cardBack.classList.add('card-face', 'card-back');
+            cardBack.textContent = '?'; // Question mark on the back
+            cardBack.appendChild(idSpan.cloneNode(true)); // Add grid ID to back
+
+            cardInner.appendChild(cardFront);
+            cardInner.appendChild(cardBack);
+            card.appendChild(cardInner);
+
+            return card;
+        }
+
+        /**
+         * Handles clicking on a card.
+         * @param {object} clickedCard - The card object that was clicked.
+         */
+        function handleCardClick(clickedCard) {
+            // Ignore clicks if flipping is disabled, card is already matched, or already revealed
+            if (!canFlip || clickedCard.matched || clickedCard.revealed || flippedCards.includes(clickedCard)) {
+                return;
+            }
+
+            flipCard(clickedCard, true);
+
+            // Handle Pending Special Action FIRST
+            if (specialCardPending) {
+                 if (specialCardPending.action === 'disappear' && clickedCard.type === 'normal') {
+                    executeDisappear(clickedCard);
+                    specialCardPending = null; // Action completed or attempted
+                    return; // Disappear resolves the turn differently
+                 }
+                 // If the click wasn't the expected type for the pending action, cancel the pending action
+                 if (specialCardPending.action === 'disappear' && clickedCard.type !== 'normal') {
+                     showMessage(`Cancelled ${specialCardPending.value} effect. Click a normal card after activating it.`, 3000, true);
+                     const originalSpecialCard = cards.find(c => c.id === specialCardPending.id);
+                     if (originalSpecialCard && !originalSpecialCard.matched) {
+                        // Flip the original special card back only if it exists and isn't already matched
+                        flipCard(originalSpecialCard, false);
+                        // Should we unmatch it? No, let it stay matched as it was used.
+                     }
+                     specialCardPending = null;
+                     // Let the current click proceed as a new turn start
+                 }
+                 // Add checks for other potential pending actions here if needed
+            }
+
+
+            // Normal Turn Logic
+            flippedCards.push(clickedCard);
+
+            if (flippedCards.length === 1) {
+                 // First card flipped
+                 if (clickedCard.type === 'special') {
+                     // Increment turn counter when a special card is revealed
+                     turnsTaken++;
+                     turnsTakenDisplay.textContent = turnsTaken;
+                     handleSpecialCard(clickedCard); // Handles matching the special card & potential pending state
+                     // Special cards resolve immediately or set pending, clear flippedCards for next action
+                     flippedCards = [];
+                 }
+                 // If normal card, wait for second flip. Turn counter increments on second flip.
+            } else if (flippedCards.length === 2) {
+                // Second card flipped - increment turn counter
+                turnsTaken++;
+                turnsTakenDisplay.textContent = turnsTaken;
+                canFlip = false; // Disable flipping while checking
+
+                const [card1, card2] = flippedCards;
+
+                // Check for a match (only if both are normal cards)
+                if (card1.type === 'normal' && card2.type === 'normal' && card1.value === card2.value) {
+                    // It's a match!
+                    showMessage('Match found!', 1500);
+                    card1.matched = true;
+                    card2.matched = true;
+                    card1.element.classList.add('matched');
+                    card2.element.classList.add('matched');
+                    matchesFound++;
+                    matchesFoundDisplay.textContent = matchesFound;
+                    flippedCards = []; // Reset flipped cards
+                    canFlip = true; // Allow flipping again
+                    checkWinCondition();
+                } else {
+                    // Not a match
+                    setTimeout(() => {
+                        // Only flip back if not matched by a concurrent special effect (edge case)
+                        if (!card1.matched) flipCard(card1, false);
+                        if (!card2.matched) flipCard(card2, false);
+                        flippedCards = []; // Reset flipped cards
+                        canFlip = true; // Allow flipping again
+                    }, 1200); // Delay before flipping back
+                }
+            }
+        }
+
+         /**
+         * Handles the logic when a special card is the *first* card flipped in a turn.
+         * @param {object} specialCard - The special card object.
+         */
+        function handleSpecialCard(specialCard) {
+            // Note: Turn counter is incremented in handleCardClick when special card is first revealed
+            showMessage(specialCard.description, 2500);
+            specialCard.matched = true; // Mark special card as used/matched immediately
+            specialCard.element.classList.add('matched'); // Visually indicate it's used
+
+            // Prevent flipping immediately after special card use, allow effects to run
+            canFlip = false;
+
+            switch (specialCard.specialAction) {
+                case 'disappear':
+                    // Set up pending state: wait for the *next* click on a normal card
+                    specialCardPending = { action: 'disappear', id: specialCard.id, value: specialCard.value };
+                    showMessage(`💨 Activated! Click a normal card, and its pair will disappear.`, 3500);
+                    // Allow the next click, which will be handled by the pending logic check in handleCardClick
+                    canFlip = true;
+                    break; // Exit early, wait for next click
+
+                case 'reveal':
+                    executeReveal(4); // This function will re-enable canFlip after its timeout
+                    break;
+
+                case 'hint':
+                    executeHint(); // This function will re-enable canFlip after its timeout
+                    break;
+            }
+
+            // Check win condition after marking special card as matched
+            // This is important in case removing the special card is the last action needed
+             checkWinCondition();
+        }
+
+
+        /**
+         * Executes the 'Disappear' special effect.
+         * Finds the match of the targetCard and removes both. Also ensures the original special card is matched.
+         * @param {object} targetCard - The normal card clicked *after* the disappear special card.
+         */
+        function executeDisappear(targetCard) {
+            canFlip = false; // Disable flips during this effect execution
+             showMessage(`💨 Poof! Making ${targetCard.value} pair disappear...`, 2000);
+
+             // Find the match of the target card that isn't already matched
+             const matchCard = cards.find(card =>
+                 card.id !== targetCard.id &&    // Not the same card
+                 !card.matched &&                // Not already matched
+                 card.type === 'normal' &&       // Must be a normal card
+                 card.value === targetCard.value // Must have the same value
+             );
+
+             const disappearSpecialCard = cards.find(card => card.id === specialCardPending?.id); // Use optional chaining
+
+             // Mark target and match (if found) as matched after a delay
+             setTimeout(() => {
+                // Ensure target card is revealed before matching
+                flipCard(targetCard, true);
+                targetCard.matched = true;
+                targetCard.element.classList.add('matched');
+
+
+                if (matchCard) {
+                    flipCard(matchCard, true); // Reveal its match too
+                    matchCard.matched = true;
+                    matchCard.element.classList.add('matched');
+                    matchesFound++; // Count this as a found match
+                    matchesFoundDisplay.textContent = matchesFound;
+                    showMessage(`Pair ${targetCard.value} removed!`, 1500);
+                } else {
+                    // If no match was found (maybe it was already revealed/matched?), still remove the target card.
+                    // Don't increment matchesFound in this case.
+                     showMessage(`${targetCard.value} removed (match already gone).`, 1500);
+                    console.warn("Could not find hidden match for disappear effect target:", targetCard);
+                }
+
+                 // Ensure the special card that triggered this is visually matched (it should be already by state)
+                 if (disappearSpecialCard && !disappearSpecialCard.element.classList.contains('matched')) {
+                     disappearSpecialCard.element.classList.add('matched');
+                 }
+
+                canFlip = true; // Re-enable flipping
+                checkWinCondition();
+            }, 1000); // Delay to show the cards before they vanish
+        }
+
+
+        /**
+         * Executes the 'Reveal' special effect.
+         * Temporarily flips N random hidden cards.
+         * @param {number} count - The number of cards to reveal.
+         */
+        function executeReveal(count) {
+            canFlip = false; // Disable flips during reveal
+            // Find hidden cards (not matched and not currently revealed)
+            const hiddenCards = cards.filter(card => !card.matched && !card.revealed);
+            shuffleArray(hiddenCards); // Shuffle to pick random ones
+            const cardsToReveal = hiddenCards.slice(0, count);
+
+            if (cardsToReveal.length === 0) {
+                 showMessage("No hidden cards left to reveal.", 2000);
+                 setTimeout(() => { canFlip = true; }, 500); // Re-enable flip after short delay
+                 return;
+            }
+
+            showMessage(`👀 Revealing ${cardsToReveal.length} cards...`, 2500);
+
+            // Flip them face up
+            cardsToReveal.forEach(card => {
+                flipCard(card, true);
+                card.element.classList.add('reveal-temp'); // Optional: Add a class for temporary styling
+            });
+
+            // Flip them back down after a delay
+            setTimeout(() => {
+                cardsToReveal.forEach(card => {
+                    // Only flip back if it wasn't part of a match found *during* the reveal
+                    if (!card.matched) {
+                         flipCard(card, false);
+                         card.element.classList.remove('reveal-temp');
+                    }
+                });
+                hideMessage(); // Clear the "Revealing..." message
+                canFlip = true; // Re-enable flipping
+            }, 2500); // How long to show the revealed cards
+        }
+
+        /**
+         * Executes the 'Hint' special effect.
+         * Highlights 3 hidden cards: one pair and one non-matching card.
+         */
+        function executeHint() {
+            canFlip = false; // Disable flips during hint
+             showMessage("💡 Looking for a hint...", 2500);
+
+            // Find hidden cards (not matched and not currently revealed)
+            const hiddenCards = cards.filter(card => !card.matched && !card.revealed);
+            if (hiddenCards.length < 3) {
+                 showMessage("Not enough hidden cards for a hint.", 2000);
+                  setTimeout(() => { canFlip = true; }, 500); // Re-enable flip after short delay
+                 return;
+            }
+
+            let pairFound = false;
+            let hintCards = []; // [match1, match2, nonMatch]
+            shuffleArray(hiddenCards); // Randomize search order
+
+            // Find a hidden pair of normal cards
+            for (let i = 0; i < hiddenCards.length; i++) {
+                const card1 = hiddenCards[i];
+                 if (card1.type !== 'normal') continue; // Only hint normal cards
+
+                for (let j = i + 1; j < hiddenCards.length; j++) {
+                    const card2 = hiddenCards[j];
+                    if (card2.type === 'normal' && card1.value === card2.value) {
+                        // Found a hidden pair
+                        hintCards.push(card1, card2);
+                        pairFound = true;
+                        break;
+                    }
+                }
+                if (pairFound) break;
+            }
+
+            if (!pairFound) {
+                 showMessage("Couldn't find a hidden pair for the hint.", 2000);
+                  setTimeout(() => { canFlip = true; }, 500); // Re-enable flip
+                 return;
+            }
+
+            // Find a third, non-matching hidden card (can be normal or special)
+            const nonMatchCard = hiddenCards.find(card =>
+                card.id !== hintCards[0].id &&
+                card.id !== hintCards[1].id &&
+                card.value !== hintCards[0].value // Ensure it doesn't match the pair's value
+            );
+
+            if (nonMatchCard) {
+                hintCards.push(nonMatchCard);
+            } else {
+                 // If no non-matching card found (e.g., only the pair is left hidden)
+                 // Find *any* other hidden card that isn't part of the found pair.
+                 const fallbackCard = hiddenCards.find(card => card.id !== hintCards[0].id && card.id !== hintCards[1].id);
+                 if(fallbackCard) hintCards.push(fallbackCard);
+            }
+
+            // Message adjustment based on outcome
+            if (hintCards.length === 3) {
+                 showMessage("💡 Hint: Highlighting a pair and another card...", 2000);
+            } else if (hintCards.length === 2) {
+                 // This might happen if only 2 cards were left hidden and they were the pair
+                 showMessage("💡 Hint: Highlighting a pair (only 2 cards left).", 2000);
+            } else {
+                 // Should not happen if pair was found, but as safety
+                 showMessage("Could not gather enough cards for hint.", 2000);
+                  setTimeout(() => { canFlip = true; }, 500); // Re-enable flip
+                 return; // Exit if no cards to highlight
+            }
+
+
+            // Apply highlight style
+            hintCards.forEach(card => card.element.classList.add('highlight'));
+
+            // Remove highlight after a delay
+            setTimeout(() => {
+                hintCards.forEach(card => card.element.classList.remove('highlight'));
+                hideMessage(); // Clear hint message
+                canFlip = true; // Re-enable flipping
+            }, 2500); // How long to show the highlight
+        }
+
+
+        /**
+         * Flips a card visually and updates its state.
+         * @param {object} card - The card object to flip.
+         * @param {boolean} faceUp - True to flip face-up, false for face-down.
+         */
+        function flipCard(card, faceUp) {
+            // Only change revealed state if it's actually different
+            // And don't flip back a matched card
+            if (card.revealed !== faceUp && !card.matched) {
+                card.revealed = faceUp;
+                if (faceUp) {
+                    card.element.classList.add('flipped');
+                } else {
+                    card.element.classList.remove('flipped');
+                }
+            } else if (faceUp && card.revealed !== faceUp) {
+                 // Allow flipping faceUp even if matched (e.g., for reveal effect)
+                 // but don't change the revealed state if already matched? Let's stick to the first condition.
+                 // Revised: Only modify class if state changes, respect matched status for faceDown flips.
+                 if (card.revealed !== faceUp) {
+                     card.revealed = faceUp;
+                     card.element.classList.add('flipped');
+                 }
+            }
+        }
+
+        /**
+         * Checks if all normal pairs have been matched.
+         */
+        function checkWinCondition() {
+            // Win condition: All 'normal' type cards are matched.
+            const allNormalMatched = cards
+                .filter(card => card.type === 'normal')
+                .every(card => card.matched);
+
+            if (allNormalMatched) {
+                // Ensure matchesFound reflects the total required matches, even if disappear was used
+                if (matchesFound !== totalMatches) {
+                    console.warn(`Win condition met, but matchesFound (${matchesFound}) doesn't equal totalMatches (${totalMatches}). Adjusting.`);
+                    matchesFound = totalMatches; // Correct the count for the win message
+                    matchesFoundDisplay.textContent = matchesFound;
+                }
+                showMessage(`🎉 Congratulations! You found all ${totalMatches} matches in ${turnsTaken} turns! 🎉`, 6000, false);
+                canFlip = false; // Disable board on win
+            }
+        }
+
+
+        /**
+         * Displays a message in the message box for a duration.
+         * @param {string} text - The message to display.
+         * @param {number} duration - How long to show the message (in ms).
+         * @param {boolean} [temporary=true] - If true, hides the message after the duration.
+         */
+        function showMessage(text, duration = 2000, temporary = true) {
+            messageText.textContent = text;
+            messageBox.classList.remove('opacity-0'); // Make visible
+
+            // Clear previous timeout if any
+            if (messageBox.timeoutId) {
+                clearTimeout(messageBox.timeoutId);
+            }
+
+            if (temporary) {
+                messageBox.timeoutId = setTimeout(() => {
+                    hideMessage();
+                }, duration);
+            } else {
+                 messageBox.timeoutId = null; // Ensure no timeout if message is permanent
+            }
+        }
+
+        /**
+         * Hides the message box.
+         */
+        function hideMessage() {
+             messageBox.classList.add('opacity-0');
+             if (messageBox.timeoutId) {
+                clearTimeout(messageBox.timeoutId);
+                messageBox.timeoutId = null;
+            }
+             // Set text to empty after fade out transition (approx 500ms)
+             setTimeout(() => {
+                 if (messageBox.classList.contains('opacity-0')) { // Check if still hidden
+                    messageText.textContent = '';
+                 }
+             }, 500);
+        }
+
+
+        /**
+         * Shuffles an array in place using the Fisher-Yates algorithm.
+         * @param {Array} array - The array to shuffle.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+            }
+        }
+
+    </script>
+
+</body>
+</html>
