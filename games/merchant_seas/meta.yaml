@@ -1,0 +1,45 @@
+# Identity
+slug: merchant-seas
+title: Merchants of the High Seas
+tagline: Sail, trade, and battle across a procedurally generated nautical world.
+description: |
+  A single-file, top-down nautical trading game. Captain a sloop, brig,
+  frigate, galleon, or man-o'-war across a seeded sea. Buy low, sell high,
+  upgrade your fleet, and survive seasonal market shifts.
+
+# Categorization
+category: Strategy
+tags:
+  - trading
+  - naval
+  - exploration
+featured: true
+status: released   # released | wip | prototype | archived
+
+# Provenance
+created: 2026-04-15
+updated: 2026-04-25
+version: 0.1.0
+built_with:
+  provider: anthropic
+  model: Claude Opus 4.7
+chat_url:        # optional link to the AI conversation that produced the game
+
+# Assets (paths are relative to this game's folder)
+entry: merchant_seas.html
+banner: merchant_seas-banner.png
+info_url:        # optional external info / release-notes url
+
+# Player-facing content
+features:
+  - Procedurally generated sea map with seeded RNG
+  - Five ship classes with distinct stats and cargo
+  - Seasonal market shifts that reroll port specialties
+  - Cannon combat with range, accuracy, and ammo
+  - Upgrade tree for hull, sails, and weaponry
+
+controls:
+  - WASD or arrow keys to sail
+  - Click a port to dock and trade
+  - Spacebar to fire cannons
+co

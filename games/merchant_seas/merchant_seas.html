@@ -1,0 +1,3731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Merchants of the High Seas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parchment: #e8d7a8;
+    --parchment-dark: #c9b487;
+    --parchment-deep: #a89060;
+    --ink: #2a1810;
+    --ink-soft: #4a2f1e;
+    --sea-deep: #1a3a52;
+    --sea-mid: #2d5a7a;
+    --sea-shallow: #4d8ab0;
+    --sea-foam: #a8d4e8;
+    --gold: #c9962a;
+    --gold-bright: #f2c14e;
+    --blood: #7a1a1a;
+    --leaf: #3a5a2a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #0a1520;
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--ink);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #game-root {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    image-rendering: auto;
+    position: absolute;
+    inset: 0;
+  }
+
+  /* ===== Menu screens ===== */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 10;
+    background:
+      radial-gradient(ellipse at center, rgba(232,215,168,0.08) 0%, rgba(10,21,32,0.85) 70%),
+      linear-gradient(180deg, #0a1520 0%, #05101c 100%);
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .screen.hidden { display: none; }
+  .hidden { display: none !important; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Parchment card */
+  .parchment {
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(255,240,200,0.4) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, rgba(120,80,40,0.15) 0%, transparent 50%),
+      linear-gradient(160deg, #f0dfb0 0%, #e8d7a8 50%, #d9c48f 100%);
+    color: var(--ink);
+    padding: 48px 64px;
+    position: relative;
+    max-width: 620px;
+    width: calc(100% - 40px);
+    box-shadow:
+      0 0 0 2px #5a4020,
+      0 0 0 4px #8a6030,
+      0 0 0 5px #3a2410,
+      0 25px 60px rgba(0,0,0,0.8),
+      inset 0 0 80px rgba(120,80,30,0.25),
+      inset 0 0 20px rgba(80,50,20,0.15);
+    border-radius: 3px;
+  }
+  .parchment.scrollable {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .parchment.scrollable::-webkit-scrollbar { width: 10px; }
+  .parchment.scrollable::-webkit-scrollbar-track { background: rgba(60,40,20,0.2); }
+  .parchment.scrollable::-webkit-scrollbar-thumb { background: var(--ink-soft); border-radius: 5px; }
+
+  .parchment::before, .parchment::after {
+    content: '';
+    position: absolute;
+    width: 40px; height: 40px;
+    background-image: radial-gradient(circle at 30% 30%, rgba(60,30,10,0.4), transparent 70%);
+    pointer-events: none;
+  }
+  .parchment::before { top: -5px; left: -5px; }
+  .parchment::after { bottom: -5px; right: -5px; }
+
+  .parchment-corners span {
+    position: absolute;
+    font-size: 28px;
+    color: var(--ink-soft);
+    opacity: 0.4;
+    font-family: 'IM Fell English SC', serif;
+  }
+  .parchment-corners span:nth-child(1) { top: 8px; left: 14px; }
+  .parchment-corners span:nth-child(2) { top: 8px; right: 14px; transform: scaleX(-1); }
+  .parchment-corners span:nth-child(3) { bottom: 8px; left: 14px; transform: scaleY(-1); }
+  .parchment-corners span:nth-child(4) { bottom: 8px; right: 14px; transform: scale(-1, -1); }
+
+  h1.title {
+    font-family: 'IM Fell English SC', serif;
+    font-size: clamp(32px, 5vw, 56px);
+    text-align: center;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    margin-bottom: 12px;
+    color: var(--ink);
+    text-shadow: 2px 2px 0 rgba(120,80,30,0.3);
+  }
+
+  h2.subtitle {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 18px;
+    text-align: center;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin-bottom: 36px;
+    opacity: 0.85;
+  }
+
+  h2.section-title {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 32px;
+    text-align: center;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 20px 0;
+    font-family: 'IM Fell English', serif;
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--ink-soft), transparent);
+    margin: 0 14px;
+  }
+
+  .menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  .btn {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 20px;
+    padding: 14px 28px;
+    background: linear-gradient(180deg, #3a2410 0%, #2a1810 100%);
+    color: var(--parchment);
+    border: 2px solid #8a6030;
+    border-radius: 2px;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(200,150,80,0.3),
+      0 4px 10px rgba(0,0,0,0.4);
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(242,193,78,0.2), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+  .btn:hover:not(:disabled) {
+    background: linear-gradient(180deg, #5a3420 0%, #3a2410 100%);
+    border-color: var(--gold);
+    color: var(--gold-bright);
+    transform: translateY(-1px);
+  }
+  .btn:hover:not(:disabled)::before { transform: translateX(100%); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn.btn-danger { border-color: #a04040; color: #f0b080; }
+  .btn.btn-danger:hover:not(:disabled) { color: #ffc090; border-color: #d05050; }
+  .btn.btn-primary { border-color: var(--gold); }
+  .btn.btn-small { font-size: 14px; padding: 8px 16px; letter-spacing: 0.04em; }
+
+  /* ===== HUD (in-game) ===== */
+  #hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .hud-bar {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    pointer-events: auto;
+  }
+
+  .stat-card {
+    background:
+      linear-gradient(160deg, rgba(232,215,168,0.96) 0%, rgba(201,180,135,0.96) 100%);
+    padding: 10px 18px;
+    border-radius: 2px;
+    font-family: 'IM Fell English', serif;
+    color: var(--ink);
+    border: 1px solid #5a4020;
+    box-shadow:
+      0 3px 10px rgba(0,0,0,0.5),
+      inset 0 0 15px rgba(120,80,30,0.15);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 15px;
+  }
+
+  .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .stat-item .label {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+  }
+
+  .stat-item .value {
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--ink);
+  }
+
+  .stat-item .value.gold { color: #8a6020; }
+  .stat-item .value.blood { color: var(--blood); }
+
+  .health-bar {
+    width: 120px;
+    height: 14px;
+    background: rgba(40,20,10,0.4);
+    border: 1px solid var(--ink-soft);
+    border-radius: 1px;
+    overflow: hidden;
+    position: relative;
+  }
+  .health-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #7a1a1a 0%, #c04040 50%, #e06060 100%);
+    transition: width 0.3s ease;
+    box-shadow: inset 0 0 6px rgba(255,200,200,0.4);
+  }
+
+  /* Right-side controls */
+  .hud-bottom {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: auto;
+  }
+
+  .hud-notices {
+    position: absolute;
+    bottom: 16px;
+    right: 172px; /* beyond the 140px minimap + padding */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .controls-hint {
+    background: rgba(10,21,32,0.75);
+    padding: 8px 14px;
+    font-family: 'IM Fell English', serif;
+    font-size: 13px;
+    color: var(--parchment);
+    border: 1px solid rgba(232,215,168,0.3);
+    border-radius: 2px;
+    backdrop-filter: blur(2px);
+  }
+  .controls-hint kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    background: var(--parchment);
+    color: var(--ink);
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 11px;
+    margin: 0 2px;
+    border: 1px solid #8a6030;
+  }
+
+  .dock-prompt {
+    background: linear-gradient(160deg, rgba(242,193,78,0.95), rgba(201,150,42,0.95));
+    padding: 12px 22px;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 18px;
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 2px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    animation: promptPulse 1.6s ease-in-out infinite;
+    letter-spacing: 0.05em;
+  }
+  .sail-badge {
+    background: linear-gradient(160deg, rgba(240,228,200,0.98), rgba(210,195,160,0.98));
+    padding: 8px 16px;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 14px;
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.4);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: sailGlow 1.4s ease-in-out infinite;
+  }
+  .sail-badge::before {
+    content: '⛵';
+    font-size: 18px;
+  }
+  @keyframes sailGlow {
+    0%, 100% { box-shadow: 0 3px 12px rgba(0,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.4); }
+    50% { box-shadow: 0 3px 20px rgba(255,255,255,0.4), inset 0 0 25px rgba(255,255,255,0.7); }
+  }
+  @keyframes promptPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    50% { transform: scale(1.03); box-shadow: 0 6px 25px rgba(242,193,78,0.6); }
+  }
+
+  /* ===== Map modal ===== */
+  .map-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,21,32,0.92);
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.25s ease;
+    padding: 24px;
+  }
+
+  .map-panel {
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(255,240,200,0.35) 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 85%, rgba(120,80,40,0.25) 0%, transparent 55%),
+      linear-gradient(160deg, #f0dfb0 0%, #e8d7a8 50%, #d9c48f 100%);
+    color: var(--ink);
+    width: 100%;
+    max-width: 1200px;
+    height: 100%;
+    max-height: 760px;
+    display: flex;
+    flex-direction: column;
+    box-shadow:
+      0 0 0 2px #5a4020,
+      0 0 0 4px #8a6030,
+      0 0 0 5px #3a2410,
+      0 25px 60px rgba(0,0,0,0.85),
+      inset 0 0 100px rgba(120,80,30,0.3);
+    position: relative;
+  }
+
+  .map-header {
+    padding: 18px 28px;
+    border-bottom: 2px double var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .map-title {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 30px;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+  }
+
+  .map-sub {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  .map-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 16px;
+    padding: 16px 20px 20px 20px;
+    min-height: 0;
+  }
+
+  .map-canvas-wrap {
+    position: relative;
+    background:
+      radial-gradient(ellipse at center, #4d8ab0 0%, #2d5a7a 55%, #1a3a52 100%);
+    border: 2px solid #3a2410;
+    box-shadow: inset 0 0 60px rgba(10,20,35,0.6);
+    overflow: hidden;
+  }
+
+  #map-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+  }
+
+  .map-legend {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: rgba(232,215,168,0.9);
+    padding: 8px 12px;
+    border: 1px solid var(--ink-soft);
+    font-family: 'IM Fell English', serif;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .map-legend .dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+
+  .map-sidebar {
+    background: rgba(60,40,20,0.08);
+    border: 1px solid rgba(60,40,20,0.4);
+    padding: 16px 18px;
+    overflow-y: auto;
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--ink);
+  }
+
+  .map-sidebar::-webkit-scrollbar { width: 8px; }
+  .map-sidebar::-webkit-scrollbar-track { background: rgba(60,40,20,0.15); }
+  .map-sidebar::-webkit-scrollbar-thumb { background: var(--ink-soft); border-radius: 4px; }
+
+  .map-hint {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--ink-soft);
+    font-size: 15px;
+    text-align: center;
+    padding: 40px 10px;
+  }
+
+  .map-port-title {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 24px;
+    letter-spacing: 0.03em;
+    color: var(--ink);
+    text-align: center;
+  }
+
+  .map-port-sub {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 13px;
+    text-align: center;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+
+  .map-port-distance {
+    font-family: 'IM Fell English', serif;
+    font-size: 13px;
+    text-align: center;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--ink-soft);
+  }
+
+  .map-good-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px dashed rgba(60,40,20,0.25);
+    font-size: 15px;
+  }
+  .map-good-row:last-child { border-bottom: none; }
+  .map-good-row .g-name { color: var(--ink); }
+  .map-good-row .g-price { font-weight: 600; text-align: right; min-width: 48px; }
+  .map-good-row .g-delta { font-size: 12px; min-width: 50px; text-align: right; font-family: 'IM Fell English', serif; }
+  .map-good-row .g-price.low { color: var(--leaf); }
+  .map-good-row .g-price.high { color: var(--blood); }
+  .map-good-row .g-delta.profit { color: var(--leaf); }
+  .map-good-row .g-delta.loss { color: var(--blood); }
+
+  .map-section-title {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 14px 0 4px 0;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--ink-soft);
+  }
+
+  .map-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(232,215,168,0.96);
+    border: 1px solid var(--ink);
+    padding: 6px 10px;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 13px;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+    transform: translate(10px, -50%);
+    z-index: 10;
+  }
+
+  @media (max-width: 800px) {
+    .map-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .map-sidebar { max-height: 240px; }
+  }
+
+  /* ===== Port menu ===== */
+  .port-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,21,32,0.85);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+    padding: 20px;
+  }
+
+  .port-panel {
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(255,240,200,0.35) 0%, transparent 50%),
+      linear-gradient(160deg, #f0dfb0 0%, #e8d7a8 50%, #d9c48f 100%);
+    color: var(--ink);
+    max-width: 820px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 36px 44px;
+    box-shadow:
+      0 0 0 2px #5a4020,
+      0 0 0 4px #8a6030,
+      0 0 0 5px #3a2410,
+      0 25px 60px rgba(0,0,0,0.8),
+      inset 0 0 80px rgba(120,80,30,0.25);
+    position: relative;
+  }
+
+  .port-panel::-webkit-scrollbar { width: 10px; }
+  .port-panel::-webkit-scrollbar-track { background: rgba(60,40,20,0.2); }
+  .port-panel::-webkit-scrollbar-thumb { background: var(--ink-soft); border-radius: 5px; }
+
+  .port-header {
+    text-align: center;
+    margin-bottom: 20px;
+    border-bottom: 2px double var(--ink-soft);
+    padding-bottom: 16px;
+  }
+
+  .port-name {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 34px;
+    letter-spacing: 0.03em;
+  }
+  .port-desc {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--ink-soft);
+    font-size: 15px;
+    margin-top: 4px;
+  }
+
+  .tabs {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    margin-bottom: 22px;
+  }
+  .tab {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 15px;
+    padding: 8px 22px;
+    background: rgba(60,40,20,0.15);
+    color: var(--ink-soft);
+    border: 1px solid var(--ink-soft);
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    transition: all 0.2s;
+  }
+  .tab:hover { background: rgba(60,40,20,0.3); color: var(--ink); }
+  .tab.active {
+    background: var(--ink);
+    color: var(--parchment);
+  }
+
+  .goods-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px;
+  }
+  .goods-table th, .goods-table td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px dashed rgba(60,40,20,0.3);
+  }
+  .goods-table th {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--ink-soft);
+  }
+  .goods-table .price {
+    font-weight: 600;
+    font-size: 18px;
+  }
+  .goods-table .price.high { color: var(--blood); }
+  .goods-table .price.low { color: var(--leaf); }
+  .goods-table .trade-btns { display: flex; gap: 4px; justify-content: flex-end; }
+  .goods-table td.right { text-align: right; }
+
+  .cargo-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    font-family: 'IM Fell English', serif;
+    font-size: 16px;
+  }
+
+  .upgrade-card {
+    background: rgba(60,40,20,0.08);
+    border: 1px solid rgba(60,40,20,0.4);
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .upgrade-card .upgrade-info h3 {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+  .upgrade-card .upgrade-info p {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .upgrade-card .upgrade-info .current {
+    font-size: 13px;
+    color: var(--ink);
+    margin-top: 3px;
+    font-weight: 600;
+  }
+  .upgrade-card .upgrade-cost {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 16px;
+    color: #8a6020;
+    white-space: nowrap;
+  }
+
+  .ship-card {
+    background: rgba(60,40,20,0.08);
+    border: 1px solid rgba(60,40,20,0.4);
+    padding: 16px 20px;
+    margin-bottom: 10px;
+  }
+  .ship-card.owned { border-color: var(--leaf); background: rgba(58,90,42,0.12); }
+  .ship-card .ship-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .ship-card h3 {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 22px;
+  }
+  .ship-card .ship-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .ship-card .ship-stats .stat {
+    background: rgba(60,40,20,0.1);
+    padding: 4px 8px;
+    border-radius: 2px;
+  }
+  .ship-card .ship-stats .stat .lbl {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    display: block;
+  }
+  .ship-card .ship-stats .stat .val { font-weight: 600; font-size: 16px; }
+  .ship-card .ship-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ship-card .ship-cost {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 16px;
+    color: #8a6020;
+  }
+
+  .port-footer {
+    display: flex;
+    justify-content: center;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 2px double var(--ink-soft);
+  }
+
+  /* Floating text */
+  .floater {
+    position: absolute;
+    pointer-events: none;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 20px;
+    font-weight: 600;
+    z-index: 6;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.5);
+    animation: floatUp 1.5s ease-out forwards;
+  }
+  @keyframes floatUp {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(-60px); opacity: 0; }
+  }
+
+  /* Settings sliders */
+  .settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    font-family: 'IM Fell English', serif;
+    font-size: 17px;
+    gap: 20px;
+  }
+  .settings-row input[type="range"] { flex: 1; accent-color: var(--blood); }
+  .settings-row .val {
+    min-width: 40px;
+    text-align: right;
+    font-weight: 600;
+  }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 30px;
+    font-family: 'IM Fell English', serif;
+    font-size: 16px;
+    margin-bottom: 20px;
+  }
+  .stats-grid .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px dashed rgba(60,40,20,0.3);
+  }
+  .stats-grid .stat-row .s-label { color: var(--ink-soft); }
+  .stats-grid .stat-row .s-val { font-weight: 600; }
+
+  /* Game over */
+  .game-over-title {
+    font-family: 'IM Fell English SC', serif;
+    font-size: clamp(40px, 7vw, 64px);
+    color: var(--blood);
+    text-align: center;
+    margin-bottom: 8px;
+    text-shadow: 2px 2px 0 rgba(60,10,10,0.4);
+  }
+  .game-over-epitaph {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    color: var(--ink-soft);
+    text-align: center;
+    font-size: 17px;
+    margin-bottom: 24px;
+  }
+
+  /* Compass in corner */
+  .compass {
+    position: absolute;
+    bottom: 172px; /* sits just above the minimap */
+    right: 20px;
+    width: 80px; height: 80px;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0.9;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+  }
+
+  /* Calendar */
+  .calendar-card {
+    position: absolute;
+    top: 90px;
+    right: 20px;
+    width: 220px;
+    background:
+      linear-gradient(160deg, rgba(232,215,168,0.96) 0%, rgba(201,180,135,0.96) 100%);
+    padding: 10px 14px 12px 14px;
+    border: 1px solid #5a4020;
+    border-radius: 2px;
+    box-shadow:
+      0 3px 10px rgba(0,0,0,0.5),
+      inset 0 0 15px rgba(120,80,30,0.15);
+    font-family: 'IM Fell English', serif;
+    color: var(--ink);
+    z-index: 5;
+    pointer-events: none;
+    transition: box-shadow 0.5s;
+  }
+  .calendar-card.season-change {
+    animation: seasonPulse 1.2s ease-out;
+  }
+  @keyframes seasonPulse {
+    0%, 100% { box-shadow: 0 3px 10px rgba(0,0,0,0.5), inset 0 0 15px rgba(120,80,30,0.15); }
+    50% { box-shadow: 0 3px 24px var(--season-accent, #f2c14e), inset 0 0 25px rgba(242,193,78,0.5); }
+  }
+  .cal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .cal-icon {
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  }
+  .cal-text { flex: 1; }
+  .cal-month {
+    font-family: 'IM Fell English SC', serif;
+    font-size: 17px;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .cal-year {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.1;
+  }
+  .cal-progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    margin-bottom: 3px;
+    text-transform: uppercase;
+  }
+  .cal-bar {
+    position: relative;
+    height: 8px;
+    background: rgba(40,20,10,0.35);
+    border: 1px solid var(--ink-soft);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+  .cal-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--season-color, #6aa850) 0%, var(--season-accent, #a8d08a) 100%);
+    transition: width 0.5s linear, background 0.5s;
+    box-shadow: inset 0 0 6px rgba(255,255,255,0.3);
+  }
+  .cal-tick {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(40,20,10,0.5);
+    pointer-events: none;
+  }
+
+  @media (max-width: 700px) {
+    .calendar-card { width: 180px; right: 16px; top: 80px; padding: 8px 10px 10px 10px; }
+    .compass { bottom: 160px; right: 16px; width: 60px; height: 60px; }
+    .cal-month { font-size: 15px; }
+    .cal-icon { font-size: 22px; }
+  }
+
+  /* Toast */
+  .toast {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(160deg, rgba(232,215,168,0.97), rgba(201,180,135,0.97));
+    color: var(--ink);
+    padding: 14px 28px;
+    font-family: 'IM Fell English SC', serif;
+    font-size: 18px;
+    border: 2px solid var(--ink);
+    z-index: 15;
+    animation: toastIn 2.5s ease-out forwards;
+    pointer-events: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    letter-spacing: 0.04em;
+  }
+  @keyframes toastIn {
+    0% { opacity: 0; transform: translate(-50%, -40%); }
+    10%, 80% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, -60%); }
+  }
+
+  /* Flash on damage */
+  .damage-flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(200,20,20,0.5) 100%);
+    pointer-events: none;
+    z-index: 4;
+    animation: dmgFlash 0.4s ease-out;
+  }
+  @keyframes dmgFlash {
+    from { opacity: 1; } to { opacity: 0; }
+  }
+
+  @media (max-width: 600px) {
+    .parchment { padding: 32px 24px; }
+    .port-panel { padding: 24px 20px; }
+    .hud-bar { flex-direction: column; }
+    .stat-card { font-size: 13px; padding: 8px 12px; gap: 10px; }
+    .stat-item .value { font-size: 14px; }
+    .ship-card .ship-stats { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="game-root">
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Main Menu -->
+  <div class="screen" id="screen-menu">
+    <div class="parchment">
+      <div class="parchment-corners"><span>❦</span><span>❦</span><span>❦</span><span>❦</span></div>
+      <h1 class="title">Merchants of the<br/>High Seas</h1>
+      <h2 class="subtitle">Anno MDCCXII — A Chronicle of Fortune &amp; Peril</h2>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" onclick="Game.startNew()">Set Sail</button>
+        <button class="btn" onclick="UI.show('screen-stats')">The Ledger</button>
+        <button class="btn" onclick="UI.show('screen-settings')">Settings</button>
+        <button class="btn" onclick="UI.show('screen-help')">How to Play</button>
+      </div>
+      <div class="divider">⚓</div>
+      <p style="text-align:center; font-family:'IM Fell English',serif; font-style:italic; font-size:14px; color:var(--ink-soft); opacity:0.8;">
+        "Seek ye fortune on the trade winds, <br/>but keep thy powder dry for buccaneers."
+      </p>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="screen hidden" id="screen-stats">
+    <div class="parchment">
+      <div class="parchment-corners"><span>❦</span><span>❦</span><span>❦</span><span>❦</span></div>
+      <h2 class="section-title">The Ledger</h2>
+      <div class="divider">⚓</div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="menu-buttons">
+        <button class="btn" onclick="UI.show('screen-menu')">Return</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="screen hidden" id="screen-settings">
+    <div class="parchment">
+      <div class="parchment-corners"><span>❦</span><span>❦</span><span>❦</span><span>❦</span></div>
+      <h2 class="section-title">Settings</h2>
+      <div class="divider">⚓</div>
+      <div class="settings-row">
+        <span>Master Volume</span>
+        <input type="range" id="vol-master" min="0" max="100" value="50">
+        <span class="val" id="vol-master-val">50</span>
+      </div>
+      <div class="settings-row">
+        <span>Pirate Difficulty</span>
+        <input type="range" id="difficulty" min="1" max="3" value="2">
+        <span class="val" id="difficulty-val">Fair</span>
+      </div>
+      <div class="settings-row">
+        <span>Show Minimap</span>
+        <input type="range" id="minimap-on" min="0" max="1" value="1">
+        <span class="val" id="minimap-val">On</span>
+      </div>
+      <div class="settings-row">
+        <span>Show Controls Hint</span>
+        <input type="range" id="controls-on" min="0" max="1" value="1">
+        <span class="val" id="controls-val">On</span>
+      </div>
+      <div class="divider">⚓</div>
+      <div class="menu-buttons">
+        <button class="btn" onclick="UI.show('screen-menu')">Return</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div class="screen hidden" id="screen-help">
+    <div class="parchment scrollable">
+      <div class="parchment-corners"><span>❦</span><span>❦</span><span>❦</span><span>❦</span></div>
+      <h2 class="section-title">How to Play</h2>
+      <div class="divider">⚓ CONTROLS ⚓</div>
+      <div style="font-family:'IM Fell English',serif; font-size:16px; line-height:1.7; color:var(--ink); padding: 0 8px;">
+        <p><strong>Arrow Keys</strong> or <strong>WASD</strong> — Steer thy vessel. Up to accelerate, down to reverse, left and right to turn. Thy rudder requires water flowing over it to work, so stopped ships cannot turn.</p>
+        <p style="margin-top:10px;"><strong>Q Key</strong> — Fire thy port broadside (left side of the ship).</p>
+        <p style="margin-top:10px;"><strong>E Key</strong> — Fire thy starboard broadside (right side). When near a port, E instead drops anchor to trade and refit.</p>
+        <p style="margin-top:10px;"><strong>Shift</strong> — Set full sail. Gain a large burst of speed at the cost of slower turning, and thy guns are stowed away until sails are struck.</p>
+        <p style="margin-top:10px;"><strong>M Key</strong> — Open the chart. Hover over ports to inspect their markets and plan profitable routes.</p>
+        <p style="margin-top:10px;"><strong>Esc</strong> — Pause the voyage.</p>
+      </div>
+      <div class="divider">⚓ TRADE ⚓</div>
+      <div style="font-family:'IM Fell English',serif; font-size:16px; line-height:1.7; color:var(--ink); padding: 0 8px;">
+        <p>Each port has <strong>plentiful goods</strong> (sold cheap, marked in green) and <strong>sought-after goods</strong> (bought at premium, marked in red). Buy low at producers, sail to those who demand them, and sell high. The larger the distance between markets, the greater the profit — but also the greater the peril.</p>
+      </div>
+      <div class="divider">⚓ SEASONS ⚓</div>
+      <div style="font-family:'IM Fell English',serif; font-size:16px; line-height:1.7; color:var(--ink); padding: 0 8px;">
+        <p>Time passes on the trade winds. Thy calendar marks each month (three real minutes) and each season of three months. When a new season arrives — 🌸 Spring, ☀️ Summer, 🍂 Autumn, or ❄️ Winter — every port <strong>rerolls its specialties and regenerates all prices</strong>. A reliable sugar-producer in Spring may demand sugar by Autumn.</p>
+        <p style="margin-top:10px;">Watch the calendar card for the progress bar. When it reaches the end of a season, the whole market shifts beneath thy feet. Cargo in thy hold at that moment may suddenly be worth far more — or far less — depending on where thou art sailing.</p>
+      </div>
+      <div class="divider">⚓ COMBAT ⚓</div>
+      <div style="font-family:'IM Fell English',serif; font-size:16px; line-height:1.7; color:var(--ink); padding: 0 8px;">
+        <p>Pirate ships fly the black flag and circle at cannon range. Position thy enemy abeam (directly to thy left or right) before loosing a broadside — cannons fire sideways, not forward. Each broadside shows a dashed cone depicting its range and spread. Upgrade <em>Trained Gunners</em> at any shipwright to tighten the spread, or purchase bigger ships for longer range.</p>
+      </div>
+      <div class="divider">⚓</div>
+      <div class="menu-buttons">
+        <button class="btn" onclick="UI.show('screen-menu')">Return</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="screen hidden" id="screen-pause">
+    <div class="parchment">
+      <div class="parchment-corners"><span>❦</span><span>❦</span><span>❦</span><span>❦</span></div>
+      <h2 class="section-title">Paused</h2>
+      <div class="divider">⚓</div>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" onclick="Game.resume()">Resume Voyage</button>
+        <button class="btn btn-danger" onclick="Game.abandon()">Abandon Voyage</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over -->
+  <div class="screen hidden" id="screen-gameover">
+    <div class="parchment">
+      <div class="parchment-corners"><span>☠</span><span>☠</span><span>☠</span><span>☠</span></div>
+      <h1 class="game-over-title">Davy Jones<br/>Claims Another</h1>
+      <p class="game-over-epitaph" id="epitaph">Thy ship lies broken upon the deep.</p>
+      <div class="stats-grid" id="gameover-stats"></div>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" onclick="Game.startNew()">New Voyage</button>
+        <button class="btn" onclick="UI.show('screen-menu')">Return to Port</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-bar">
+      <div class="stat-card">
+        <div class="stat-item"><span class="label">Gold</span><span class="value gold" id="hud-gold">100</span></div>
+        <div class="stat-item"><span class="label">Cargo</span><span class="value" id="hud-cargo">0/10</span></div>
+        <div class="stat-item"><span class="label">Ammo</span><span class="value" id="hud-ammo">20</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-item"><span class="label">Hull</span></div>
+        <div class="health-bar"><div class="health-fill" id="hud-health" style="width:100%"></div></div>
+        <div class="stat-item"><span class="value blood" id="hud-health-text">100/100</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-item"><span class="label">Pirates</span><span class="value" id="hud-kills">0</span></div>
+        <div class="stat-item"><span class="label">Ship</span><span class="value" id="hud-ship">Sloop</span></div>
+      </div>
+    </div>
+
+    <svg class="compass" viewBox="0 0 100 100" id="compass-svg">
+      <defs>
+        <radialGradient id="compass-bg">
+          <stop offset="0%" stop-color="#f0dfb0"/>
+          <stop offset="100%" stop-color="#c9b487"/>
+        </radialGradient>
+      </defs>
+      <circle cx="50" cy="50" r="46" fill="url(#compass-bg)" stroke="#3a2410" stroke-width="2"/>
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#5a4020" stroke-width="1" stroke-dasharray="1,3"/>
+      <g id="compass-needle" style="transform-origin:50px 50px; transition:transform 0.1s linear;">
+        <polygon points="50,12 45,50 55,50" fill="#7a1a1a"/>
+        <polygon points="50,88 45,50 55,50" fill="#2a1810"/>
+      </g>
+      <circle cx="50" cy="50" r="4" fill="#3a2410"/>
+      <text x="50" y="10" text-anchor="middle" font-family="IM Fell English SC" font-size="9" fill="#2a1810" font-weight="bold">N</text>
+      <text x="50" y="95" text-anchor="middle" font-family="IM Fell English SC" font-size="9" fill="#2a1810">S</text>
+      <text x="93" y="53" text-anchor="middle" font-family="IM Fell English SC" font-size="9" fill="#2a1810">E</text>
+      <text x="7" y="53" text-anchor="middle" font-family="IM Fell English SC" font-size="9" fill="#2a1810">W</text>
+    </svg>
+
+    <div class="calendar-card" id="calendar-card">
+      <div class="cal-head">
+        <span class="cal-icon" id="cal-icon">🌸</span>
+        <div class="cal-text">
+          <div class="cal-month" id="cal-month">March</div>
+          <div class="cal-year"><span id="cal-season">Spring</span> · <span id="cal-year">1712</span></div>
+        </div>
+      </div>
+      <div class="cal-progress-label">
+        <span>Season</span>
+        <span id="cal-progress-text">3/9</span>
+      </div>
+      <div class="cal-bar">
+        <div class="cal-bar-fill" id="cal-bar-fill"></div>
+        <div class="cal-tick" style="left:33.3%"></div>
+        <div class="cal-tick" style="left:66.6%"></div>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="controls-hint" id="controls-hint">
+        <kbd>↑↓←→</kbd> sail &nbsp; <kbd>Q</kbd> port guns &nbsp; <kbd>E</kbd> starboard / dock &nbsp; <kbd>Shift</kbd> full sail &nbsp; <kbd>M</kbd> chart &nbsp; <kbd>Esc</kbd> pause
+      </div>
+    </div>
+    <div class="hud-notices">
+      <div id="sail-status"></div>
+      <div id="dock-prompt-wrap"></div>
+    </div>
+  </div>
+
+  <!-- Map Modal -->
+  <div class="map-overlay hidden" id="map-overlay">
+    <div class="map-panel">
+      <div class="map-header">
+        <div>
+          <div class="map-title">The Chart</div>
+          <div class="map-sub">Hover over ports to inspect markets and find lucrative routes</div>
+        </div>
+        <button class="btn btn-small" onclick="MapView.close()">Close Chart &nbsp;·&nbsp; M</button>
+      </div>
+      <div class="map-body">
+        <div class="map-canvas-wrap">
+          <canvas id="map-canvas"></canvas>
+          <div class="map-legend">
+            <div><span class="dot" style="background:#f0e4c8; border:1px solid #2a1810"></span> You</div>
+            <div><span class="dot" style="background:#f2c14e"></span> Port</div>
+            <div><span class="dot" style="background:#c04040"></span> Pirate</div>
+            <div><span class="dot" style="background:#4a7a3a"></span> Island</div>
+          </div>
+        </div>
+        <div class="map-sidebar" id="map-sidebar">
+          <div class="map-hint">Hover any port to view its market.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Port Menu -->
+  <div class="port-overlay hidden" id="port-overlay">
+    <div class="port-panel">
+      <div class="port-header">
+        <div class="port-name" id="port-name">Port Royal</div>
+        <div class="port-desc" id="port-desc">A bustling harbor</div>
+      </div>
+      <div class="tabs">
+        <div class="tab active" data-tab="market" onclick="UI.portTab('market')">Market</div>
+        <div class="tab" data-tab="upgrade" onclick="UI.portTab('upgrade')">Shipwright</div>
+        <div class="tab" data-tab="fleet" onclick="UI.portTab('fleet')">Fleet</div>
+        <div class="tab" data-tab="tavern" onclick="UI.portTab('tavern')">Tavern</div>
+      </div>
+      <div id="port-content"></div>
+      <div class="port-footer">
+        <button class="btn" onclick="Game.leavePort()">Cast Off</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   MERCHANTS OF THE HIGH SEAS
+   Single-file top-down nautical trading game.
+   ===================================================================== */
+
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
+const TAU = Math.PI * 2;
+
+// ---------- Utility ----------
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const angleBetween = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+const angleDiff = (a, b) => {
+  let d = b - a;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  return d;
+};
+
+// Seeded RNG for map generation
+function mulberry32(seed) {
+  let a = seed;
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// ---------- Config ----------
+const GOODS = [
+  { id: 'rum',    name: 'Rum',        basePrice: 18, icon: '🍾' },
+  { id: 'silk',   name: 'Silk',       basePrice: 45, icon: '🧵' },
+  { id: 'spice',  name: 'Spice',      basePrice: 32, icon: '🌶️' },
+  { id: 'tea',    name: 'Tea',        basePrice: 28, icon: '🍵' },
+  { id: 'sugar',  name: 'Sugar',      basePrice: 12, icon: '🍬' },
+  { id: 'cotton', name: 'Cotton',     basePrice: 22, icon: '🧺' },
+  { id: 'tobacco',name: 'Tobacco',    basePrice: 35, icon: '🍂' },
+  { id: 'gems',   name: 'Gemstones',  basePrice: 90, icon: '💎' },
+];
+
+const SHIP_CLASSES = {
+  sloop:     { name: 'Sloop',      maxHP:  80, speed: 0.36, turn: 0.050, cargo: 10,  cannons: 2, ammo: 20, size: 22, range: 260, cost: 0,     desc: 'A nimble single-masted cutter.' },
+  brig:      { name: 'Brig',       maxHP: 140, speed: 0.32, turn: 0.044, cargo: 20,  cannons: 3, ammo: 30, size: 28, range: 320, cost: 800,   desc: 'Two masts, more teeth.' },
+  frigate:   { name: 'Frigate',    maxHP: 220, speed: 0.30, turn: 0.038, cargo: 35,  cannons: 4, ammo: 45, size: 34, range: 400, cost: 2400,  desc: 'A naval-grade warship.' },
+  galleon:   { name: 'Galleon',    maxHP: 340, speed: 0.26, turn: 0.030, cargo: 60,  cannons: 5, ammo: 65, size: 42, range: 480, cost: 6000,  desc: 'Lumbering treasure-hauler.' },
+  manowar:   { name: 'Man o\' War',maxHP: 500, speed: 0.27, turn: 0.028, cargo: 90,  cannons: 6, ammo: 90, size: 50, range: 560, cost: 14000, desc: 'The terror of all flags.' },
+};
+
+const UPGRADES = {
+  cannons:   { name: 'Extra Cannon',        desc: 'Adds another gun per broadside.',  base: 400, mult: 2.2, max: 6,   apply: (p,lv) => p.extraCannons = lv },
+  accuracy:  { name: 'Trained Gunners',     desc: 'Tighter grouping, less spread.',    base: 300, mult: 2.0, max: 5,   apply: (p,lv) => p.accuracyLevel = lv },
+  speed:     { name: 'Improved Rigging',    desc: 'Catch more wind, sail faster.',    base: 200, mult: 1.8, max: 5,   apply: (p,lv) => p.speedBonus = lv * 0.15 },
+  hull:      { name: 'Reinforced Hull',     desc: 'More punishment before sinking.',  base: 300, mult: 2.0, max: 5,   apply: (p,lv) => p.hpBonus = lv * 0.25 },
+  ammo:      { name: 'Powder Magazine',     desc: 'Carry more cannonballs.',          base: 150, mult: 1.6, max: 5,   apply: (p,lv) => p.ammoBonus = lv * 15 },
+  reload:    { name: 'Swift Gunners',       desc: 'Fire more rapidly.',               base: 350, mult: 2.0, max: 5,   apply: (p,lv) => p.reloadBonus = lv * 0.15 },
+  cargo:     { name: 'Cargo Optimization',  desc: 'Squeeze in extra crates.',         base: 250, mult: 1.9, max: 5,   apply: (p,lv) => p.cargoBonus = lv * 4 },
+};
+
+const PORT_NAMES = [
+  'Port Royal', 'Tortuga', 'Nassau', 'Havana', 'Maracaibo', 'Santo Domingo',
+  'Cartagena', 'Campeche', 'San Juan', 'Basseterre', 'Bridgetown', 'Willemstad',
+  'Kingston', "St. Pierre", 'Panama Viejo', 'Veracruz', 'Barbados', 'Port-au-Prince'
+];
+
+const PORT_EPITHETS = [
+  'the free harbor', 'den of thieves', 'the sugar colony', 'the silk road\'s end',
+  'of the spice guild', 'jewel of the Antilles', 'of scarlet sails',
+  'the fortified port', 'a lawless cove', 'the trading crossroads'
+];
+
+const WORLD_SIZE = 4500;
+const VIEW_ZOOM = 1.0;
+
+// ---------- Canvas ----------
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W() * dpr;
+  canvas.height = H() * dpr;
+  canvas.style.width = W() + 'px';
+  canvas.style.height = H() + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- UI helpers ----------
+const UI = {
+  current: 'screen-menu',
+  show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    document.getElementById('hud').classList.add('hidden');
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('hidden'); this.current = id; }
+    if (id === 'screen-stats') this.renderStats();
+  },
+  hideAll() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    this.current = null;
+  },
+  showHUD() {
+    this.hideAll();
+    document.getElementById('hud').classList.remove('hidden');
+  },
+  renderStats() {
+    const s = Stats.data;
+    const g = document.getElementById('stats-grid');
+    g.innerHTML = `
+      <div class="stat-row"><span class="s-label">Voyages</span><span class="s-val">${s.voyages}</span></div>
+      <div class="stat-row"><span class="s-label">Highest Gold</span><span class="s-val">${s.maxGold} ⚜</span></div>
+      <div class="stat-row"><span class="s-label">Pirates Sunk</span><span class="s-val">${s.piratesKilled}</span></div>
+      <div class="stat-row"><span class="s-label">Ports Visited</span><span class="s-val">${s.portsVisited}</span></div>
+      <div class="stat-row"><span class="s-label">Goods Traded</span><span class="s-val">${s.goodsTraded}</span></div>
+      <div class="stat-row"><span class="s-label">Ships Owned</span><span class="s-val">${s.shipsOwned}</span></div>
+      <div class="stat-row"><span class="s-label">Times Sunk</span><span class="s-val">${s.timesSunk}</span></div>
+      <div class="stat-row"><span class="s-label">Best Ship</span><span class="s-val">${s.bestShip || '—'}</span></div>
+      <div class="stat-row"><span class="s-label">Most Years at Sea</span><span class="s-val">${s.mostYearsSurvived || 0}</span></div>
+    `;
+  },
+  portTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    Port.renderTab(tab);
+  },
+  showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.getElementById('game-root').appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+  },
+  showFloater(x, y, text, color) {
+    const f = document.createElement('div');
+    f.className = 'floater';
+    f.textContent = text;
+    f.style.color = color;
+    f.style.left = x + 'px';
+    f.style.top = y + 'px';
+    document.getElementById('game-root').appendChild(f);
+    setTimeout(() => f.remove(), 1500);
+  },
+  damageFlash() {
+    const f = document.createElement('div');
+    f.className = 'damage-flash';
+    document.getElementById('game-root').appendChild(f);
+    setTimeout(() => f.remove(), 400);
+  }
+};
+
+// ---------- Persistent Stats ----------
+const Stats = {
+  data: JSON.parse(localStorage.getItem('mhs_stats') || 'null') || {
+    voyages: 0, maxGold: 0, piratesKilled: 0, portsVisited: 0,
+    goodsTraded: 0, shipsOwned: 1, timesSunk: 0, bestShip: 'Sloop',
+    mostYearsSurvived: 0
+  },
+  save() { localStorage.setItem('mhs_stats', JSON.stringify(this.data)); }
+};
+
+// Backfill for older saves
+if (Stats.data.mostYearsSurvived === undefined) Stats.data.mostYearsSurvived = 0;
+
+// ---------- Settings ----------
+const Settings = {
+  volume: 0.5,
+  difficulty: 2,
+  minimap: true,
+  showControls: true,
+  init() {
+    const saved = JSON.parse(localStorage.getItem('mhs_settings') || 'null');
+    if (saved) Object.assign(this, saved);
+    document.getElementById('vol-master').value = this.volume * 100;
+    document.getElementById('vol-master-val').textContent = Math.round(this.volume * 100);
+    document.getElementById('difficulty').value = this.difficulty;
+    document.getElementById('difficulty-val').textContent = ['', 'Gentle', 'Fair', 'Brutal'][this.difficulty];
+    document.getElementById('minimap-on').value = this.minimap ? 1 : 0;
+    document.getElementById('minimap-val').textContent = this.minimap ? 'On' : 'Off';
+    document.getElementById('controls-on').value = this.showControls ? 1 : 0;
+    document.getElementById('controls-val').textContent = this.showControls ? 'On' : 'Off';
+
+    document.getElementById('vol-master').addEventListener('input', e => {
+      this.volume = e.target.value / 100;
+      document.getElementById('vol-master-val').textContent = e.target.value;
+      this.save();
+    });
+    document.getElementById('difficulty').addEventListener('input', e => {
+      this.difficulty = +e.target.value;
+      document.getElementById('difficulty-val').textContent = ['', 'Gentle', 'Fair', 'Brutal'][this.difficulty];
+      this.save();
+    });
+    document.getElementById('minimap-on').addEventListener('input', e => {
+      this.minimap = e.target.value === '1';
+      document.getElementById('minimap-val').textContent = this.minimap ? 'On' : 'Off';
+      this.save();
+    });
+    document.getElementById('controls-on').addEventListener('input', e => {
+      this.showControls = e.target.value === '1';
+      document.getElementById('controls-val').textContent = this.showControls ? 'On' : 'Off';
+      this.save();
+    });
+  },
+  save() { localStorage.setItem('mhs_settings', JSON.stringify({ volume: this.volume, difficulty: this.difficulty, minimap: this.minimap, showControls: this.showControls })); }
+};
+
+// ---------- Audio (simple Web Audio synths, no files) ----------
+const Audio_ = {
+  ctx: null,
+  ensure() {
+    if (!this.ctx) {
+      try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  play(freq, dur, type = 'sine', vol = 0.3, slide = 0) {
+    this.ensure();
+    if (!this.ctx) return;
+    const c = this.ctx;
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), c.currentTime + dur);
+    gain.gain.value = vol * Settings.volume;
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    osc.connect(gain); gain.connect(c.destination);
+    osc.start(); osc.stop(c.currentTime + dur);
+  },
+  cannon() {
+    this.ensure();
+    if (!this.ctx) return;
+    const c = this.ctx;
+    // noise burst
+    const bufSize = c.sampleRate * 0.25;
+    const buffer = c.createBuffer(1, bufSize, c.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/bufSize, 2);
+    const src = c.createBufferSource();
+    src.buffer = buffer;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = 400;
+    const gain = c.createGain();
+    gain.gain.value = 0.5 * Settings.volume;
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.25);
+    src.connect(filter); filter.connect(gain); gain.connect(c.destination);
+    src.start();
+    this.play(80, 0.15, 'sawtooth', 0.25, -40);
+  },
+  hit() { this.play(200, 0.15, 'square', 0.3, -120); },
+  explode() {
+    this.cannon();
+    setTimeout(() => this.play(120, 0.4, 'sawtooth', 0.3, -80), 80);
+  },
+  coin() {
+    this.play(880, 0.08, 'triangle', 0.3);
+    setTimeout(() => this.play(1320, 0.1, 'triangle', 0.3), 80);
+  },
+  dock() { this.play(440, 0.15, 'triangle', 0.25); setTimeout(() => this.play(660, 0.25, 'triangle', 0.25), 120); }
+};
+
+// ---------- Input ----------
+const Input = {
+  keys: {},
+  init() {
+    window.addEventListener('keydown', e => {
+      this.keys[e.code] = true;
+      this.keys[e.key.toLowerCase()] = true;
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+      if (e.code === 'Escape') Game.togglePause();
+      if (e.code === 'KeyE' && Game.state === 'playing' && !e.repeat) {
+        if (Game.nearbyPort) {
+          Game.enterPort(Game.nearbyPort);
+        } else if (!Player.fullSail && Player.reloadTimer <= 0 && Player.ammo > 0) {
+          Player.fire(1); // starboard
+        }
+      }
+      if (e.code === 'KeyQ' && Game.state === 'playing' && !e.repeat) {
+        if (!Player.fullSail && !Game.nearbyPort && Player.reloadTimer <= 0 && Player.ammo > 0) {
+          Player.fire(-1); // port
+        }
+      }
+      if (e.code === 'KeyM' && !e.repeat) {
+        if (Game.state === 'playing') MapView.show();
+        else if (Game.state === 'map') MapView.close();
+      }
+      if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && Game.state === 'playing' && !e.repeat) {
+        Player.fullSail = !Player.fullSail;
+        Audio_.play(Player.fullSail ? 660 : 440, 0.18, 'triangle', 0.25);
+      }
+    });
+    window.addEventListener('keyup', e => {
+      this.keys[e.code] = false;
+      this.keys[e.key.toLowerCase()] = false;
+    });
+    window.addEventListener('blur', () => { this.keys = {}; });
+  }
+};
+
+// ---------- World / Procedural map ----------
+const World = {
+  seed: 0,
+  ports: [],
+  islands: [],   // purely visual + collision
+  generate(seed) {
+    this.seed = seed;
+    const rng = mulberry32(seed);
+    this.ports = [];
+    this.islands = [];
+
+    // generate 8 ports around the world
+    const portCount = 8;
+    const placed = [];
+    let attempts = 0;
+    while (placed.length < portCount && attempts < 400) {
+      attempts++;
+      const x = rng() * WORLD_SIZE;
+      const y = rng() * WORLD_SIZE;
+      let ok = true;
+      for (const p of placed) if (dist({x,y}, p) < 650) { ok = false; break; }
+      if (!ok) continue;
+      placed.push({ x, y });
+    }
+
+    const nameList = [...PORT_NAMES].sort(() => rng() - 0.5);
+    placed.forEach((pos, i) => {
+      // Each port specializes in 1-2 goods (cheap), demands 1-2 (expensive)
+      const shuf = [...GOODS].sort(() => rng() - 0.5);
+      const produces = shuf.slice(0, 2).map(g => g.id);
+      const demands = shuf.slice(2, 4).map(g => g.id);
+      const islandR = rand(140, 200);
+      const dockAngle = rng() * TAU;
+      // Dock sits just outside the island on the chosen coast
+      const dockDist = islandR * 1.05;
+      const dockX = pos.x + Math.cos(dockAngle) * dockDist;
+      const dockY = pos.y + Math.sin(dockAngle) * dockDist;
+      const port = {
+        id: 'p' + i,
+        name: nameList[i % nameList.length],
+        epithet: PORT_EPITHETS[Math.floor(rng() * PORT_EPITHETS.length)],
+        x: dockX, y: dockY,
+        dockAngle,
+        radius: 110,
+        produces, demands,
+        prices: {},
+        island: {
+          x: pos.x, y: pos.y,
+          r: islandR,
+          shape: this.makeIslandShape(rng),
+          buildings: this.makeBuildings(rng, pos)
+        }
+      };
+      this.generatePrices(port, rng);
+      this.ports.push(port);
+      this.islands.push(port.island);
+    });
+
+    // decorative islands (no ports)
+    const decoCount = 12;
+    for (let i = 0; i < decoCount; i++) {
+      let tries = 0;
+      while (tries < 30) {
+        tries++;
+        const x = rng() * WORLD_SIZE;
+        const y = rng() * WORLD_SIZE;
+        const r = rand(50, 120);
+        let ok = true;
+        for (const isl of this.islands) if (dist({x,y}, isl) < (r + isl.r + 200)) { ok = false; break; }
+        if (!ok) continue;
+        this.islands.push({ x, y, r, shape: this.makeIslandShape(rng), buildings: [] });
+        break;
+      }
+    }
+  },
+  makeIslandShape(rng) {
+    const pts = [];
+    const segs = 14;
+    for (let i = 0; i < segs; i++) {
+      const ang = (i / segs) * TAU;
+      const rFactor = 0.75 + rng() * 0.5;
+      pts.push({ a: ang, r: rFactor });
+    }
+    return pts;
+  },
+  makeBuildings(rng, pos) {
+    const count = randi(3, 6);
+    const bs = [];
+    for (let i = 0; i < count; i++) {
+      bs.push({
+        ox: rand(-50, 50),
+        oy: rand(-40, 40),
+        w: rand(14, 22),
+        h: rand(16, 26),
+        roof: rand(0, 1) > 0.5,
+        color: ['#8a5a3a', '#a07050', '#6a4028', '#c08050'][randi(0,3)]
+      });
+    }
+    return bs;
+  },
+  generatePrices(port, rng) {
+    for (const g of GOODS) {
+      let mult = 1;
+      if (port.produces.includes(g.id)) mult = 0.55 + (rng ? rng() : Math.random()) * 0.15;
+      else if (port.demands.includes(g.id)) mult = 1.55 + (rng ? rng() : Math.random()) * 0.35;
+      else mult = 0.85 + (rng ? rng() : Math.random()) * 0.3;
+      port.prices[g.id] = Math.round(g.basePrice * mult);
+    }
+  },
+  refreshPrices() {
+    // Called when visiting a port, slight drift to feel dynamic
+    for (const port of this.ports) {
+      for (const g of GOODS) {
+        const basePrice = g.basePrice;
+        let targetMult = 1;
+        if (port.produces.includes(g.id)) targetMult = 0.6;
+        else if (port.demands.includes(g.id)) targetMult = 1.65;
+        const current = port.prices[g.id] / basePrice;
+        const drift = (Math.random() - 0.5) * 0.15;
+        const newMult = lerp(current, targetMult + drift, 0.4);
+        port.prices[g.id] = Math.max(1, Math.round(basePrice * newMult));
+      }
+    }
+  },
+  pointInLand(x, y) {
+    for (const isl of this.islands) {
+      const d = Math.hypot(x - isl.x, y - isl.y);
+      if (d < isl.r * 0.85) return isl;
+    }
+    return null;
+  }
+};
+
+// ---------- Calendar / Seasons ----------
+const MONTH_DURATION = 180; // 3 minutes real time per month
+const SEASONS = [
+  { id: 'spring', name: 'Spring', color: '#6aa850', accent: '#a8d08a', icon: '🌸', months: ['March','April','May'] },
+  { id: 'summer', name: 'Summer', color: '#d8a030', accent: '#f2c14e', icon: '☀️',  months: ['June','July','August'] },
+  { id: 'autumn', name: 'Autumn', color: '#b55020', accent: '#d97040', icon: '🍂', months: ['September','October','November'] },
+  { id: 'winter', name: 'Winter', color: '#6080a8', accent: '#a8c4e0', icon: '❄️',  months: ['December','January','February'] },
+];
+
+const Calendar = {
+  elapsed: 0,        // seconds since game start
+  monthsElapsed: 0,  // total months that have passed
+  startYear: 1712,
+  lastSeasonId: null,
+
+  reset() {
+    this.elapsed = 0;
+    this.monthsElapsed = 0;
+    this.lastSeasonId = this.seasonData().id;
+  },
+
+  update(dt) {
+    const prevMonth = Math.floor(this.elapsed / MONTH_DURATION);
+    this.elapsed += dt;
+    const nowMonth = Math.floor(this.elapsed / MONTH_DURATION);
+    if (nowMonth > prevMonth) {
+      this.monthsElapsed = nowMonth;
+      const cur = this.seasonData();
+      if (cur.id !== this.lastSeasonId) {
+        this.lastSeasonId = cur.id;
+        this.onSeasonChange(cur);
+      }
+    }
+  },
+
+  // seasons are 3 months: spring = 0..2, summer = 3..5, autumn = 6..8, winter = 9..11
+  // offset so we begin at the START of spring
+  seasonIndex() {
+    return Math.floor((this.monthsElapsed % 12) / 3);
+  },
+  seasonData() {
+    return SEASONS[this.seasonIndex()];
+  },
+  // 0..1 progress through the current season
+  seasonProgress() {
+    const monthInSeason = (this.monthsElapsed % 3);
+    const secThisMonth = this.elapsed - this.monthsElapsed * MONTH_DURATION;
+    return (monthInSeason + secThisMonth / MONTH_DURATION) / 3;
+  },
+  // 0..1 progress through current month
+  monthProgress() {
+    return (this.elapsed - this.monthsElapsed * MONTH_DURATION) / MONTH_DURATION;
+  },
+  year() {
+    return this.startYear + Math.floor(this.monthsElapsed / 12);
+  },
+  monthName() {
+    const season = this.seasonData();
+    const monthInSeason = this.monthsElapsed % 3;
+    return season.months[monthInSeason];
+  },
+
+  onSeasonChange(season) {
+    // Track years survived — reaching Spring again = one full year
+    const currentYears = Math.floor(this.monthsElapsed / 12);
+    if (currentYears > (Stats.data.mostYearsSurvived || 0)) {
+      Stats.data.mostYearsSurvived = currentYears;
+      Stats.save();
+    }
+
+    // Rebuild each port's produces/demands and reprice everything
+    for (const port of World.ports) {
+      const shuf = [...GOODS].sort(() => Math.random() - 0.5);
+      port.produces = shuf.slice(0, 2).map(g => g.id);
+      port.demands = shuf.slice(2, 4).map(g => g.id);
+      // Fresh prices based on the new specialty
+      for (const g of GOODS) {
+        let mult = 1;
+        if (port.produces.includes(g.id)) mult = 0.55 + Math.random() * 0.15;
+        else if (port.demands.includes(g.id)) mult = 1.55 + Math.random() * 0.35;
+        else mult = 0.85 + Math.random() * 0.3;
+        port.prices[g.id] = Math.max(1, Math.round(g.basePrice * mult));
+      }
+    }
+    UI.showToast(`${season.icon}  ${season.name} has arrived — markets shift!`);
+    const card = document.getElementById('calendar-card');
+    if (card) {
+      card.classList.remove('season-change');
+      void card.offsetWidth; // force reflow to restart animation
+      card.classList.add('season-change');
+      setTimeout(() => card.classList.remove('season-change'), 1300);
+    }
+    Audio_.play(season.id === 'winter' ? 220 : 440, 0.35, 'triangle', 0.3);
+    setTimeout(() => Audio_.play(season.id === 'winter' ? 293 : 660, 0.35, 'triangle', 0.3), 200);
+    // If the port UI is currently open, refresh it
+    if (Port.current && Game.state === 'port') {
+      Port.renderTab(Port.tab);
+    }
+  }
+};
+
+// ---------- Player ----------
+const Player = {
+  x: 0, y: 0,
+  vx: 0, vy: 0,
+  angle: 0,
+  angularVel: 0,
+  rudder: 0, // -1..1, current rudder deflection
+  shipClass: 'sloop',
+  ownedShips: ['sloop'],
+  hp: 80, maxHPBase: 80,
+  gold: 200,
+  cargo: {}, cargoUsed: 0,
+  ammo: 20,
+  reloadTimer: 0,
+  lastFireSide: 0,
+  upgrades: { cannons: 0, accuracy: 0, speed: 0, hull: 0, ammo: 0, reload: 0, cargo: 0 },
+  extraCannons: 0, accuracyLevel: 0, speedBonus: 0, hpBonus: 0, ammoBonus: 0, reloadBonus: 0, cargoBonus: 0,
+  invuln: 0,
+  fullSail: false,
+  cannonBalls: [],
+  get ship() { return SHIP_CLASSES[this.shipClass]; },
+  get maxHP() { return Math.round(this.ship.maxHP * (1 + this.hpBonus)); },
+  get maxCargo() { return this.ship.cargo + this.cargoBonus; },
+  get maxAmmo() { return this.ship.ammo + this.ammoBonus; },
+  get speed() { return this.ship.speed * (1 + this.speedBonus); },
+  get turnRate() { return this.ship.turn; },
+  get reloadTime() { return Math.max(0.12, 0.5 - this.reloadBonus); },
+  get numCannons() { return this.ship.cannons + this.extraCannons; },
+
+  reset() {
+    this.shipClass = 'sloop';
+    this.ownedShips = ['sloop'];
+    this.upgrades = { cannons: 0, accuracy: 0, speed: 0, hull: 0, ammo: 0, reload: 0, cargo: 0 };
+    this.applyUpgrades();
+    this.hp = this.maxHP;
+    this.gold = 200;
+    this.cargo = {};
+    this.cargoUsed = 0;
+    this.ammo = this.maxAmmo;
+    this.reloadTimer = 0;
+    this.invuln = 0;
+    this.fullSail = false;
+    this.cannonBalls = [];
+    this.vx = 0; this.vy = 0;
+    this.angularVel = 0;
+    this.rudder = 0;
+    // spawn near starting port, offshore from the dock
+    const port = World.ports[0];
+    this.x = port.x + Math.cos(port.dockAngle) * 180;
+    this.y = port.y + Math.sin(port.dockAngle) * 180;
+    this.angle = port.dockAngle + Math.PI; // facing toward the port
+  },
+
+  applyUpgrades() {
+    for (const key in this.upgrades) {
+      UPGRADES[key].apply(this, this.upgrades[key]);
+    }
+    this.maxHPBase = this.ship.maxHP;
+  },
+
+  update(dt) {
+    if (this.invuln > 0) this.invuln -= dt;
+    if (this.reloadTimer > 0) this.reloadTimer -= dt;
+
+    // Full Sail: massive speed boost, slower turning, cannons stowed
+    const sailMult = this.fullSail ? 1.8 : 1.0;
+    const turnMult = this.fullSail ? 0.55 : 1.0;
+
+    // ----- Rudder + steering physics -----
+    // Rudder input: pressing left/right deflects the rudder, it returns to center when released
+    let rudderInput = 0;
+    if (Input.keys['ArrowLeft'] || Input.keys['a']) rudderInput -= 1;
+    if (Input.keys['ArrowRight'] || Input.keys['d']) rudderInput += 1;
+    // Ease rudder toward input — can't snap to full lock instantly
+    this.rudder += (rudderInput - this.rudder) * Math.min(1, dt * 5);
+
+    // Rudder authority depends on forward speed (water flowing over the rudder)
+    const forwardSpeed = this.vx * Math.cos(this.angle) + this.vy * Math.sin(this.angle);
+    const speedRef = this.speed * 12; // ship's nominal top speed
+    // 0 when stopped, 1 when at normal cruise; rudder needs some water flow
+    const rudderAuthority = clamp(Math.abs(forwardSpeed) / (speedRef * 0.3), 0, 1);
+    // Reverse + left rudder = turn right in real boats, so sign flips when in reverse
+    const dirSign = forwardSpeed >= 0 ? 1 : -1;
+    // Target angular velocity
+    const targetAngVel = this.rudder * this.turnRate * 60 * turnMult * rudderAuthority * dirSign;
+    // Ease angular velocity toward target (rotational inertia)
+    this.angularVel += (targetAngVel - this.angularVel) * Math.min(1, dt * 3);
+    // Rotational damping when no input
+    if (Math.abs(rudderInput) < 0.01) this.angularVel *= 0.92 ** (dt * 60);
+    this.angle += this.angularVel * dt;
+
+    // ----- Throttle / thrust -----
+    let throttle = 0;
+    if (Input.keys['ArrowUp'] || Input.keys['w']) throttle = 1;
+    else if (Input.keys['ArrowDown'] || Input.keys['s']) throttle = -0.5;
+    if (this.fullSail) throttle = Math.max(throttle, 1);
+
+    const accel = this.speed * 8 * throttle * sailMult;
+    this.vx += Math.cos(this.angle) * accel * dt;
+    this.vy += Math.sin(this.angle) * accel * dt;
+
+    // ----- Hull grip (reorient velocity toward heading) -----
+    // Ships don't slide sideways easily — the hull "bites" water.
+    // We lerp velocity direction toward the heading while preserving speed.
+    const spdNow = Math.hypot(this.vx, this.vy);
+    if (spdNow > 0.05) {
+      const vAngle = Math.atan2(this.vy, this.vx);
+      const diff = angleDiff(vAngle, this.angle);
+      // Grip strength: faster ships bite harder (realistic), also stronger when moving forward
+      const grip = clamp(Math.min(1, dt * 2.2), 0, 1);
+      const newAngle = vAngle + diff * grip;
+      this.vx = Math.cos(newAngle) * spdNow;
+      this.vy = Math.sin(newAngle) * spdNow;
+    }
+
+    // Drag
+    const drag = 0.89 ** (dt * 60);
+    this.vx *= drag;
+    this.vy *= drag;
+
+    // Max speed cap
+    const maxSpeed = this.speed * 12 * sailMult;
+    const spd = Math.hypot(this.vx, this.vy);
+    if (spd > maxSpeed) {
+      this.vx *= maxSpeed / spd;
+      this.vy *= maxSpeed / spd;
+    }
+
+    // Try move
+    let nx = this.x + this.vx * dt * 60;
+    let ny = this.y + this.vy * dt * 60;
+
+    // World bounds
+    nx = clamp(nx, 30, WORLD_SIZE - 30);
+    ny = clamp(ny, 30, WORLD_SIZE - 30);
+
+    // Island collision — slide around
+    const land = World.pointInLand(nx, ny);
+    if (land) {
+      const dx = nx - land.x, dy = ny - land.y;
+      const d = Math.hypot(dx, dy) || 1;
+      nx = land.x + (dx / d) * land.r * 0.86;
+      ny = land.y + (dy / d) * land.r * 0.86;
+      this.vx *= 0.3;
+      this.vy *= 0.3;
+      this.angularVel *= 0.5;
+    }
+
+    this.x = nx; this.y = ny;
+
+    // Held-to-fire: after the initial press, holding Q or E will auto-fire on cooldown
+    if (!this.fullSail && this.reloadTimer <= 0 && this.ammo > 0 && !Game.nearbyPort) {
+      if (Input.keys['KeyQ']) this.fire(-1);
+      else if (Input.keys['KeyE']) this.fire(1);
+    }
+
+    // Update cannon balls
+    for (const cb of this.cannonBalls) {
+      cb.x += cb.vx * dt * 60;
+      cb.y += cb.vy * dt * 60;
+      cb.life -= dt;
+      cb.trail.push({ x: cb.x, y: cb.y, age: 0 });
+      if (cb.trail.length > 8) cb.trail.shift();
+      for (const t of cb.trail) t.age += dt;
+    }
+    this.cannonBalls = this.cannonBalls.filter(cb => cb.life > 0);
+  },
+
+  fire(side) {
+    // side: -1 for port (left), +1 for starboard (right)
+    Audio_.cannon();
+    this.reloadTimer = this.reloadTime;
+    this.ammo--;
+
+    const shots = this.numCannons;
+    const ballSpeed = 8;
+    const ballLife = this.ship.range / (ballSpeed * 60);
+    // Accuracy: default spread is ~12° (0.21 rad) half-angle.
+    // Each accuracy level tightens by 22%. 0 = sloppy greens, 5 = marksman.
+    const baseSpread = 0.21;
+    const spreadHalfAngle = baseSpread * Math.pow(0.78, this.accuracyLevel || 0);
+
+    for (let i = 0; i < shots; i++) {
+      const offset = (i - (shots - 1) / 2) * 8;
+      const perpAngle = this.angle + side * Math.PI / 2;
+      const spawnX = this.x + Math.cos(this.angle) * offset + Math.cos(perpAngle) * this.ship.size * 0.5;
+      const spawnY = this.y + Math.sin(this.angle) * offset + Math.sin(perpAngle) * this.ship.size * 0.5;
+      // Random spread within the accuracy cone
+      const spread = (Math.random() - 0.5) * 2 * spreadHalfAngle;
+      this.cannonBalls.push({
+        x: spawnX, y: spawnY,
+        vx: Math.cos(perpAngle + spread) * ballSpeed,
+        vy: Math.sin(perpAngle + spread) * ballSpeed,
+        life: ballLife,
+        trail: [],
+        from: 'player'
+      });
+    }
+    // Muzzle flash + smoke
+    const perpAngle = this.angle + side * Math.PI / 2;
+    Effects.flash(
+      this.x + Math.cos(perpAngle) * this.ship.size * 0.55,
+      this.y + Math.sin(perpAngle) * this.ship.size * 0.55,
+      perpAngle
+    );
+    Effects.smoke(
+      this.x + Math.cos(perpAngle) * this.ship.size * 0.55,
+      this.y + Math.sin(perpAngle) * this.ship.size * 0.55,
+      perpAngle
+    );
+  },
+
+  damage(amt) {
+    if (this.invuln > 0) return;
+    this.hp -= amt;
+    this.invuln = 0.35;
+    Audio_.hit();
+    UI.damageFlash();
+    Effects.splash(this.x, this.y, '#c04040');
+    if (this.hp <= 0) {
+      this.hp = 0;
+      Game.lose();
+    }
+  },
+
+  heal(amt) {
+    this.hp = Math.min(this.maxHP, this.hp + amt);
+  },
+
+  refillAmmo() {
+    this.ammo = this.maxAmmo;
+  },
+
+  canAfford(cost) { return this.gold >= cost; },
+
+  addCargo(goodId, qty) {
+    if (this.cargoUsed + qty > this.maxCargo) qty = this.maxCargo - this.cargoUsed;
+    if (qty <= 0) return 0;
+    this.cargo[goodId] = (this.cargo[goodId] || 0) + qty;
+    this.cargoUsed += qty;
+    return qty;
+  },
+  removeCargo(goodId, qty) {
+    const have = this.cargo[goodId] || 0;
+    const amt = Math.min(have, qty);
+    this.cargo[goodId] = have - amt;
+    if (this.cargo[goodId] <= 0) delete this.cargo[goodId];
+    this.cargoUsed -= amt;
+    return amt;
+  }
+};
+
+// ---------- Pirates ----------
+const Pirates = {
+  list: [],
+  spawnTimer: 10,
+
+  update(dt) {
+    this.spawnTimer -= dt;
+    const diffMult = [1, 1.5, 1.0, 0.65][Settings.difficulty];
+    if (this.spawnTimer <= 0 && this.list.length < 4 + Settings.difficulty) {
+      this.spawn();
+      this.spawnTimer = rand(10, 20) * diffMult;
+    }
+
+    for (const p of this.list) {
+      this.updatePirate(p, dt);
+    }
+
+    // Remove dead and too-far pirates
+    this.list = this.list.filter(p => {
+      if (p.hp <= 0) return false;
+      const d = dist(p, Player);
+      if (d > 1400) return false;
+      return true;
+    });
+  },
+
+  spawn() {
+    // Spawn off-screen from player
+    const ang = Math.random() * TAU;
+    const dist = 800 + Math.random() * 200;
+    let x = Player.x + Math.cos(ang) * dist;
+    let y = Player.y + Math.sin(ang) * dist;
+    x = clamp(x, 100, WORLD_SIZE - 100);
+    y = clamp(y, 100, WORLD_SIZE - 100);
+    if (World.pointInLand(x, y)) return;
+
+    const difficulty = Settings.difficulty;
+    const tier = difficulty === 3 ? (Math.random() < 0.5 ? 1 : 2) : (Math.random() < 0.75 ? 0 : 1);
+    const tiers = [
+      { hp: 40, speed: 0.22, turn: 0.040, size: 20, dmg: 8, fireRate: 1.6, range: 280 },
+      { hp: 75, speed: 0.24, turn: 0.042, size: 24, dmg: 12, fireRate: 1.3, range: 320 },
+      { hp: 120, speed: 0.20, turn: 0.035, size: 30, dmg: 18, fireRate: 1.1, range: 360 },
+    ];
+    const t = tiers[tier];
+    this.list.push({
+      x, y, vx: 0, vy: 0,
+      angle: Math.random() * TAU,
+      angularVel: 0, rudder: 0,
+      hp: t.hp, maxHP: t.hp,
+      speed: t.speed, turn: t.turn, size: t.size,
+      damage: t.dmg, fireRate: t.fireRate, range: t.range,
+      fireTimer: rand(0, t.fireRate),
+      tier,
+      cannonBalls: [],
+      hitFlash: 0
+    });
+  },
+
+  updatePirate(p, dt) {
+    if (p.hitFlash > 0) p.hitFlash -= dt;
+
+    const d = dist(p, Player);
+    const targetAngle = angleBetween(p, Player);
+
+    // Want to keep moderate distance: ideal = 70% of range
+    const ideal = p.range * 0.7;
+    let moveAngle;
+    if (d > ideal + 40) {
+      moveAngle = targetAngle;
+    } else if (d < ideal - 60) {
+      moveAngle = targetAngle + Math.PI; // back off
+    } else {
+      // circle strafe
+      moveAngle = targetAngle + Math.PI / 2;
+    }
+
+    // Decide rudder input — point rudder toward desired heading
+    const headingDiff = angleDiff(p.angle, moveAngle);
+    const rudderTarget = clamp(headingDiff * 1.5, -1, 1);
+    p.rudder += (rudderTarget - p.rudder) * Math.min(1, dt * 4);
+
+    // Rudder authority based on forward speed
+    const forwardSpeed = p.vx * Math.cos(p.angle) + p.vy * Math.sin(p.angle);
+    const speedRef = p.speed * 12;
+    const rudderAuthority = clamp(Math.abs(forwardSpeed) / (speedRef * 0.3), 0, 1);
+    const dirSign = forwardSpeed >= 0 ? 1 : -1;
+    const targetAngVel = p.rudder * p.turn * 60 * rudderAuthority * dirSign;
+    p.angularVel += (targetAngVel - p.angularVel) * Math.min(1, dt * 3);
+    p.angularVel *= 0.95 ** (dt * 60);
+    p.angle += p.angularVel * dt;
+
+    // Accelerate (always pushing forward — pirates are aggressive)
+    const thrust = p.speed * 8;
+    p.vx += Math.cos(p.angle) * thrust * dt;
+    p.vy += Math.sin(p.angle) * thrust * dt;
+
+    // Hull grip — reorient velocity toward heading
+    const spdNow = Math.hypot(p.vx, p.vy);
+    if (spdNow > 0.05) {
+      const vAngle = Math.atan2(p.vy, p.vx);
+      const diff2 = angleDiff(vAngle, p.angle);
+      const grip = clamp(Math.min(1, dt * 2.2), 0, 1);
+      const newAngle = vAngle + diff2 * grip;
+      p.vx = Math.cos(newAngle) * spdNow;
+      p.vy = Math.sin(newAngle) * spdNow;
+    }
+
+    const drag = 0.89 ** (dt * 60);
+    p.vx *= drag; p.vy *= drag;
+    const maxSpd = p.speed * 12;
+    const spd = Math.hypot(p.vx, p.vy);
+    if (spd > maxSpd) { p.vx *= maxSpd / spd; p.vy *= maxSpd / spd; }
+
+    let nx = p.x + p.vx * dt * 60;
+    let ny = p.y + p.vy * dt * 60;
+    nx = clamp(nx, 30, WORLD_SIZE - 30);
+    ny = clamp(ny, 30, WORLD_SIZE - 30);
+    const land = World.pointInLand(nx, ny);
+    if (land) {
+      const dx = nx - land.x, dy = ny - land.y;
+      const dd = Math.hypot(dx, dy) || 1;
+      nx = land.x + (dx / dd) * land.r * 0.9;
+      ny = land.y + (dy / dd) * land.r * 0.9;
+      p.vx *= 0.4; p.vy *= 0.4;
+    }
+    p.x = nx; p.y = ny;
+
+    // Fire — when player is roughly abeam
+    p.fireTimer -= dt;
+    if (p.fireTimer <= 0 && d < p.range) {
+      const bearing = angleDiff(p.angle, targetAngle);
+      // Fire if player is roughly 90° off either side
+      if (Math.abs(Math.abs(bearing) - Math.PI / 2) < 0.7) {
+        this.pirateFires(p);
+        p.fireTimer = p.fireRate;
+      } else {
+        p.fireTimer = 0.2;
+      }
+    }
+
+    // Update pirate cannon balls
+    for (const cb of p.cannonBalls) {
+      cb.x += cb.vx * dt * 60;
+      cb.y += cb.vy * dt * 60;
+      cb.life -= dt;
+      cb.trail.push({ x: cb.x, y: cb.y, age: 0 });
+      if (cb.trail.length > 6) cb.trail.shift();
+      for (const t of cb.trail) t.age += dt;
+      // hit player
+      if (dist(cb, Player) < Player.ship.size * 0.7) {
+        Player.damage(p.damage);
+        cb.life = 0;
+        Effects.explosion(cb.x, cb.y, 0.6);
+      }
+    }
+    p.cannonBalls = p.cannonBalls.filter(cb => cb.life > 0);
+  },
+
+  pirateFires(p) {
+    Audio_.cannon();
+    const toPlayer = angleBetween(p, Player);
+    // Predict where player will be
+    const d = dist(p, Player);
+    const leadTime = d / 8 / 60;
+    const leadX = Player.x + Player.vx * leadTime * 60;
+    const leadY = Player.y + Player.vy * leadTime * 60;
+    const leadAngle = Math.atan2(leadY - p.y, leadX - p.x);
+
+    const shots = 1 + p.tier;
+    const ballSpeed = 8;
+    const ballLife = p.range / (ballSpeed * 60);
+    for (let i = 0; i < shots; i++) {
+      const spread = (Math.random() - 0.5) * 0.15;
+      p.cannonBalls.push({
+        x: p.x, y: p.y,
+        vx: Math.cos(leadAngle + spread) * ballSpeed,
+        vy: Math.sin(leadAngle + spread) * ballSpeed,
+        life: ballLife,
+        trail: []
+      });
+    }
+    const perpAngle = toPlayer;
+    Effects.flash(p.x + Math.cos(perpAngle) * p.size * 0.5, p.y + Math.sin(perpAngle) * p.size * 0.5, perpAngle);
+    Effects.smoke(p.x + Math.cos(perpAngle) * p.size * 0.5, p.y + Math.sin(perpAngle) * p.size * 0.5, perpAngle);
+  },
+
+  // player cannonballs hit them
+  checkPlayerHits() {
+    for (const cb of Player.cannonBalls) {
+      for (const p of this.list) {
+        if (p.hp <= 0) continue;
+        if (dist(cb, p) < p.size * 0.7) {
+          p.hp -= 18;
+          p.hitFlash = 0.18;
+          cb.life = 0;
+          Effects.explosion(cb.x, cb.y, 0.5);
+          if (p.hp <= 0) {
+            Effects.explosion(p.x, p.y, 1.5);
+            Audio_.explode();
+            const loot = 40 + Math.floor(Math.random() * 30) + p.tier * 20;
+            Player.gold += loot;
+            Stats.data.piratesKilled++;
+            Stats.data.maxGold = Math.max(Stats.data.maxGold, Player.gold);
+            Stats.save();
+            UI.showFloater(W()/2, H()/2 - 40, `+${loot} gold!`, '#f2c14e');
+          }
+          break;
+        }
+      }
+    }
+  }
+};
+
+// ---------- Particle effects ----------
+const Effects = {
+  particles: [],
+  splashes: [],
+  wake: [],
+
+  update(dt) {
+    for (const p of this.particles) {
+      p.x += p.vx * dt * 60;
+      p.y += p.vy * dt * 60;
+      p.vx *= 0.95;
+      p.vy *= 0.95;
+      p.life -= dt;
+      p.r *= 1 + dt * p.grow;
+    }
+    this.particles = this.particles.filter(p => p.life > 0);
+
+    for (const s of this.splashes) {
+      s.life -= dt;
+      const rate = s.growRate != null ? s.growRate : 60;
+      s.r += dt * rate;
+      if (s.maxR != null && s.r > s.maxR) s.r = s.maxR;
+    }
+    this.splashes = this.splashes.filter(s => s.life > 0);
+
+    // Wake: add one behind ship occasionally if moving
+    const spd = Math.hypot(Player.vx, Player.vy);
+    if (spd > 0.5) {
+      if (Math.random() < 0.4) {
+        this.wake.push({
+          x: Player.x - Math.cos(Player.angle) * Player.ship.size * 0.5 + rand(-3,3),
+          y: Player.y - Math.sin(Player.angle) * Player.ship.size * 0.5 + rand(-3,3),
+          life: 2.5, maxLife: 2.5, r: 3
+        });
+      }
+    }
+    for (const w of this.wake) {
+      w.life -= dt;
+      w.r += dt * 12;
+    }
+    this.wake = this.wake.filter(w => w.life > 0);
+  },
+
+  explosion(x, y, scale = 1) {
+    for (let i = 0; i < 14 * scale; i++) {
+      const ang = Math.random() * TAU;
+      const s = rand(0.4, 2.2);
+      this.particles.push({
+        x, y, vx: Math.cos(ang) * s, vy: Math.sin(ang) * s,
+        life: rand(0.3, 0.6), r: rand(1.5, 3.5),
+        color: ['#ffaa30','#ff6020','#ffe070','#c04010'][randi(0,3)],
+        grow: 0
+      });
+    }
+    this.splashes.push({ x, y, r: 4, life: 0.35, color: 'rgba(255,180,80,', growRate: 30, maxR: 14 });
+  },
+
+  flash(x, y, angle) {
+    for (let i = 0; i < 8; i++) {
+      const spread = (Math.random() - 0.5) * 0.6;
+      const s = rand(2, 5);
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle + spread) * s,
+        vy: Math.sin(angle + spread) * s,
+        life: 0.25, r: rand(3, 6),
+        color: '#ffd860', grow: 2
+      });
+    }
+  },
+
+  smoke(x, y, angle) {
+    for (let i = 0; i < 6; i++) {
+      const spread = (Math.random() - 0.5) * 0.8;
+      const s = rand(0.5, 2);
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle + spread) * s,
+        vy: Math.sin(angle + spread) * s,
+        life: rand(0.8, 1.6), r: rand(3, 7),
+        color: 'rgba(140,140,140,0.7)', grow: 3
+      });
+    }
+  },
+
+  splash(x, y, color) {
+    for (let i = 0; i < 10; i++) {
+      const ang = Math.random() * TAU;
+      const s = rand(1, 4);
+      this.particles.push({
+        x, y, vx: Math.cos(ang) * s, vy: Math.sin(ang) * s,
+        life: rand(0.4, 0.9), r: rand(2, 4), color, grow: 0.5
+      });
+    }
+  }
+};
+
+// ---------- Rendering ----------
+function drawWaterBackground(camX, camY) {
+  // Base sea color
+  ctx.fillStyle = '#2d5a7a';
+  ctx.fillRect(0, 0, W(), H());
+
+  // Animated water pattern — concentric subtle rings based on time
+  const t = performance.now() / 1000;
+  ctx.save();
+  ctx.globalAlpha = 0.12;
+  ctx.strokeStyle = '#6da8c8';
+  ctx.lineWidth = 1;
+  const grid = 80;
+  const startX = -((camX) % grid);
+  const startY = -((camY) % grid);
+  for (let x = startX; x < W(); x += grid) {
+    for (let y = startY; y < H(); y += grid) {
+      const worldX = x + camX;
+      const worldY = y + camY;
+      const offset = Math.sin(worldX * 0.01 + t) * 3 + Math.cos(worldY * 0.01 + t * 0.7) * 3;
+      ctx.beginPath();
+      ctx.arc(x + offset, y + offset, 18, 0, TAU);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // Wave highlights
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#9ecbe0';
+  for (let i = 0; i < 40; i++) {
+    const seed = i * 137.5;
+    const x = ((seed * 7.3 + t * 20) % (W() + 200)) - 100;
+    const y = ((seed * 11.7 + t * 10) % (H() + 200)) - 100;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 15, 3, Math.sin(t + i) * 0.3, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawIsland(isl, camX, camY) {
+  const sx = isl.x - camX;
+  const sy = isl.y - camY;
+  if (sx < -isl.r * 1.5 || sx > W() + isl.r * 1.5 || sy < -isl.r * 1.5 || sy > H() + isl.r * 1.5) return;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Shadow/depth in water around island
+  const shadowGrad = ctx.createRadialGradient(0, 0, isl.r * 0.8, 0, 0, isl.r * 1.4);
+  shadowGrad.addColorStop(0, 'rgba(0,20,40,0.4)');
+  shadowGrad.addColorStop(1, 'rgba(0,20,40,0)');
+  ctx.fillStyle = shadowGrad;
+  ctx.fillRect(-isl.r * 1.5, -isl.r * 1.5, isl.r * 3, isl.r * 3);
+
+  // Beach/shallow ring
+  ctx.beginPath();
+  for (let i = 0; i < isl.shape.length; i++) {
+    const pt = isl.shape[i];
+    const x = Math.cos(pt.a) * isl.r * pt.r * 1.08;
+    const y = Math.sin(pt.a) * isl.r * pt.r * 1.08;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#e8d49a';
+  ctx.fill();
+
+  // Main island (dirt/sand)
+  ctx.beginPath();
+  for (let i = 0; i < isl.shape.length; i++) {
+    const pt = isl.shape[i];
+    const x = Math.cos(pt.a) * isl.r * pt.r * 0.96;
+    const y = Math.sin(pt.a) * isl.r * pt.r * 0.96;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#c9a070';
+  ctx.fill();
+
+  // Grass
+  ctx.beginPath();
+  for (let i = 0; i < isl.shape.length; i++) {
+    const pt = isl.shape[i];
+    const x = Math.cos(pt.a) * isl.r * pt.r * 0.82;
+    const y = Math.sin(pt.a) * isl.r * pt.r * 0.82;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#4a7a3a';
+  ctx.fill();
+
+  // Grass highlights
+  ctx.beginPath();
+  for (let i = 0; i < isl.shape.length; i++) {
+    const pt = isl.shape[i];
+    const x = Math.cos(pt.a) * isl.r * pt.r * 0.62;
+    const y = Math.sin(pt.a) * isl.r * pt.r * 0.62;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#5a8a40';
+  ctx.fill();
+
+  // Buildings (for port islands)
+  for (const b of isl.buildings) {
+    ctx.save();
+    ctx.translate(b.ox, b.oy);
+    ctx.fillStyle = b.color;
+    ctx.fillRect(-b.w/2, -b.h/2, b.w, b.h);
+    // roof
+    ctx.fillStyle = '#5a2a1a';
+    ctx.beginPath();
+    ctx.moveTo(-b.w/2 - 2, -b.h/2);
+    ctx.lineTo(0, -b.h/2 - 6);
+    ctx.lineTo(b.w/2 + 2, -b.h/2);
+    ctx.closePath();
+    ctx.fill();
+    // window
+    ctx.fillStyle = '#f2c14e';
+    ctx.fillRect(-2, -b.h/4, 4, 4);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawPort(port, camX, camY) {
+  const sx = port.x - camX;
+  const sy = port.y - camY;
+  if (sx < -200 || sx > W() + 200 || sy < -200 || sy > H() + 200) return;
+
+  const t = performance.now() / 1000;
+
+  // Dock platform — a pier extending from the shore into the sea along the dock angle
+  ctx.save();
+  ctx.translate(sx, sy);
+  // Rotate so +x points from island outward to sea
+  ctx.rotate(port.dockAngle);
+  // Pier extends from inland (-x, toward island) to out in the water (+x)
+  ctx.fillStyle = '#6a4028';
+  ctx.fillRect(-42, -6, 56, 12);
+  // Planks (perpendicular to pier)
+  ctx.fillStyle = '#8a5a3a';
+  for (let i = -3; i <= 2; i++) {
+    ctx.fillRect(i * 10 + 2, -6, 2, 12);
+  }
+  // Dock posts at the seaward end
+  ctx.fillStyle = '#3a2410';
+  ctx.fillRect(10, -8, 3, 3);
+  ctx.fillRect(10, 5, 3, 3);
+  ctx.restore();
+
+  // Port flag and name — placed at the dock, floating above
+  ctx.save();
+  ctx.translate(sx, sy - 90);
+  // Flag pole
+  ctx.strokeStyle = '#3a2410';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(0, 40);
+  ctx.stroke();
+  // Flag (waves)
+  const wave = Math.sin(t * 2) * 3;
+  ctx.fillStyle = '#c9962a';
+  ctx.beginPath();
+  ctx.moveTo(0, 5);
+  ctx.lineTo(22 + wave, 8);
+  ctx.lineTo(20 + wave, 16);
+  ctx.lineTo(0, 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Name label
+  ctx.save();
+  ctx.font = '14px IM Fell English SC, serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(232,215,168,0.95)';
+  ctx.strokeStyle = 'rgba(20,10,5,0.9)';
+  ctx.lineWidth = 3;
+  ctx.strokeText(port.name, sx, sy - 100);
+  ctx.fillText(port.name, sx, sy - 100);
+  ctx.restore();
+
+  // Docking radius indicator (when close)
+  const d = dist(port, Player);
+  if (d < 220) {
+    ctx.save();
+    ctx.globalAlpha = 0.3 + Math.sin(t * 3) * 0.15;
+    ctx.strokeStyle = '#f2c14e';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(sx, sy, port.radius, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawShip(x, y, angle, shipSize, color, isEnemy, hitFlash, fullSail) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  const size = shipSize;
+  const len = size * 1.5;
+  const wid = size * 0.5;
+  const sailBoost = fullSail ? 1.35 : 1.0;
+
+  // Hull shadow
+  ctx.save();
+  ctx.translate(3, 3);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.moveTo(len, 0);
+  ctx.lineTo(len * 0.3, -wid);
+  ctx.lineTo(-len * 0.8, -wid);
+  ctx.lineTo(-len * 0.9, 0);
+  ctx.lineTo(-len * 0.8, wid);
+  ctx.lineTo(len * 0.3, wid);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Hull
+  ctx.fillStyle = hitFlash > 0 ? '#ff9080' : color;
+  ctx.beginPath();
+  ctx.moveTo(len, 0);
+  ctx.lineTo(len * 0.3, -wid);
+  ctx.lineTo(-len * 0.8, -wid);
+  ctx.lineTo(-len * 0.9, 0);
+  ctx.lineTo(-len * 0.8, wid);
+  ctx.lineTo(len * 0.3, wid);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#2a1810';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Deck
+  ctx.fillStyle = '#8a6030';
+  ctx.beginPath();
+  ctx.moveTo(len * 0.85, 0);
+  ctx.lineTo(len * 0.2, -wid * 0.7);
+  ctx.lineTo(-len * 0.7, -wid * 0.7);
+  ctx.lineTo(-len * 0.8, 0);
+  ctx.lineTo(-len * 0.7, wid * 0.7);
+  ctx.lineTo(len * 0.2, wid * 0.7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cabin (back)
+  ctx.fillStyle = '#c08050';
+  ctx.fillRect(-len * 0.7, -wid * 0.45, wid * 0.5, wid * 0.9);
+  ctx.strokeRect(-len * 0.7, -wid * 0.45, wid * 0.5, wid * 0.9);
+
+  // Mast(s)
+  const mastCount = shipSize > 30 ? 3 : (shipSize > 22 ? 2 : 1);
+  ctx.fillStyle = '#5a3a1a';
+  for (let i = 0; i < mastCount; i++) {
+    const mx = lerp(-len * 0.3, len * 0.5, mastCount === 1 ? 0.5 : i / (mastCount - 1));
+    ctx.beginPath();
+    ctx.arc(mx, 0, 2, 0, TAU);
+    ctx.fill();
+
+    // Sail
+    const sailW = wid * 1.5 * sailBoost;
+    const sailH = size * 0.8 * sailBoost;
+    ctx.save();
+    const sailColor = isEnemy ? '#1a1210' : (fullSail ? '#ffffff' : '#f0e4c8');
+    ctx.fillStyle = sailColor;
+    ctx.strokeStyle = '#2a1810';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(mx, 0, sailH * 0.55, sailW * 0.5, 0, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+
+    // Sail emblem
+    if (isEnemy && i === Math.floor(mastCount / 2)) {
+      // skull
+      ctx.fillStyle = '#e8d7a8';
+      ctx.beginPath();
+      ctx.arc(mx, 0, 6, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#1a1210';
+      ctx.beginPath();
+      ctx.arc(mx - 2, -1, 1.3, 0, TAU);
+      ctx.arc(mx + 2, -1, 1.3, 0, TAU);
+      ctx.fill();
+      ctx.fillRect(mx - 1, 1, 2, 3);
+    }
+    ctx.restore();
+  }
+
+  // Flag at back
+  const t = performance.now() / 300;
+  ctx.save();
+  ctx.translate(-len * 0.85, 0);
+  ctx.fillStyle = isEnemy ? '#1a1210' : '#c9962a';
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.9);
+  ctx.lineTo(8 + Math.sin(t) * 2, -size * 0.87);
+  ctx.lineTo(7 + Math.sin(t) * 2, -size * 0.75);
+  ctx.lineTo(0, -size * 0.76);
+  ctx.closePath();
+  ctx.fill();
+  // flagpole
+  ctx.strokeStyle = '#3a2410';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(0, -size * 0.95);
+  ctx.stroke();
+  ctx.restore();
+
+  // Bow wave (forward splash) when moving fast
+  ctx.restore();
+}
+
+function drawCannonBall(cb, camX, camY, isEnemy) {
+  const sx = cb.x - camX;
+  const sy = cb.y - camY;
+  // Trail
+  for (let i = 0; i < cb.trail.length; i++) {
+    const t = cb.trail[i];
+    const tsx = t.x - camX;
+    const tsy = t.y - camY;
+    const alpha = (i / cb.trail.length) * 0.4;
+    ctx.fillStyle = `rgba(180,180,180,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(tsx, tsy, 3 + i * 0.4, 0, TAU);
+    ctx.fill();
+  }
+  // Ball
+  ctx.fillStyle = isEnemy ? '#4a2a2a' : '#1a1810';
+  ctx.beginPath();
+  ctx.arc(sx, sy, 4, 0, TAU);
+  ctx.fill();
+  // Highlight
+  ctx.fillStyle = 'rgba(200,200,200,0.5)';
+  ctx.beginPath();
+  ctx.arc(sx - 1, sy - 1, 1.5, 0, TAU);
+  ctx.fill();
+}
+
+function drawHealthBar(x, y, hp, maxHP, w = 36) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(x - w/2, y, w, 5);
+  const ratio = hp / maxHP;
+  ctx.fillStyle = ratio > 0.5 ? '#60c040' : (ratio > 0.25 ? '#f2c14e' : '#c04040');
+  ctx.fillRect(x - w/2 + 1, y + 1, (w - 2) * ratio, 3);
+  ctx.restore();
+}
+
+function drawParticles(camX, camY) {
+  for (const p of Effects.particles) {
+    const sx = p.x - camX, sy = p.y - camY;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.r, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+  for (const s of Effects.splashes) {
+    const sx = s.x - camX, sy = s.y - camY;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, s.life);
+    ctx.strokeStyle = s.color + s.life + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Wake
+  for (const w of Effects.wake) {
+    const sx = w.x - camX, sy = w.y - camY;
+    ctx.save();
+    ctx.globalAlpha = (w.life / w.maxLife) * 0.4;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, w.r, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawMinimap() {
+  if (!Settings.minimap) return;
+  const size = 140;
+  const pad = 16;
+  const mx = W() - size - pad;
+  const my = H() - size - pad;
+
+  ctx.save();
+  // Bg
+  ctx.fillStyle = 'rgba(20,10,5,0.8)';
+  ctx.strokeStyle = '#8a6030';
+  ctx.lineWidth = 2;
+  ctx.fillRect(mx, my, size, size);
+  ctx.strokeRect(mx, my, size, size);
+
+  // Sea tint
+  ctx.fillStyle = 'rgba(45,90,122,0.4)';
+  ctx.fillRect(mx + 1, my + 1, size - 2, size - 2);
+
+  // Islands
+  for (const isl of World.islands) {
+    const rx = mx + (isl.x / WORLD_SIZE) * size;
+    const ry = my + (isl.y / WORLD_SIZE) * size;
+    ctx.fillStyle = '#4a7a3a';
+    ctx.beginPath();
+    ctx.arc(rx, ry, (isl.r / WORLD_SIZE) * size, 0, TAU);
+    ctx.fill();
+  }
+
+  // Ports
+  for (const port of World.ports) {
+    const rx = mx + (port.x / WORLD_SIZE) * size;
+    const ry = my + (port.y / WORLD_SIZE) * size;
+    ctx.fillStyle = '#f2c14e';
+    ctx.beginPath();
+    ctx.arc(rx, ry, 3, 0, TAU);
+    ctx.fill();
+  }
+
+  // Pirates
+  for (const p of Pirates.list) {
+    const rx = mx + (p.x / WORLD_SIZE) * size;
+    const ry = my + (p.y / WORLD_SIZE) * size;
+    ctx.fillStyle = '#c04040';
+    ctx.fillRect(rx - 1.5, ry - 1.5, 3, 3);
+  }
+
+  // Player
+  const px = mx + (Player.x / WORLD_SIZE) * size;
+  const py = my + (Player.y / WORLD_SIZE) * size;
+  ctx.fillStyle = '#f0e4c8';
+  ctx.beginPath();
+  ctx.arc(px, py, 3, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = '#2a1810';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Label
+  ctx.font = '10px IM Fell English SC, serif';
+  ctx.fillStyle = '#f0e4c8';
+  ctx.textAlign = 'left';
+  ctx.fillText('CHART', mx + 6, my + 12);
+
+  ctx.restore();
+}
+
+// ---------- Port / Trading UI ----------
+const Port = {
+  current: null,
+  tab: 'market',
+
+  enter(port) {
+    this.current = port;
+    this.tab = 'market';
+    World.refreshPrices();
+    Stats.data.portsVisited++;
+    Stats.save();
+    Audio_.dock();
+    document.getElementById('port-overlay').classList.remove('hidden');
+    document.getElementById('port-name').textContent = port.name;
+    document.getElementById('port-desc').textContent = port.epithet.charAt(0).toUpperCase() + port.epithet.slice(1);
+    UI.portTab('market');
+  },
+
+  leave() {
+    document.getElementById('port-overlay').classList.add('hidden');
+    this.current = null;
+    // push player away from port a little
+    const p = Player;
+    const d = dist(p, World.ports.find(pp => pp === this.current) || { x: p.x + 100, y: p.y });
+    // nudge
+  },
+
+  renderTab(tab) {
+    if (!this.current) return;
+    this.tab = tab;
+    const content = document.getElementById('port-content');
+    if (tab === 'market') content.innerHTML = this.renderMarket();
+    else if (tab === 'upgrade') content.innerHTML = this.renderUpgrades();
+    else if (tab === 'fleet') content.innerHTML = this.renderFleet();
+    else if (tab === 'tavern') content.innerHTML = this.renderTavern();
+    this.updateHud();
+  },
+
+  renderMarket() {
+    const port = this.current;
+    if (!port) return '';
+    let html = `
+      <div class="cargo-info">
+        <span>Cargo: <strong>${Player.cargoUsed}/${Player.maxCargo}</strong> crates</span>
+        <span>Gold: <strong style="color:#8a6020">${Player.gold} ⚜</strong></span>
+      </div>
+      <table class="goods-table">
+        <thead><tr>
+          <th>Good</th><th>Price</th><th>Status</th><th>You Have</th><th class="right">Trade</th>
+        </tr></thead>
+        <tbody>
+    `;
+    for (const g of GOODS) {
+      const price = port.prices[g.id];
+      const have = Player.cargo[g.id] || 0;
+      let status = '', priceClass = '';
+      if (port.produces.includes(g.id)) { status = 'Plentiful'; priceClass = 'low'; }
+      else if (port.demands.includes(g.id)) { status = 'Sought'; priceClass = 'high'; }
+      else { status = 'Common'; }
+      html += `
+        <tr>
+          <td>${g.icon} <strong>${g.name}</strong></td>
+          <td class="price ${priceClass}">${price} ⚜</td>
+          <td><em>${status}</em></td>
+          <td>${have}</td>
+          <td class="right"><div class="trade-btns">
+            <button class="btn btn-small" onclick="Port.buy('${g.id}',1)">Buy</button>
+            <button class="btn btn-small" onclick="Port.buy('${g.id}',10)">Buy 10</button>
+            <button class="btn btn-small btn-danger" onclick="Port.sell('${g.id}',1)">Sell</button>
+            <button class="btn btn-small btn-danger" onclick="Port.sell('${g.id}',999)">Sell All</button>
+          </div></td>
+        </tr>
+      `;
+    }
+    html += `</tbody></table>`;
+    return html;
+  },
+
+  buy(goodId, qty) {
+    const port = this.current;
+    if (!port) return;
+    const good = GOODS.find(g => g.id === goodId);
+    const price = port.prices[goodId];
+    const space = Player.maxCargo - Player.cargoUsed;
+    const canAfford = Math.floor(Player.gold / price);
+    const actual = Math.min(qty, space, canAfford);
+    if (actual <= 0) {
+      UI.showToast(space <= 0 ? 'Hold is full!' : 'Not enough gold!');
+      return;
+    }
+    Player.gold -= price * actual;
+    Player.addCargo(goodId, actual);
+    Stats.data.goodsTraded += actual;
+    Stats.data.maxGold = Math.max(Stats.data.maxGold, Player.gold);
+    Stats.save();
+    Audio_.coin();
+    this.renderTab('market');
+  },
+
+  sell(goodId, qty) {
+    const port = this.current;
+    if (!port) return;
+    const good = GOODS.find(g => g.id === goodId);
+    const price = port.prices[goodId];
+    const have = Player.cargo[goodId] || 0;
+    const actual = Math.min(qty, have);
+    if (actual <= 0) { UI.showToast('Nothing to sell!'); return; }
+    Player.removeCargo(goodId, actual);
+    Player.gold += price * actual;
+    Stats.data.goodsTraded += actual;
+    Stats.data.maxGold = Math.max(Stats.data.maxGold, Player.gold);
+    Stats.save();
+    Audio_.coin();
+    this.renderTab('market');
+  },
+
+  renderUpgrades() {
+    let html = `<div class="cargo-info"><span>Improve thy vessel at the shipwright.</span><span>Gold: <strong style="color:#8a6020">${Player.gold} ⚜</strong></span></div>`;
+    for (const key in UPGRADES) {
+      const u = UPGRADES[key];
+      const lvl = Player.upgrades[key];
+      const cost = Math.round(u.base * Math.pow(u.mult, lvl));
+      const maxed = lvl >= u.max;
+      html += `
+        <div class="upgrade-card">
+          <div class="upgrade-info">
+            <h3>${u.name} <span style="font-size:13px; color:var(--ink-soft)">Lv. ${lvl}/${u.max}</span></h3>
+            <p>${u.desc}</p>
+            <div class="current">${this.upgradeEffect(key, lvl)}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            ${maxed ? '<em style="color:var(--leaf)">Mastered</em>' :
+              `<div class="upgrade-cost">${cost} ⚜</div>
+               <button class="btn btn-small btn-primary" onclick="Port.upgrade('${key}')" ${Player.gold < cost ? 'disabled' : ''}>Upgrade</button>`}
+          </div>
+        </div>
+      `;
+    }
+    return html;
+  },
+
+  upgradeEffect(key, lvl) {
+    switch (key) {
+      case 'cannons': return `Guns per side: ${Player.ship.cannons + lvl}`;
+      case 'accuracy': return `Spread: ${Math.round(0.21 * Math.pow(0.78, lvl) * 180 / Math.PI * 2)}° cone`;
+      case 'speed': return `Speed: +${Math.round(lvl * 15)}%`;
+      case 'hull': return `Hull strength: +${Math.round(lvl * 25)}%`;
+      case 'ammo': return `Ammo capacity: ${Player.ship.ammo + lvl * 15}`;
+      case 'reload': return `Reload: +${Math.round(lvl * 15)}% faster`;
+      case 'cargo': return `Cargo: ${Player.ship.cargo + lvl * 4} crates`;
+    }
+  },
+
+  upgrade(key) {
+    const u = UPGRADES[key];
+    const lvl = Player.upgrades[key];
+    const cost = Math.round(u.base * Math.pow(u.mult, lvl));
+    if (Player.gold < cost || lvl >= u.max) return;
+    Player.gold -= cost;
+    Player.upgrades[key]++;
+    Player.applyUpgrades();
+    // refill/clamp derived stats
+    Player.ammo = Math.min(Player.ammo, Player.maxAmmo);
+    if (Player.hp > Player.maxHP) Player.hp = Player.maxHP;
+    Audio_.coin();
+    UI.showToast(`${u.name} upgraded!`);
+    this.renderTab('upgrade');
+  },
+
+  renderFleet() {
+    let html = `<div class="cargo-info"><span>Choose thy vessel or purchase a new one.</span><span>Gold: <strong style="color:#8a6020">${Player.gold} ⚜</strong></span></div>`;
+    for (const id in SHIP_CLASSES) {
+      const s = SHIP_CLASSES[id];
+      const owned = Player.ownedShips.includes(id);
+      const active = Player.shipClass === id;
+      html += `
+        <div class="ship-card ${owned ? 'owned' : ''}">
+          <div class="ship-head">
+            <h3>${s.name} ${active ? '<span style="font-size:12px; color:var(--leaf)">◆ SAILING</span>' : ''}</h3>
+            <em style="color:var(--ink-soft); font-size:14px">${s.desc}</em>
+          </div>
+          <div class="ship-stats">
+            <div class="stat"><span class="lbl">Hull</span><span class="val">${s.maxHP}</span></div>
+            <div class="stat"><span class="lbl">Speed</span><span class="val">${Math.round(s.speed * 100)}</span></div>
+            <div class="stat"><span class="lbl">Cargo</span><span class="val">${s.cargo}</span></div>
+            <div class="stat"><span class="lbl">Guns/Side</span><span class="val">${s.cannons}</span></div>
+            <div class="stat"><span class="lbl">Range</span><span class="val">${s.range}</span></div>
+            <div class="stat"><span class="lbl">Ammo</span><span class="val">${s.ammo}</span></div>
+          </div>
+          <div class="ship-action">
+            ${active ? '<em style="color:var(--leaf)">Currently at sea</em>' :
+              owned ? `<button class="btn btn-small btn-primary" onclick="Port.switchShip('${id}')">Board Vessel</button>` :
+              `<div class="ship-cost">${s.cost} ⚜</div>
+               <button class="btn btn-small btn-primary" onclick="Port.buyShip('${id}')" ${Player.gold < s.cost ? 'disabled' : ''}>Purchase</button>`}
+          </div>
+        </div>
+      `;
+    }
+    return html;
+  },
+
+  buyShip(id) {
+    const s = SHIP_CLASSES[id];
+    if (Player.gold < s.cost) return;
+    Player.gold -= s.cost;
+    Player.ownedShips.push(id);
+    Stats.data.shipsOwned = Math.max(Stats.data.shipsOwned, Player.ownedShips.length);
+    Stats.save();
+    Audio_.coin();
+    UI.showToast(`Acquired: ${s.name}!`);
+    this.renderTab('fleet');
+  },
+
+  switchShip(id) {
+    Player.shipClass = id;
+    Player.applyUpgrades();
+    Player.hp = Player.maxHP;
+    Player.ammo = Player.maxAmmo;
+    // Clamp cargo to new capacity
+    while (Player.cargoUsed > Player.maxCargo) {
+      for (const k in Player.cargo) {
+        Player.removeCargo(k, 1);
+        if (Player.cargoUsed <= Player.maxCargo) break;
+      }
+    }
+    const s = SHIP_CLASSES[id];
+    if (['brig','frigate','galleon','manowar'].includes(id) && s.name !== Stats.data.bestShip) {
+      Stats.data.bestShip = s.name;
+      Stats.save();
+    }
+    UI.showToast(`Now sailing: ${SHIP_CLASSES[id].name}`);
+    Audio_.dock();
+    this.renderTab('fleet');
+  },
+
+  renderTavern() {
+    const repairCost = Math.ceil((Player.maxHP - Player.hp) * 1.2);
+    const ammoMissing = Player.maxAmmo - Player.ammo;
+    const ammoCost = ammoMissing * 2;
+    return `
+      <div class="cargo-info"><span>Rest, repair, and resupply at the tavern.</span><span>Gold: <strong style="color:#8a6020">${Player.gold} ⚜</strong></span></div>
+      <div class="upgrade-card">
+        <div class="upgrade-info">
+          <h3>Repair Hull</h3>
+          <p>Patch up the damage.</p>
+          <div class="current">Current: ${Player.hp}/${Player.maxHP}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          ${Player.hp >= Player.maxHP ? '<em style="color:var(--leaf)">Seaworthy</em>' :
+            `<div class="upgrade-cost">${repairCost} ⚜</div>
+             <button class="btn btn-small btn-primary" onclick="Port.repair()" ${Player.gold < repairCost ? 'disabled' : ''}>Repair</button>`}
+        </div>
+      </div>
+      <div class="upgrade-card">
+        <div class="upgrade-info">
+          <h3>Restock Powder &amp; Shot</h3>
+          <p>Refill cannon magazine.</p>
+          <div class="current">Current: ${Player.ammo}/${Player.maxAmmo}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          ${ammoMissing <= 0 ? '<em style="color:var(--leaf)">Fully stocked</em>' :
+            `<div class="upgrade-cost">${ammoCost} ⚜</div>
+             <button class="btn btn-small btn-primary" onclick="Port.restock()" ${Player.gold < ammoCost ? 'disabled' : ''}>Restock</button>`}
+        </div>
+      </div>
+      <div class="upgrade-card">
+        <div class="upgrade-info">
+          <h3>Pay for Full Refit</h3>
+          <p>Complete repair and restock.</p>
+          <div class="current">Total: ${repairCost + ammoCost} ⚜</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          ${(ammoMissing <= 0 && Player.hp >= Player.maxHP) ? '<em style="color:var(--leaf)">All shipshape</em>' :
+            `<button class="btn btn-small btn-primary" onclick="Port.fullRefit()" ${Player.gold < (repairCost + ammoCost) ? 'disabled' : ''}>Refit</button>`}
+        </div>
+      </div>
+    `;
+  },
+
+  repair() {
+    const cost = Math.ceil((Player.maxHP - Player.hp) * 1.2);
+    if (Player.gold < cost) return;
+    Player.gold -= cost;
+    Player.hp = Player.maxHP;
+    Audio_.coin();
+    this.renderTab('tavern');
+  },
+  restock() {
+    const missing = Player.maxAmmo - Player.ammo;
+    const cost = missing * 2;
+    if (Player.gold < cost) return;
+    Player.gold -= cost;
+    Player.ammo = Player.maxAmmo;
+    Audio_.coin();
+    this.renderTab('tavern');
+  },
+  fullRefit() {
+    const rCost = Math.ceil((Player.maxHP - Player.hp) * 1.2);
+    const aCost = (Player.maxAmmo - Player.ammo) * 2;
+    const total = rCost + aCost;
+    if (Player.gold < total) return;
+    Player.gold -= total;
+    Player.hp = Player.maxHP;
+    Player.ammo = Player.maxAmmo;
+    Audio_.coin();
+    this.renderTab('tavern');
+  },
+
+  updateHud() { Game.updateHud(); }
+};
+
+// ---------- Map View ----------
+const MapView = {
+  open: false,
+  canvas: null,
+  ctx: null,
+  hoverPort: null,
+  mouseX: 0, mouseY: 0,
+  tooltip: null,
+  boundResize: null,
+
+  init() {
+    this.canvas = document.getElementById('map-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.canvas.addEventListener('mousemove', e => this.onMove(e));
+    this.canvas.addEventListener('mouseleave', () => { this.hoverPort = null; this.render(); this.hideTooltip(); });
+    this.canvas.addEventListener('click', e => this.onClick(e));
+    this.boundResize = () => { if (this.open) this.resize(); };
+    window.addEventListener('resize', this.boundResize);
+  },
+
+  show() {
+    if (Game.state !== 'playing') return;
+    this.open = true;
+    Game.state = 'map';
+    document.getElementById('map-overlay').classList.remove('hidden');
+    document.getElementById('hud').classList.add('hidden');
+    this.resize();
+    this.render();
+    this.renderSidebar(null);
+  },
+
+  close() {
+    this.open = false;
+    this.hoverPort = null;
+    this.hideTooltip();
+    document.getElementById('map-overlay').classList.add('hidden');
+    if (Game.state === 'map') {
+      Game.state = 'playing';
+      document.getElementById('hud').classList.remove('hidden');
+      Game.lastTime = performance.now();
+    }
+  },
+
+  resize() {
+    const wrap = this.canvas.parentElement;
+    const rect = wrap.getBoundingClientRect();
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = rect.width * d;
+    this.canvas.height = rect.height * d;
+    this.canvas.style.width = rect.width + 'px';
+    this.canvas.style.height = rect.height + 'px';
+    this.ctx.setTransform(d, 0, 0, d, 0, 0);
+    this.render();
+  },
+
+  // world -> map canvas pixel
+  worldToMap(x, y) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (x / WORLD_SIZE) * rect.width,
+      y: (y / WORLD_SIZE) * rect.height
+    };
+  },
+  // map canvas pixel -> world
+  mapToWorld(mx, my) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (mx / rect.width) * WORLD_SIZE,
+      y: (my / rect.height) * WORLD_SIZE
+    };
+  },
+
+  render() {
+    if (!this.ctx) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const g = this.ctx;
+    g.clearRect(0, 0, rect.width, rect.height);
+
+    // Grid (latitude/longitude lines)
+    g.save();
+    g.strokeStyle = 'rgba(232,215,168,0.08)';
+    g.lineWidth = 1;
+    const gridStep = rect.width / 10;
+    for (let i = 1; i < 10; i++) {
+      g.beginPath(); g.moveTo(i * gridStep, 0); g.lineTo(i * gridStep, rect.height); g.stroke();
+    }
+    const gridStepY = rect.height / 10;
+    for (let i = 1; i < 10; i++) {
+      g.beginPath(); g.moveTo(0, i * gridStepY); g.lineTo(rect.width, i * gridStepY); g.stroke();
+    }
+    g.restore();
+
+    // Islands
+    for (const isl of World.islands) {
+      const p = this.worldToMap(isl.x, isl.y);
+      const r = Math.max(3, (isl.r / WORLD_SIZE) * rect.width);
+      // beach
+      g.fillStyle = '#e8d49a';
+      g.beginPath(); g.arc(p.x, p.y, r * 1.08, 0, TAU); g.fill();
+      // grass
+      g.fillStyle = '#4a7a3a';
+      g.beginPath(); g.arc(p.x, p.y, r * 0.95, 0, TAU); g.fill();
+      g.fillStyle = '#5a8a40';
+      g.beginPath(); g.arc(p.x, p.y, r * 0.62, 0, TAU); g.fill();
+    }
+
+    // Route line from player to hovered port
+    if (this.hoverPort) {
+      const a = this.worldToMap(Player.x, Player.y);
+      const b = this.worldToMap(this.hoverPort.x, this.hoverPort.y);
+      g.save();
+      g.strokeStyle = '#f2c14e';
+      g.lineWidth = 1.5;
+      g.setLineDash([5, 5]);
+      g.globalAlpha = 0.7;
+      g.beginPath();
+      g.moveTo(a.x, a.y);
+      g.lineTo(b.x, b.y);
+      g.stroke();
+      g.restore();
+    }
+
+    // Pirates
+    for (const pi of Pirates.list) {
+      const p = this.worldToMap(pi.x, pi.y);
+      g.fillStyle = '#c04040';
+      g.strokeStyle = '#1a0505';
+      g.lineWidth = 1;
+      g.beginPath(); g.arc(p.x, p.y, 4, 0, TAU); g.fill(); g.stroke();
+      // little skull dot
+      g.fillStyle = '#1a0505';
+      g.fillRect(p.x - 0.5, p.y - 0.5, 1, 1);
+    }
+
+    // Ports
+    for (const port of World.ports) {
+      const p = this.worldToMap(port.x, port.y);
+      const isHover = port === this.hoverPort;
+      // Halo on hover
+      if (isHover) {
+        g.save();
+        g.globalAlpha = 0.4 + Math.sin(performance.now() / 200) * 0.15;
+        g.fillStyle = '#f2c14e';
+        g.beginPath(); g.arc(p.x, p.y, 14, 0, TAU); g.fill();
+        g.restore();
+      }
+      // Gold dot
+      g.fillStyle = '#f2c14e';
+      g.strokeStyle = '#2a1810';
+      g.lineWidth = 1.5;
+      g.beginPath(); g.arc(p.x, p.y, isHover ? 7 : 5, 0, TAU); g.fill(); g.stroke();
+      // Name
+      g.font = `${isHover ? 14 : 12}px 'IM Fell English SC', serif`;
+      g.textAlign = 'center';
+      g.fillStyle = '#f0e4c8';
+      g.strokeStyle = 'rgba(20,10,5,0.95)';
+      g.lineWidth = 3;
+      g.strokeText(port.name, p.x, p.y - 10);
+      g.fillText(port.name, p.x, p.y - 10);
+    }
+
+    // Player (draw last so it sits on top)
+    const pp = this.worldToMap(Player.x, Player.y);
+    g.save();
+    // Direction indicator — small triangle
+    g.translate(pp.x, pp.y);
+    g.rotate(Player.angle);
+    g.fillStyle = '#f0e4c8';
+    g.strokeStyle = '#2a1810';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(7, 0); g.lineTo(-5, -4); g.lineTo(-3, 0); g.lineTo(-5, 4);
+    g.closePath();
+    g.fill(); g.stroke();
+    g.restore();
+
+    // Pulse around player
+    g.save();
+    const pulse = (Math.sin(performance.now() / 400) + 1) / 2;
+    g.globalAlpha = 0.4 * (1 - pulse);
+    g.strokeStyle = '#f0e4c8';
+    g.lineWidth = 1;
+    g.beginPath(); g.arc(pp.x, pp.y, 6 + pulse * 14, 0, TAU); g.stroke();
+    g.restore();
+
+    if (this.open) requestAnimationFrame(() => { if (this.open) this.render(); });
+  },
+
+  onMove(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouseX = e.clientX - rect.left;
+    this.mouseY = e.clientY - rect.top;
+    // find closest port within pixel threshold
+    let closest = null, cd = 18;
+    for (const port of World.ports) {
+      const p = this.worldToMap(port.x, port.y);
+      const d = Math.hypot(p.x - this.mouseX, p.y - this.mouseY);
+      if (d < cd) { cd = d; closest = port; }
+    }
+    if (closest !== this.hoverPort) {
+      this.hoverPort = closest;
+      this.renderSidebar(closest);
+    }
+    if (closest) {
+      this.showTooltip(closest, e.clientX, e.clientY);
+    } else {
+      this.hideTooltip();
+    }
+  },
+
+  onClick(e) {
+    if (this.hoverPort) {
+      // If extremely close to the port (already docked) enter it
+      if (dist(this.hoverPort, Player) < this.hoverPort.radius + 10) {
+        this.close();
+        Game.enterPort(this.hoverPort);
+      }
+    }
+  },
+
+  showTooltip(port, cx, cy) {
+    if (!this.tooltip) {
+      this.tooltip = document.createElement('div');
+      this.tooltip.className = 'map-tooltip';
+      document.getElementById('map-overlay').appendChild(this.tooltip);
+    }
+    const d = Math.round(dist(port, Player));
+    this.tooltip.textContent = `${port.name} — ${d} leagues`;
+    const overlayRect = document.getElementById('map-overlay').getBoundingClientRect();
+    this.tooltip.style.left = (cx - overlayRect.left) + 'px';
+    this.tooltip.style.top = (cy - overlayRect.top) + 'px';
+  },
+
+  hideTooltip() {
+    if (this.tooltip) { this.tooltip.remove(); this.tooltip = null; }
+  },
+
+  renderSidebar(port) {
+    const sb = document.getElementById('map-sidebar');
+    if (!port) {
+      sb.innerHTML = `<div class="map-hint">Hover any port to view its market.<br/><br/>Goods shown in <span style="color:var(--leaf)">green</span> are plentiful and cheap. Goods in <span style="color:var(--blood)">red</span> are sought after — sell there for profit.</div>`;
+      return;
+    }
+    const distLeagues = Math.round(dist(port, Player));
+    let html = `
+      <div class="map-port-title">${port.name}</div>
+      <div class="map-port-sub">${port.epithet.charAt(0).toUpperCase() + port.epithet.slice(1)}</div>
+      <div class="map-port-distance">${distLeagues} leagues away</div>
+    `;
+
+    // Categorize goods: what the port produces (cheap, good to buy), demands (expensive, good to sell), and neutral
+    const produces = [];
+    const demands = [];
+    const neutral = [];
+    for (const g of GOODS) {
+      const row = { good: g, price: port.prices[g.id] };
+      if (port.produces.includes(g.id)) produces.push(row);
+      else if (port.demands.includes(g.id)) demands.push(row);
+      else neutral.push(row);
+    }
+
+    const renderRow = (row, cls) => {
+      const carrying = Player.cargo[row.good.id] || 0;
+      // Delta: if we're carrying this good, show profit/loss vs a reasonable reference.
+      // Use the base price as reference, but more useful: show absolute price diff against current buying opportunities.
+      let deltaHtml = '';
+      if (carrying > 0) {
+        // Find where we likely bought it (use average of producing ports' prices as approximation)
+        let avgBuy = 0, c = 0;
+        for (const p of World.ports) {
+          if (p.produces.includes(row.good.id)) { avgBuy += p.prices[row.good.id]; c++; }
+        }
+        const ref = c > 0 ? avgBuy / c : row.good.basePrice;
+        const diff = row.price - ref;
+        const cls = diff > 0 ? 'profit' : (diff < 0 ? 'loss' : '');
+        const sign = diff > 0 ? '+' : '';
+        deltaHtml = `<span class="g-delta ${cls}">${sign}${Math.round(diff)}</span>`;
+      } else {
+        deltaHtml = `<span class="g-delta"></span>`;
+      }
+      return `
+        <div class="map-good-row">
+          <span>${row.good.icon}</span>
+          <span class="g-name">${row.good.name}${carrying > 0 ? ` <em style="color:var(--ink-soft);font-size:12px">×${carrying}</em>` : ''}</span>
+          <span class="g-price ${cls}">${row.price} ⚜</span>
+          ${deltaHtml}
+        </div>
+      `;
+    };
+
+    if (produces.length) {
+      html += `<div class="map-section-title">◆ Plentiful (Buy Here)</div>`;
+      html += produces.map(r => renderRow(r, 'low')).join('');
+    }
+    if (demands.length) {
+      html += `<div class="map-section-title">◆ Sought (Sell Here)</div>`;
+      html += demands.map(r => renderRow(r, 'high')).join('');
+    }
+    if (neutral.length) {
+      html += `<div class="map-section-title">Common Market</div>`;
+      html += neutral.map(r => renderRow(r, '')).join('');
+    }
+
+    // Cargo profit hint
+    if (Player.cargoUsed > 0) {
+      let totalValue = 0;
+      for (const id in Player.cargo) totalValue += port.prices[id] * Player.cargo[id];
+      html += `
+        <div class="map-section-title">Thy Cargo Here</div>
+        <div style="text-align:center; font-family:'IM Fell English SC',serif; font-size:16px; color:#8a6020; padding:6px 0;">
+          Worth ${totalValue} ⚜ if sold
+        </div>
+      `;
+    }
+
+    sb.innerHTML = html;
+  }
+};
+
+// ---------- Game controller ----------
+const Game = {
+  state: 'menu', // menu | playing | paused | gameover | port | map
+  lastTime: 0,
+  nearbyPort: null,
+
+  startNew() {
+    World.generate(Date.now() & 0xffffffff);
+    Calendar.reset();
+    Player.reset();
+    Pirates.list = [];
+    Pirates.spawnTimer = 12;
+    Effects.particles = [];
+    Effects.splashes = [];
+    Effects.wake = [];
+    Stats.data.voyages++;
+    Stats.save();
+    this.state = 'playing';
+    UI.showHUD();
+    this.lastTime = performance.now();
+    UI.showToast('Fair winds and following seas!');
+  },
+
+  togglePause() {
+    if (this.state === 'playing') {
+      this.state = 'paused';
+      UI.show('screen-pause');
+    } else if (this.state === 'paused') {
+      this.resume();
+    }
+  },
+
+  resume() {
+    this.state = 'playing';
+    UI.showHUD();
+    this.lastTime = performance.now();
+  },
+
+  abandon() {
+    Stats.data.timesSunk++;
+    Stats.save();
+    this.state = 'menu';
+    UI.show('screen-menu');
+  },
+
+  enterPort(port) {
+    this.state = 'port';
+    Player.fullSail = false;
+    Port.enter(port);
+  },
+
+  leavePort() {
+    Port.leave();
+    this.state = 'playing';
+    document.getElementById('port-overlay').classList.add('hidden');
+    // push player out into open sea away from the island
+    const port = World.ports.find(p => dist(p, Player) < 250);
+    if (port) {
+      Player.x = port.x + Math.cos(port.dockAngle) * 160;
+      Player.y = port.y + Math.sin(port.dockAngle) * 160;
+      Player.angle = port.dockAngle; // facing away from the island
+      Player.vx = 0; Player.vy = 0;
+    }
+    this.lastTime = performance.now();
+  },
+
+  lose() {
+    this.state = 'gameover';
+    Stats.data.timesSunk++;
+    Stats.save();
+    // Explosion
+    Effects.explosion(Player.x, Player.y, 3);
+    setTimeout(() => {
+      const stats = document.getElementById('gameover-stats');
+      const years = Math.floor(Calendar.monthsElapsed / 12);
+      const extraMonths = Calendar.monthsElapsed % 12;
+      const dateStr = `${Calendar.monthName()} ${Calendar.year()}`;
+      stats.innerHTML = `
+        <div class="stat-row"><span class="s-label">Date of sinking</span><span class="s-val">${dateStr}</span></div>
+        <div class="stat-row"><span class="s-label">Voyage length</span><span class="s-val">${years}y ${extraMonths}m</span></div>
+        <div class="stat-row"><span class="s-label">Gold on person</span><span class="s-val">${Player.gold}</span></div>
+        <div class="stat-row"><span class="s-label">Pirates sunk</span><span class="s-val">${Stats.data.piratesKilled}</span></div>
+        <div class="stat-row"><span class="s-label">Goods traded</span><span class="s-val">${Stats.data.goodsTraded}</span></div>
+        <div class="stat-row"><span class="s-label">Last ship</span><span class="s-val">${Player.ship.name}</span></div>
+      `;
+      const epitaphs = [
+        'Thy ship lies broken upon the deep.',
+        'The salt claims another trader.',
+        'Davy Jones hath a new guest.',
+        'Thy cargo feeds the fishes now.',
+      ];
+      document.getElementById('epitaph').textContent = epitaphs[randi(0, epitaphs.length - 1)];
+      UI.show('screen-gameover');
+    }, 1500);
+  },
+
+  updateHud() {
+    document.getElementById('hud-gold').textContent = Player.gold;
+    document.getElementById('hud-cargo').textContent = `${Player.cargoUsed}/${Player.maxCargo}`;
+    document.getElementById('hud-ammo').textContent = Player.ammo;
+    document.getElementById('hud-health').style.width = (Player.hp / Player.maxHP * 100) + '%';
+    document.getElementById('hud-health-text').textContent = `${Player.hp}/${Player.maxHP}`;
+    document.getElementById('hud-kills').textContent = Stats.data.piratesKilled;
+    document.getElementById('hud-ship').textContent = Player.ship.name;
+
+    // Calendar
+    const season = Calendar.seasonData();
+    const card = document.getElementById('calendar-card');
+    if (card) {
+      card.style.setProperty('--season-color', season.color);
+      card.style.setProperty('--season-accent', season.accent);
+      document.getElementById('cal-icon').textContent = season.icon;
+      document.getElementById('cal-month').textContent = Calendar.monthName();
+      document.getElementById('cal-season').textContent = season.name;
+      document.getElementById('cal-year').textContent = Calendar.year();
+      const monthInSeason = Calendar.monthsElapsed % 3;
+      const secThisMonth = Math.floor(Calendar.elapsed - Calendar.monthsElapsed * MONTH_DURATION);
+      document.getElementById('cal-progress-text').textContent =
+        `Month ${monthInSeason + 1}/3`;
+      document.getElementById('cal-bar-fill').style.width = (Calendar.seasonProgress() * 100) + '%';
+    }
+
+    // Compass: red needle points in the direction the ship is heading
+    const needle = document.getElementById('compass-needle');
+    if (needle) {
+      const ang = Player.angle * 180 / Math.PI + 90;
+      needle.style.transform = `rotate(${ang}deg)`;
+    }
+
+    // Dock prompt
+    const wrap = document.getElementById('dock-prompt-wrap');
+    if (this.nearbyPort) {
+      wrap.innerHTML = `<div class="dock-prompt">Press E to dock at ${this.nearbyPort.name}</div>`;
+    } else wrap.innerHTML = '';
+
+    // Sail status
+    const sailEl = document.getElementById('sail-status');
+    if (sailEl) {
+      if (Player.fullSail) {
+        sailEl.innerHTML = `<div class="sail-badge">FULL SAIL · guns stowed</div>`;
+      } else {
+        sailEl.innerHTML = '';
+      }
+    }
+
+    // Position the notices column based on whether the minimap is rendered
+    const notices = document.querySelector('.hud-notices');
+    if (notices) {
+      notices.style.right = Settings.minimap ? '172px' : '16px';
+    }
+
+    // Toggle controls hint based on settings
+    const hint = document.getElementById('controls-hint');
+    if (hint) {
+      hint.style.display = Settings.showControls === false ? 'none' : '';
+    }
+  },
+
+  tick(now) {
+    const dt = Math.min(0.05, (now - this.lastTime) / 1000);
+    this.lastTime = now;
+
+    if (this.state === 'playing') {
+      Calendar.update(dt);
+      Player.update(dt);
+      Pirates.update(dt);
+      Pirates.checkPlayerHits();
+      Effects.update(dt);
+
+      // Check nearby port
+      let near = null;
+      for (const p of World.ports) {
+        if (dist(p, Player) < p.radius + 10) { near = p; break; }
+      }
+      this.nearbyPort = near;
+
+      Stats.data.maxGold = Math.max(Stats.data.maxGold, Player.gold);
+    }
+
+    // Render
+    if (this.state === 'playing' || this.state === 'paused' || this.state === 'port' || this.state === 'gameover' || this.state === 'map') {
+      this.render();
+    }
+    this.updateHud();
+    requestAnimationFrame(t => this.tick(t));
+  },
+
+  render() {
+    // Camera
+    const camX = Player.x - W() / 2;
+    const camY = Player.y - H() / 2;
+
+    drawWaterBackground(camX, camY);
+
+    // Wake (draw before ships)
+    drawParticles(camX, camY);
+
+    // Islands (sorted by Y for pseudo-depth)
+    const sortedIslands = [...World.islands].sort((a, b) => a.y - b.y);
+    for (const isl of sortedIslands) drawIsland(isl, camX, camY);
+
+    // Ports over islands
+    for (const p of World.ports) drawPort(p, camX, camY);
+
+    // Pirates
+    for (const p of Pirates.list) {
+      drawShip(p.x - camX, p.y - camY, p.angle, p.size, '#3a1a1a', true, p.hitFlash);
+      drawHealthBar(p.x - camX, p.y - camY - p.size - 8, p.hp, p.maxHP, p.size * 1.2);
+      for (const cb of p.cannonBalls) drawCannonBall(cb, camX, camY, true);
+    }
+
+    // Player ship (blink if invuln)
+    if (Player.hp > 0) {
+      const blink = Player.invuln > 0 && Math.floor(performance.now() / 60) % 2 === 0;
+      // Cannon firing cones — shows range and accuracy spread on each broadside
+      if (!Player.fullSail) {
+        const psx = Player.x - camX;
+        const psy = Player.y - camY;
+        const t = performance.now() / 1000;
+        const range = Player.ship.range;
+        const baseSpread = 0.21;
+        const half = baseSpread * Math.pow(0.78, Player.accuracyLevel || 0);
+        const ready = Player.reloadTimer <= 0 && Player.ammo > 0;
+        ctx.save();
+        ctx.strokeStyle = ready ? '#f0e4c8' : '#8a7050';
+        ctx.fillStyle = ready
+          ? `rgba(240,228,200,${0.06 + Math.sin(t * 1.4) * 0.02})`
+          : 'rgba(140,110,80,0.04)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3, 7]);
+        ctx.lineDashOffset = -t * 10;
+        for (const side of [-1, 1]) {
+          const center = Player.angle + side * Math.PI / 2;
+          // Fill the cone (pie slice from ship to range arc)
+          ctx.beginPath();
+          ctx.moveTo(psx, psy);
+          ctx.arc(psx, psy, range, center - half, center + half);
+          ctx.closePath();
+          ctx.fill();
+          // Two dashed edges of the cone
+          ctx.beginPath();
+          ctx.moveTo(psx, psy);
+          ctx.lineTo(psx + Math.cos(center - half) * range, psy + Math.sin(center - half) * range);
+          ctx.moveTo(psx, psy);
+          ctx.lineTo(psx + Math.cos(center + half) * range, psy + Math.sin(center + half) * range);
+          ctx.stroke();
+          // Dashed arc at max range
+          ctx.beginPath();
+          ctx.arc(psx, psy, range, center - half, center + half);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if (!blink) drawShip(Player.x - camX, Player.y - camY, Player.angle, Player.ship.size, '#8a5a3a', false, 0, Player.fullSail);
+    }
+
+    // Player cannonballs
+    for (const cb of Player.cannonBalls) drawCannonBall(cb, camX, camY, false);
+
+    // Minimap
+    drawMinimap();
+  }
+};
+
+// ---------- Init ----------
+Settings.init();
+Input.init();
+MapView.init();
+// Start ticker
+requestAnimationFrame(t => { Game.lastTime = t; Game.tick(t); });
+
+// Expose for HTML onclick
+window.Game = Game;
+window.UI = UI;
+window.Port = Port;
+window.MapView = MapView;
+
+// Initial menu
+UI.show('screen-menu');
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Identity
+slug: economy-idle
+title: Economy IDLE
+tagline: Tile-based production chains with scaling taxes and upgrades.
+
+# Categorization
+category: Idle
+tags:
+  - economy
+  - grid
+  - management
+status: released
+
+# Provenance
+built_with:
+  provider: openai
+  model: GPT-4o
+
+# Assets (paths are relative to this game's folder)
+entry: index.html
+banner: banner.png
+info_url: /games/economy_idle/release_notes.html

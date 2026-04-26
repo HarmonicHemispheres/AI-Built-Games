@@ -1,0 +1,23 @@
+# Identity
+slug: basic-maze
+title: Basic Maze
+tagline: A fast, timed top-down maze run with adjustable challenge.
+
+# Categorization
+category: Maze
+tags:
+  - arcade
+  - timed
+  - top-down
+status: released
+
+# Provenance
+created: 2025-02-22
+built_with:
+  provider: xai
+  model: Grok 3
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner.png
+info_url: /games/maze_basic/detail.html

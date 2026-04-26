@@ -1,0 +1,24 @@
+# Identity
+slug: memory-match
+title: Memory Match
+tagline: Flip cards, trigger specials, and beat your best turn count.
+
+# Categorization
+category: Puzzle
+tags:
+  - cards
+  - memory
+  - single-player
+featured: true
+status: released
+
+# Provenance
+created: 2025-04-18
+built_with:
+  provider: google
+  model: Gemini 2.5 Pro
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: memory-match-banner.png
+info_url: /games/memory_match/detail.html

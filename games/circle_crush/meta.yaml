@@ -1,0 +1,22 @@
+# Identity
+slug: circle-crush
+title: Circle Crush
+tagline: Match circles, chain bombs, and cash in multipliers.
+
+# Categorization
+category: Puzzle
+tags:
+  - match-3
+  - casual
+  - score-attack
+status: released
+
+# Provenance
+built_with:
+  provider: openai
+  model: GPT-o1-preview
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner.png
+info_url: /games/circle_crush/detail.html

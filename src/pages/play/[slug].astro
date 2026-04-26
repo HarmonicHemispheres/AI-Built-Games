@@ -1,0 +1,61 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+import { games } from "../../data/games";
+
+export function getStaticPaths() {
+  return games.map((game) => ({
+    params: { slug: game.slug },
+    props: { game }
+  }));
+}
+
+const { game } = Astro.props;
+const embeddable = game.playUrl.startsWith("/");
+---
+
+<MainLayout title={`Play ${game.title} | Games Made with AI`} description={`Play ${game.title} in an embedded frame.`}>
+  <main class="play-wrap">
+    <header class="play-header section-card">
+      <div class="play-header-grid">
+        <div class="play-meta">
+          <span class="badge">Embedded Play</span>
+        </div>
+
+        <div class="play-main">
+          <h1 class="play-title">{game.title}</h1>
+          <p class="play-copy">
+            {embeddable
+              ? "Play directly in-site below. You can still open the original game link in a new tab."
+              : "This game is hosted externally and may block iframe embedding. Use the direct play link below."}
+          </p>
+        </div>
+
+        <div class="socials play-actions">
+          <a class="btn btn-primary" href={game.playUrl} target="_blank" rel="noreferrer">Open Original</a>
+          <a class="btn btn-secondary" href={`/game/${game.slug}/`}>Game Info</a>
+          <a class="btn btn-neutral" href="/">Back To Catalog</a>
+        </div>
+      </div>
+    </header>
+
+    {embeddable ? (
+      <section class="play-stage section-card">
+        <div class="iframe-shell immersive">
+          <iframe
+            src={game.playUrl}
+            title={`${game.title} embedded play`}
+            loading="lazy"
+            allow="fullscreen; autoplay"
+            referrerpolicy="no-referrer"
+          ></iframe>
+        </div>
+      </section>
+    ) : (
+      <section class="section-card panel play-fallback">
+        <p>
+          Embedded mode is unavailable for this title because the source is external and can deny iframe usage.
+        </p>
+      </section>
+    )}
+  </main>
+</MainLayout>

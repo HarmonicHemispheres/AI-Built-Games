@@ -1,0 +1,22 @@
+# Identity
+slug: wordl
+title: Wordl
+tagline: A quick daily-style word puzzle with adjustable length.
+
+# Categorization
+category: Word
+tags:
+  - vocabulary
+  - daily
+  - puzzle
+status: released
+
+# Provenance
+built_with:
+  provider: openai
+  model: GPT-4o
+
+# Assets (paths are relative to this game's folder)
+entry: index.html
+banner: banner.png
+info_url: /games/wordl/release_notes.html

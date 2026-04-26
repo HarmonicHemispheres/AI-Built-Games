@@ -1,0 +1,22 @@
+# Identity
+slug: tower-defense
+title: Tower Defense Example
+tagline: Build your lane defense and survive escalating waves.
+
+# Categorization
+category: Strategy
+tags:
+  - tower-defense
+  - waves
+  - upgrades
+status: released
+
+# Provenance
+built_with:
+  provider: openai
+  model: GPT-4o
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner.png
+info_url: /games/tower_def_1/release_notes.html

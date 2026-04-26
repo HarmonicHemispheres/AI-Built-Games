@@ -29,6 +29,88 @@
   After the primary content is generated, then I go into the code and update and add small elements i want changed, mostly variable values.
 </p>
 
+## Website Frontend Overhaul (Astro)
+
+The main website shell is now powered by Astro with a neo-brutalist design system.
+Existing game content and links are preserved and auto-synced to Astro's public directory.
+
+### Commands
+
+```bash
+npm install
+npm run dev
+```
+
+The `sync:legacy-assets` step runs automatically before `dev` and `build`.
+It copies `games/`, `templates/`, and shared banner assets into `public/` so links like `./games/...` still work.
+
+### Per-game `meta.yaml`
+
+Each game folder may contain a `meta.yaml` describing the game. The site reads
+every `games/*/meta.yaml` at build time and overlays the values onto the catalog
+entry that shares the same `slug`. Anything you set in `meta.yaml` wins over the
+static defaults in `src/data/games.ts`, and a fully-described `meta.yaml` can
+add a brand-new game with no code changes.
+
+Full example (`games/merchant_seas/meta.yaml`):
+
+```yaml
+# Identity
+slug: merchant-seas                        # matches the catalog slug used in URLs
+title: Merchants of the High Seas
+tagline: Sail, trade, and battle across a procedurally generated nautical world.
+description: |
+  Multi-line "about" copy for the detail page.
+  Captain a sloop, brig, frigate, galleon, or man-o'-war on a seeded sea.
+
+# Categorization
+category: Strategy
+tags:
+  - trading
+  - naval
+  - exploration
+featured: true                             # surfaces in the "Featured Drops" row
+status: released                           # released | wip | prototype | archived
+
+# Provenance
+created: 2026-04-15                        # ISO date the game was first added
+updated: 2026-04-25                        # ISO date of the last meaningful change
+version: 0.1.0
+built_with:
+  provider: anthropic                      # anthropic | openai | google | xai | ...
+  model: Claude Opus 4.7                   # shown on every card as "Built with <model>"
+chat_url: https://...                      # optional link to the AI conversation
+
+# Assets (paths are relative to this game's folder)
+entry: merchant_seas.html                  # the HTML file the "Play" button opens
+banner: merchant_seas-banner.png           # card / detail banner image
+info_url:                                  # optional external info or release-notes URL
+
+# Player-facing content
+features:
+  - Procedurally generated sea map with seeded RNG
+  - Five ship classes with distinct stats and cargo
+  - Seasonal market shifts that reroll port specialties
+
+controls:
+  - WASD or arrow keys to sail
+  - Click a port to dock and trade
+  - Spacebar to fire cannons
+```
+
+Field reference:
+
+| Field | Purpose |
+|-------|---------|
+| `slug` | Catalog slug; must match the entry in `src/data/games.ts` if one exists. |
+| `title`, `tagline`, `description` | Short title, one-line hook, and longer about-copy. |
+| `category`, `tags`, `featured` | Drives the catalog filters and the featured row. |
+| `status`, `version`, `created`, `updated` | Provenance shown on the detail page. |
+| `built_with.provider`, `built_with.model` | The provider and model that generated the game. `model` is rendered on every card. |
+| `chat_url` | Optional link to the AI chat session that produced the game. |
+| `entry`, `banner`, `info_url` | Asset paths (relative to the game folder) plus optional external info link. |
+| `features`, `controls` | Bullet lists rendered on the detail page when present. |
+
 <!-- Table of Contents -->
 ## Table of Contents
 - [Games](#games)

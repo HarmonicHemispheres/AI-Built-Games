@@ -1,0 +1,23 @@
+# Identity
+slug: chess
+title: Chess
+tagline: Classic chess with a configurable modern browser board.
+
+# Categorization
+category: Strategy
+tags:
+  - board
+  - classic
+  - turn-based
+status: released
+
+# Provenance
+created: 2025-02-22
+built_with:
+  provider: xai
+  model: Grok 3
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner.png
+info_url: /games/chess/detail.html

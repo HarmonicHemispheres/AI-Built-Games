@@ -1,0 +1,23 @@
+# Identity
+slug: maze-runner-3d
+title: 3D Maze Runner
+tagline: Navigate giant mazes, dodge zombies, survive deeper levels.
+
+# Categorization
+category: Maze
+tags:
+  - 3d
+  - survival
+  - shooter
+featured: true
+status: released
+
+# Provenance
+built_with:
+  provider: openai
+  model: GPT-o1-mini
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner_2.png
+info_url: /games/3d_maze/release_notes.html

@@ -1,0 +1,22 @@
+# Identity
+slug: zombie-destroy
+title: 2D Zombie Destroy
+tagline: Endless procedural rooms, upgrades, and zombie swarms.
+
+# Categorization
+category: Action
+tags:
+  - survival
+  - shooter
+  - procedural
+status: released
+
+# Provenance
+built_with:
+  provider: openai
+  model: OpenAI o1
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner.png
+info_url: /games/inf_2d_explore_1/detail.html

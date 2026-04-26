@@ -1,0 +1,162 @@
+---
+import MainLayout from "../layouts/MainLayout.astro";
+import { games, socialLinks } from "../data/games";
+
+const categories = Array.from(new Set(games.map((game) => game.category))).sort((a, b) =>
+  a.localeCompare(b)
+);
+const tags = Array.from(new Set(games.flatMap((game) => game.tags))).sort((a, b) =>
+  a.localeCompare(b)
+);
+---
+
+<MainLayout
+  title="Games Made with AI"
+  description="A neo-brutalist catalog for AI-built games with direct play and info links."
+>
+  <main class="shell">
+    <section class="hero section-card">
+      <span class="badge">Neo Brutalist Edition</span>
+      <h1 class="title">Games Made with AI</h1>
+      <p class="subtitle">
+        Same game links, same content, completely rebuilt shell. Pick a project, launch it instantly,
+        and jump to release notes or details when available.
+      </p>
+      <div class="socials">
+        <a
+          class="social-icon-btn"
+          href={socialLinks.github}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open GitHub"
+          title="GitHub"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48v-1.69c-2.78.6-3.37-1.34-3.37-1.34-.46-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0 1 12 6.84c.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0 0 22 12c0-5.52-4.48-10-10-10Z"
+            ></path>
+          </svg>
+        </a>
+        <a
+          class="social-icon-btn"
+          href={socialLinks.linkedin}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open LinkedIn"
+          title="LinkedIn"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M6.94 8.5a1.72 1.72 0 1 1 0-3.44 1.72 1.72 0 0 1 0 3.44ZM8.5 10H5.4v9.5h3.1V10Zm5.01 0h-2.98v9.5h3.1v-4.99c0-2.78 3.63-3 3.63 0v5h3.1V13.4c0-4.75-5.42-4.57-6.85-2.24V10Z"
+            ></path>
+          </svg>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <p class="kicker" style="margin: 1rem 0 0.4rem;">All Games</p>
+      <div class="filters section-card">
+        <div class="filter-row">
+          <label class="filter-label" for="game-search">Search</label>
+          <input id="game-search" class="filter-input" type="search" placeholder="Find by title or description" />
+        </div>
+        <div class="filter-row">
+          <label class="filter-label" for="category-filter">Category</label>
+          <select id="category-filter" class="filter-select">
+            <option value="all">All categories</option>
+            {categories.map((category) => <option value={category.toLowerCase()}>{category}</option>)}
+          </select>
+        </div>
+        <div class="filter-row">
+          <label class="filter-label" for="tag-filter">Tag</label>
+          <select id="tag-filter" class="filter-select">
+            <option value="all">All tags</option>
+            {tags.map((tag) => <option value={tag.toLowerCase()}>{tag}</option>)}
+          </select>
+        </div>
+        <p id="game-result-count" class="result-count">Showing {games.length} games</p>
+      </div>
+
+      <div class="games-grid" id="games-grid">
+        {games.map((game) => (
+          <article
+            class="game-card"
+            data-title={game.title.toLowerCase()}
+            data-tagline={game.tagline.toLowerCase()}
+            data-category={game.category.toLowerCase()}
+            data-tags={game.tags.join(",").toLowerCase()}
+          >
+            <a class="card-link" href={`/game/${game.slug}/`}>
+              <div class="cover">
+                <img src={game.image} alt={`${game.title} preview`} loading="lazy" />
+                <span class="cover-chip">{game.category}</span>
+              </div>
+            </a>
+            <div class="card-body">
+              <h2 class="card-title">{game.title}</h2>
+              <p class="card-copy">{game.tagline}</p>
+              <p class="card-model"><span class="card-model-label">Built with</span> <span class="card-model-value">{game.model}</span></p>
+              <div class="card-actions">
+                <a class="btn btn-primary card-action-play" href={`/play/${game.slug}/`}>Play</a>
+                <a class="btn btn-neutral card-action-info" href={`/game/${game.slug}/`}>Info</a>
+                <a class="btn btn-neutral btn-icon" href={game.playUrl} target="_blank" rel="noreferrer" aria-label="Open original in new tab" title="Open original in new tab">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 16 L16 8 M9 8 H16 V15" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <footer class="footer section-card">
+      <strong>Made by Robby Boney</strong>
+      <span>Copyright 2025-2026</span>
+    </footer>
+  </main>
+</MainLayout>
+
+<script>
+  const searchInput = document.getElementById("game-search") as HTMLInputElement | null;
+  const categoryFilter = document.getElementById("category-filter") as HTMLSelectElement | null;
+  const tagFilter = document.getElementById("tag-filter") as HTMLSelectElement | null;
+  const resultCount = document.getElementById("game-result-count");
+  const cards = Array.from(document.querySelectorAll<HTMLElement>(".game-card"));
+
+  const applyFilters = () => {
+    const search = (searchInput?.value || "").trim().toLowerCase();
+    const category = categoryFilter?.value || "all";
+    const tag = tagFilter?.value || "all";
+
+    let visibleCount = 0;
+
+    for (const card of cards) {
+      const title = card.dataset.title || "";
+      const tagline = card.dataset.tagline || "";
+      const cardCategory = card.dataset.category || "";
+      const cardTags = (card.dataset.tags || "").split(",");
+
+      const matchesSearch = !search || title.includes(search) || tagline.includes(search);
+      const matchesCategory = category === "all" || cardCategory === category;
+      const matchesTag = tag === "all" || cardTags.includes(tag);
+      const isVisible = matchesSearch && matchesCategory && matchesTag;
+
+      card.classList.toggle("is-hidden", !isVisible);
+      if (isVisible) {
+        visibleCount += 1;
+      }
+    }
+
+    if (resultCount) {
+      const label = visibleCount === 1 ? "game" : "games";
+      resultCount.textContent = `Showing ${visibleCount} ${label}`;
+    }
+  };
+
+  searchInput?.addEventListener("input", applyFilters);
+  categoryFilter?.addEventListener("change", applyFilters);
+  tagFilter?.addEventListener("change", applyFilters);
+</script>

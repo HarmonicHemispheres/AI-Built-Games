@@ -1,0 +1,103 @@
+---
+import MainLayout from "../../layouts/MainLayout.astro";
+import { games } from "../../data/games";
+
+export function getStaticPaths() {
+  return games.map((game) => ({
+    params: { slug: game.slug },
+    props: { game }
+  }));
+}
+
+const { game } = Astro.props;
+const embeddable = game.playUrl.startsWith("/");
+const hasFacts = Boolean(
+  game.model || game.provider || game.status || game.version || game.created || game.updated
+);
+---
+
+<MainLayout title={`${game.title} | Games Made with AI`} description={game.tagline}>
+  <main class="shell detail-wrap">
+    <header class="detail-header section-card">
+      <span class="badge">Game Overview</span>
+      <h1 class="detail-title">{game.title}</h1>
+      <p>{game.tagline}</p>
+      <div class="socials" style="margin-top: 0.9rem;">
+        <a class="btn btn-primary" href={game.playUrl} target="_blank" rel="noreferrer">Play Game</a>
+        {embeddable ? <a class="btn btn-secondary" href={`/play/${game.slug}/`}>Play In Site</a> : null}
+        <a class="btn btn-neutral" href="/">Back To Catalog</a>
+      </div>
+    </header>
+
+    <section class="detail-grid">
+      <article class="panel section-card">
+        <h2 class="kicker">Banner</h2>
+        <div class="cover" style="margin-top: 0.6rem; border: var(--border-heavy) solid var(--ink);">
+          <img src={game.image} alt={`${game.title} banner`} />
+        </div>
+        {game.description && (
+          <div style="margin-top: 1rem;">
+            <h2 class="kicker">About</h2>
+            <p style="margin-top: 0.4rem; white-space: pre-line;">{game.description}</p>
+          </div>
+        )}
+      </article>
+
+      <aside class="panel section-card">
+        <h2 class="kicker">Links</h2>
+        <div class="socials" style="margin-top: 0.4rem;">
+          <a class="btn btn-primary" href={game.playUrl} target="_blank" rel="noreferrer">Play URL</a>
+          {game.infoUrl ? (
+            <a class="btn btn-neutral" href={game.infoUrl} target="_blank" rel="noreferrer">Legacy Notes</a>
+          ) : null}
+          {game.chatUrl ? (
+            <a class="btn btn-neutral" href={game.chatUrl} target="_blank" rel="noreferrer">AI Chat</a>
+          ) : null}
+        </div>
+
+        {hasFacts && (
+          <div style="margin-top: 1rem;">
+            <h2 class="kicker">Facts</h2>
+            <dl class="fact-list">
+              {game.model && (<><dt>Model</dt><dd>{game.model}</dd></>)}
+              {game.provider && (<><dt>Provider</dt><dd>{game.provider}</dd></>)}
+              {game.status && (<><dt>Status</dt><dd>{game.status}</dd></>)}
+              {game.version && (<><dt>Version</dt><dd>{game.version}</dd></>)}
+              {game.created && (<><dt>Created</dt><dd>{game.created}</dd></>)}
+              {game.updated && (<><dt>Updated</dt><dd>{game.updated}</dd></>)}
+            </dl>
+          </div>
+        )}
+
+        <div style="margin-top: 1rem;">
+          <h2 class="kicker">Tags</h2>
+          <div class="tag-row" style="margin-top: 0.4rem;">
+            <span class="chip">{game.category}</span>
+            {game.tags.map((tag) => <span class="chip chip-soft">{tag}</span>)}
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    {(game.features?.length || game.controls?.length) && (
+      <section class="detail-grid" style="margin-top: 1rem;">
+        {game.features?.length ? (
+          <article class="panel section-card">
+            <h2 class="kicker">Features</h2>
+            <ul class="bullet-list">
+              {game.features.map((item) => <li>{item}</li>)}
+            </ul>
+          </article>
+        ) : null}
+        {game.controls?.length ? (
+          <article class="panel section-card">
+            <h2 class="kicker">Controls</h2>
+            <ul class="bullet-list">
+              {game.controls.map((item) => <li>{item}</li>)}
+            </ul>
+          </article>
+        ) : null}
+      </section>
+    )}
+  </main>
+</MainLayout>
