@@ -1,6 +1,7 @@
 ---
 import MainLayout from "../../layouts/MainLayout.astro";
 import { games } from "../../data/games";
+import { withBase } from "../../utils/paths";
 
 export function getStaticPaths() {
   return games.map((game) => ({
@@ -14,6 +15,8 @@ const embeddable = game.playUrl.startsWith("/");
 const hasFacts = Boolean(
   game.model || game.provider || game.status || game.version || game.created || game.updated
 );
+const playPath = withBase(`/play/${game.slug}/`);
+const homePath = withBase("/");
 ---
 
 <MainLayout title={`${game.title} | Games Made with AI`} description={game.tagline}>
@@ -24,8 +27,8 @@ const hasFacts = Boolean(
       <p>{game.tagline}</p>
       <div class="socials" style="margin-top: 0.9rem;">
         <a class="btn btn-primary" href={game.playUrl} target="_blank" rel="noreferrer">Play Game</a>
-        {embeddable ? <a class="btn btn-secondary" href={`/play/${game.slug}/`}>Play In Site</a> : null}
-        <a class="btn btn-neutral" href="/">Back To Catalog</a>
+        {embeddable ? <a class="btn btn-secondary" href={playPath}>Play In Site</a> : null}
+        <a class="btn btn-neutral" href={homePath}>Back To Catalog</a>
       </div>
     </header>
 

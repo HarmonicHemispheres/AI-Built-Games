@@ -39,10 +39,39 @@ Existing game content and links are preserved and auto-synced to Astro's public 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
 The `sync:legacy-assets` step runs automatically before `dev` and `build`.
 It copies `games/`, `templates/`, and shared banner assets into `public/` so links like `./games/...` still work.
+
+### Deploying To GitHub Pages
+
+This repo is now configured for GitHub Pages project-site deployment at:
+
+```text
+https://harmonichemispheres.github.io/AI-Built-Games/
+```
+
+Build and publish flow:
+
+```bash
+npm install
+npm run build
+git add .
+git commit -m "Deploy new Astro site"
+git push origin main
+```
+
+On push to `main`, GitHub Actions runs `.github/workflows/deploy-pages.yml`, builds the Astro site, and deploys `dist/` to Pages.
+
+One-time GitHub setup:
+
+1. Open the repository on GitHub.
+2. Go to `Settings -> Pages`.
+3. Under `Source`, select `GitHub Actions`.
+
+After that, each push to `main` replaces the live Pages site with the latest build.
 
 ### Per-game `meta.yaml`
 

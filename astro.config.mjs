@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
-  site: "https://example.com"
+  site: "https://harmonichemispheres.github.io",
+  base: "/AI-Built-Games"
 });

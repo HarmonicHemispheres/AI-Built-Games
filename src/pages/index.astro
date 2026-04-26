@@ -1,6 +1,7 @@
 ---
 import MainLayout from "../layouts/MainLayout.astro";
 import { games, socialLinks } from "../data/games";
+import { withBase } from "../utils/paths";
 
 const categories = Array.from(new Set(games.map((game) => game.category))).sort((a, b) =>
   a.localeCompare(b)
@@ -8,6 +9,8 @@ const categories = Array.from(new Set(games.map((game) => game.category))).sort(
 const tags = Array.from(new Set(games.flatMap((game) => game.tags))).sort((a, b) =>
   a.localeCompare(b)
 );
+const gamePath = (slug: string) => withBase(`/game/${slug}/`);
+const playPath = (slug: string) => withBase(`/play/${slug}/`);
 ---
 
 <MainLayout
@@ -87,7 +90,7 @@ const tags = Array.from(new Set(games.flatMap((game) => game.tags))).sort((a, b)
             data-category={game.category.toLowerCase()}
             data-tags={game.tags.join(",").toLowerCase()}
           >
-            <a class="card-link" href={`/game/${game.slug}/`}>
+            <a class="card-link" href={gamePath(game.slug)}>
               <div class="cover">
                 <img src={game.image} alt={`${game.title} preview`} loading="lazy" />
                 <span class="cover-chip">{game.category}</span>
@@ -98,8 +101,8 @@ const tags = Array.from(new Set(games.flatMap((game) => game.tags))).sort((a, b)
               <p class="card-copy">{game.tagline}</p>
               <p class="card-model"><span class="card-model-label">Built with</span> <span class="card-model-value">{game.model}</span></p>
               <div class="card-actions">
-                <a class="btn btn-primary card-action-play" href={`/play/${game.slug}/`}>Play</a>
-                <a class="btn btn-neutral card-action-info" href={`/game/${game.slug}/`}>Info</a>
+                <a class="btn btn-primary card-action-play" href={playPath(game.slug)}>Play</a>
+                <a class="btn btn-neutral card-action-info" href={gamePath(game.slug)}>Info</a>
                 <a class="btn btn-neutral btn-icon" href={game.playUrl} target="_blank" rel="noreferrer" aria-label="Open original in new tab" title="Open original in new tab">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8 16 L16 8 M9 8 H16 V15" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
