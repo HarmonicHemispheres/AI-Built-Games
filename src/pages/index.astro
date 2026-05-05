@@ -3,10 +3,26 @@ import MainLayout from "../layouts/MainLayout.astro";
 import { games, socialLinks } from "../data/games";
 import { withBase } from "../utils/paths";
 
-const categories = Array.from(new Set(games.map((game) => game.category))).sort((a, b) =>
+const gameTimestamp = (value?: string) => {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+};
+
+const sortedGames = [...games].sort((a, b) => {
+  const byUpdated = gameTimestamp(b.updated) - gameTimestamp(a.updated);
+  if (byUpdated !== 0) return byUpdated;
+
+  const byCreated = gameTimestamp(b.created) - gameTimestamp(a.created);
+  if (byCreated !== 0) return byCreated;
+
+  return a.title.localeCompare(b.title);
+});
+
+const categories = Array.from(new Set(sortedGames.map((game) => game.category))).sort((a, b) =>
   a.localeCompare(b)
 );
-const tags = Array.from(new Set(games.flatMap((game) => game.tags))).sort((a, b) =>
+const tags = Array.from(new Set(sortedGames.flatMap((game) => game.tags))).sort((a, b) =>
   a.localeCompare(b)
 );
 const gamePath = (slug: string) => withBase(`/game/${slug}/`);
@@ -78,11 +94,11 @@ const playPath = (slug: string) => withBase(`/play/${slug}/`);
             {tags.map((tag) => <option value={tag.toLowerCase()}>{tag}</option>)}
           </select>
         </div>
-        <p id="game-result-count" class="result-count">Showing {games.length} games</p>
+        <p id="game-result-count" class="result-count">Showing {sortedGames.length} games</p>
       </div>
 
       <div class="games-grid" id="games-grid">
-        {games.map((game) => (
+        {sortedGames.map((game) => (
           <article
             class="game-card"
             data-title={game.title.toLowerCase()}

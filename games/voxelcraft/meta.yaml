@@ -1,0 +1,50 @@
+# Identity
+slug: voxelcraft
+title: VoxelCraft
+tagline: An infinite cubic adventure with procedural terrain, biomes, and freeform building.
+description: |
+  A browser-based voxel sandbox built as a single HTML file. Explore a procedurally
+  generated world with plains, forests, mesas, and mountains, break and place
+  blocks with a rotating hotbar, navigate with a live minimap, and save or load
+  persistent worlds as JSON files.
+
+# Categorization
+category: Sandbox
+tags:
+  - voxel
+  - building
+  - survival
+  - exploration
+status: released
+
+# Provenance
+created: 2026-05-04
+updated: 2026-05-05
+version: 0.2.0
+built_with:
+  provider: anthropic
+  model: Claude Opus 4.7
+chat_url:
+
+# Assets (paths are relative to this game's folder)
+entry: game.html
+banner: banner.png
+info_url:
+
+# Player-facing content
+features:
+  - Procedurally generated voxel world with multiple biomes and landmarks
+  - Block placement, block breaking, and rotation-aware building pieces
+  - Hotbar and drag-and-drop inventory management
+  - Live minimap, world stats, and in-game settings panel
+  - Save and load support for persistent worlds via downloadable JSON files
+  - Save data preserves world edits, player state, hotbar setup, stats, and tree growth timers
+  - Water, foliage motion, and tree growth systems for added world activity
+
+controls:
+  - WASD to move and mouse to look around
+  - Left click to break blocks and right click to place blocks
+  - Mouse wheel or number keys to change the selected hotbar slot
+  - E to open inventory and R to rotate placeable blocks
+  - Space to jump and double-tap Space to fly
+  - Use LOAD GAME on the title screen and SAVE GAME from the pause menu
