@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Endless BackSpace</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="view"></canvas>
+
+    <!-- Main menu -->
+    <div id="main-menu" class="overlay overlay-menu">
+      <div class="menu-card">
+        <h1 class="title">Endless BackSpace</h1>
+        <p class="subtitle">A facility that should not exist this large.</p>
+        <div class="menu-buttons">
+          <button id="btn-new" class="menu-btn primary">New Descent</button>
+          <button id="btn-continue" class="menu-btn" disabled>Continue</button>
+          <button id="btn-settings-menu" class="menu-btn">Settings</button>
+          <button id="btn-credits" class="menu-btn">Credits</button>
+        </div>
+        <p class="footnote">Click to look. WASD to walk. F for flashlight. E to interact. TAB for journal. ESC to pause.</p>
+      </div>
+    </div>
+
+    <!-- Click-to-play prompt (after un-pause) -->
+    <div id="click-resume" class="overlay overlay-click hidden">
+      <div class="click-card">
+        <p>Click to resume</p>
+      </div>
+    </div>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hud hidden">
+      <div id="reticle" class="reticle"></div>
+      <div id="interact-prompt" class="interact-prompt hidden">
+        <span class="key">E</span><span id="interact-verb">interact</span>
+      </div>
+      <div id="indicators" class="indicators">
+        <div id="flashlight-indicator" class="indicator hidden">
+          <span class="ind-label">FL</span>
+          <div class="ind-bar"><div id="flashlight-bar" class="ind-bar-fill"></div></div>
+        </div>
+      </div>
+      <div id="toast" class="toast hidden"></div>
+      <div id="vignette" class="vignette"></div>
+      <div id="grain" class="grain"></div>
+    </div>
+
+    <!-- Pause overlay -->
+    <div id="pause" class="overlay overlay-menu hidden">
+      <div class="menu-card">
+        <h2 class="title">Paused</h2>
+        <div class="menu-buttons">
+          <button id="btn-resume" class="menu-btn primary">Resume</button>
+          <button id="btn-journal" class="menu-btn">Journal</button>
+          <button id="btn-map" class="menu-btn">Map</button>
+          <button id="btn-settings" class="menu-btn">Settings</button>
+          <button id="btn-save-quit" class="menu-btn">Save &amp; Quit</button>
+        </div>
+        <p class="footnote" id="seed-display">seed: —</p>
+      </div>
+    </div>
+
+    <!-- Journal -->
+    <div id="journal" class="overlay overlay-panel hidden">
+      <div class="panel-card">
+        <header class="panel-header">
+          <h2>Journal</h2>
+          <button class="panel-close" data-close="journal">×</button>
+        </header>
+        <nav class="panel-tabs">
+          <button class="tab-btn active" data-tab="documents">Documents</button>
+          <button class="tab-btn" data-tab="tapes">Tapes</button>
+          <button class="tab-btn" data-tab="polaroids">Polaroids</button>
+        </nav>
+        <div class="panel-body">
+          <ul id="journal-list" class="journal-list"></ul>
+          <div id="journal-reader" class="journal-reader">
+            <p class="journal-empty">Select an entry on the left.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map-panel" class="overlay overlay-panel hidden">
+      <div class="panel-card">
+        <header class="panel-header">
+          <h2>Map</h2>
+          <button class="panel-close" data-close="map-panel">×</button>
+        </header>
+        <div class="panel-body">
+          <p class="journal-empty">MAPPING SYSTEM OFFLINE</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings-panel" class="overlay overlay-panel hidden">
+      <div class="panel-card">
+        <header class="panel-header">
+          <h2>Settings</h2>
+          <button class="panel-close" data-close="settings-panel">×</button>
+        </header>
+        <div class="panel-body settings-body">
+          <label class="setting-row">
+            <span>Mouse sensitivity</span>
+            <input id="set-sens" type="range" min="0.5" max="3" step="0.05" />
+          </label>
+          <label class="setting-row">
+            <span>Field of view</span>
+            <input id="set-fov" type="range" min="60" max="100" step="1" />
+          </label>
+          <label class="setting-row">
+            <span>Brightness</span>
+            <input id="set-brightness" type="range" min="0.4" max="1.5" step="0.02" />
+          </label>
+          <label class="setting-row">
+            <span>Master volume</span>
+            <input id="set-master" type="range" min="0" max="1" step="0.01" />
+          </label>
+          <label class="setting-row">
+            <span>Head bob</span>
+            <input id="set-headbob" type="checkbox" />
+          </label>
+          <label class="setting-row">
+            <span>Film grain</span>
+            <input id="set-grain" type="checkbox" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reader overlay (for documents / tapes when picked up) -->
+    <div id="reader" class="overlay overlay-panel hidden">
+      <div class="panel-card reader-card">
+        <header class="panel-header">
+          <h2 id="reader-title">—</h2>
+          <button class="panel-close" data-close="reader">×</button>
+        </header>
+        <div id="reader-body" class="reader-body"></div>
+      </div>
+    </div>
+
+    <!-- Credits -->
+    <div id="credits" class="overlay overlay-panel hidden">
+      <div class="panel-card">
+        <header class="panel-header">
+          <h2>Credits</h2>
+          <button class="panel-close" data-close="credits">×</button>
+        </header>
+        <div class="panel-body credits-body">
+          <p><strong>Endless BackSpace</strong></p>
+          <p>An exploration of impossible architecture.</p>
+          <p>Built with Claude Opus 4.7.</p>
+          <p>three.js renders the facility you should not be in.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+/* Per-act palette via CSS variables. Defaults = Act 1. */
+:root {
+  --bg-0: #0a0e10;
+  --bg-1: #131a1e;
+  --bg-2: #1c262c;
+  --panel: rgba(18, 26, 30, 0.92);
+  --panel-edge: #2c3a42;
+
+  --ink: #d9e3e6;
+  --ink-dim: #88979d;
+  --accent: #7ad6b3;        /* pale lab green */
+  --accent-dim: #3b8d70;
+  --danger: #e26b5c;
+  --gold: #e8c460;
+  --warn: #f0a04b;
+
+  --tile-open: #1a2429;
+  --tile-open-2: #1f2a30;
+  --tile-path: #3a322a;
+  --tile-path-2: #443a30;
+  --tile-wall: #2a3138;
+  --tile-toxic: #2b3a26;
+  --tile-toxic-2: #344726;
+  --tile-grid: #0c1115;
+
+  --unit-land: #9dd0e0;
+  --unit-flying: #c3a9e6;
+  --unit-structure: #b4a484;
+
+  --zombie: #7ea05a;
+  --zombie-brute: #6c8649;
+  --zombie-runner: #b5c473;
+  --zombie-boss: #d05a4a;
+
+  --hp-good: #6ddc9c;
+  --hp-mid: #e8c460;
+  --hp-low: #e26b5c;
+}
+
+/* Act 2 / 3 palettes are loaded by swapping class on <body>. */
+body.act-2 {
+  --bg-0: #0e0a08;
+  --bg-1: #1c1410;
+  --tile-open: #2b1e16;
+  --tile-open-2: #322218;
+  --accent: #f0a04b;
+  --tile-toxic: #4a3a1c;
+  --tile-toxic-2: #5a4624;
+}
+body.act-3 {
+  --bg-0: #0a0606;
+  --bg-1: #1c0e0e;
+  --tile-open: #2a1414;
+  --tile-open-2: #341818;
+  --accent: #e2655a;
+  --tile-toxic: #4a1c1c;
+  --tile-toxic-2: #5a2424;
+}

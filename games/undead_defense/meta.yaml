@@ -1,0 +1,23 @@
+# Identity
+slug: undead-defense
+title: Undead Defense
+tagline: RTS-controlled drones vs procedurally generated zombie hordes.
+
+# Categorization
+category: Strategy
+tags:
+  - tower-defense
+  - rts
+  - roguelite
+  - procedural
+status: prototype
+
+# Provenance
+created: 2026-05-26
+updated: 2026-05-26
+built_with:
+  provider: anthropic
+  model: Claude Opus 4.7
+
+# Assets (paths are relative to this game's folder)
+entry: index.html

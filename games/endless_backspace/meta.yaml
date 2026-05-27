@@ -1,0 +1,26 @@
+# Identity
+slug: endless-backspace
+title: Endless BackSpace
+tagline: First-person exploration through an ever-expanding procedural CIA research facility.
+
+# Categorization
+category: Exploration
+tags:
+  - first-person
+  - 3d
+  - procedural
+  - liminal
+  - horror
+  - exploration
+status: prototype
+
+# Provenance
+created: 2026-05-26
+updated: 2026-05-26
+built_with:
+  provider: anthropic
+  model: Claude Opus 4.7
+
+# Assets (paths are relative to this game's folder)
+entry: index.html
+banner: banner.png
