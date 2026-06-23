@@ -40,6 +40,8 @@ features:
   - Procedurally generated wilderness with forests, rivers, rock, and fertile soil
   - Isometric tile-space building grid with footprints, roads, and terrain adjacency
   - Production chains — extract raw goods, refine them, and sell for profit
+  - Settlers walk from their homes to their jobs and back, following roads and paths
+  - Live placement preview that highlights each tile green / amber / red as you build
   - Living world — flowing water, swaying trees, chimney smoke, seasons, and weather
   - Turning seasons that shift production, food demand, and the palette
   - Decision-card events tied to the coming revolution

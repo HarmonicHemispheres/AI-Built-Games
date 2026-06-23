@@ -539,6 +539,7 @@ const tileGroup = new THREE.Group(); worldGroup.add(tileGroup);
 const decoGroup = new THREE.Group(); worldGroup.add(decoGroup);
 const buildGroup = new THREE.Group(); worldGroup.add(buildGroup);
 const fxGroup = new THREE.Group(); worldGroup.add(fxGroup);
+const walkerGroup = new THREE.Group(); worldGroup.add(walkerGroup);
 
 // tile-space -> world helper (centre map at origin)
 function tileToWorld(col,row){ const o=(state?state.grid:GRID)/2-0.5; return [col-o, 0, row-o]; }
@@ -746,6 +747,171 @@ function rebuildAllBuildings(){
   buildGroup.clear(); buildMeshes.clear(); smokeEmitters.length=0;
   for(const b of state.buildings) addBuildingMesh(b);
 }
+function buildingById(id){ return state.buildings.find(b=>b.id===id); }
+
+/* =====================================================================
+   SETTLERS (walking people) — emerge from homes, commute to jobs,
+   preferring roads/paths. Purely cosmetic, lightweight, capped & pooled.
+   ===================================================================== */
+const WALKER_CAP = 40;
+const walkers = [];           // active walkers
+const walkerPool = [];        // parked meshes for reuse
+const walkerHeadMat = new THREE.MeshLambertMaterial({color:0xe8c9a0});
+
+function makeWalkerMesh(){
+  if(walkerPool.length){ const g=walkerPool.pop(); g.visible=true; return g; }
+  const g=new THREE.Group();
+  const col = state && state.faction==='people' ? 0x7a5230 : 0x9a5a3a;
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.1,0.22,6),
+    new THREE.MeshLambertMaterial({color:col}));
+  body.position.y=0.13; body.castShadow=true; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.065,7,6), walkerHeadMat);
+  head.position.y=0.29; g.add(head);
+  g.userData.bodyCol=body.material;
+  walkerGroup.add(g);
+  return g;
+}
+function despawnWalker(w){ if(!w)return; w.mesh.visible=false; walkerPool.push(w.mesh); }
+function clearWalkers(){ while(walkers.length) despawnWalker(walkers.pop()); }
+
+// a walkable tile = open ground or road, never water/forest/rock or a building footprint
+function isRoadTile(c,r){ const id=state.occ[r*state.grid+c]; if(id===-1)return false; const b=buildingById(id); return !!(b&&BUILDINGS[b.key].road); }
+function walkable(c,r){
+  const g=state.grid; if(c<0||r<0||c>=g||r>=g) return false;
+  const tt=state.terrain[r*g+c]; if(tt===T.WATER||tt===T.FOREST||tt===T.ROCK) return false;
+  const id=state.occ[r*g+c]; if(id===-1) return true; return isRoadTile(c,r);
+}
+// a walkable access tile next to a building footprint, preferring a road
+function accessTile(b){
+  let fallback=null;
+  for(let r=b.row-1;r<=b.row+b.h;r++)for(let c=b.col-1;c<=b.col+b.w;c++){
+    const inside=(c>=b.col&&c<b.col+b.w&&r>=b.row&&r<b.row+b.h); if(inside)continue;
+    if(c<0||r<0||c>=state.grid||r>=state.grid)continue;
+    if(!walkable(c,r))continue;
+    if(isRoadTile(c,r)) return [c,r];
+    if(!fallback) fallback=[c,r];
+  }
+  return fallback;
+}
+// A* over walkable tiles, roads cheap so commuters follow paths
+function findPath(start,goal){
+  if(!start||!goal) return null;
+  const g=state.grid, key=(c,r)=>r*g+c, goalK=key(goal[0],goal[1]);
+  const open=[{c:start[0],r:start[1],g:0,f:0,p:null}];
+  const best={[key(start[0],start[1])]:0};
+  const h=(c,r)=>Math.abs(c-goal[0])+Math.abs(r-goal[1]);
+  let guard=0;
+  while(open.length){
+    if(++guard>3000) break;
+    let bi=0; for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i;
+    const cur=open.splice(bi,1)[0];
+    if(key(cur.c,cur.r)===goalK){ const path=[]; let n=cur; while(n){ path.push([n.c,n.r]); n=n.p;} return path.reverse(); }
+    for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nc=cur.c+dc, nr=cur.r+dr;
+      const isGoal=(key(nc,nr)===goalK);
+      if(!isGoal && !walkable(nc,nr)) continue;
+      if(nc<0||nr<0||nc>=g||nr>=g) continue;
+      const step = isRoadTile(nc,nr)?1:4;
+      const ng=cur.g+step, k=key(nc,nr);
+      if(best[k]!==undefined && ng>=best[k]) continue;
+      best[k]=ng; open.push({c:nc,r:nr,g:ng,f:ng+h(nc,nr),p:cur});
+    }
+  }
+  return null;
+}
+// build a world-space point list from home -> work (centres + path of tile centres)
+function commutePoints(home,work){
+  const hc=tileToWorld(home.col+(home.w-1)/2, home.row+(home.h-1)/2);
+  const wc=tileToWorld(work.col+(work.w-1)/2, work.row+(work.h-1)/2);
+  if(home.id===work.id) return [[hc[0],hc[2]]];
+  const a=accessTile(home), b=accessTile(work);
+  const pts=[[hc[0],hc[2]]];
+  const tilePath = findPath(a,b);
+  if(tilePath){ for(const [c,r] of tilePath){ const w=tileToWorld(c,r); pts.push([w[0],w[2]]); } }
+  pts.push([wc[0],wc[2]]);
+  return pts;
+}
+function nearestHome(homes,b){
+  let best=null,bd=1e9;
+  for(const h of homes){ const d=Math.abs(h.col-b.col)+Math.abs(h.row-b.row); if(d<bd){bd=d;best=h;} }
+  return best;
+}
+function randPause(){ return 2.5+Math.random()*5; }
+
+// reconcile walkers to current staffed jobs (called from recompute; cheap when stable)
+function syncWalkers(){
+  if(!state || state._vista || !state.founded){ clearWalkers(); return; }
+  const homes=state.buildings.filter(b=>b.on && BUILDINGS[b.key].houses>0);
+  const jobs=[];
+  for(const b of state.buildings){ const d=BUILDINGS[b.key];
+    if(b.on && (d.workers||0)>0 && (b.workers||0)>0){
+      const home=nearestHome(homes,b)||b;
+      for(let i=0;i<b.workers;i++) jobs.push({workId:b.id, homeId:home.id});
+    }
+  }
+  const N=Math.min(jobs.length, WALKER_CAP);
+  while(walkers.length>N) despawnWalker(walkers.pop());
+  while(walkers.length<N){
+    const w={mesh:makeWalkerMesh(), workId:-1, homeId:-1, phase:'resting',
+      phaseT:Math.random()*4, points:null, seg:0, segT:0, bob:Math.random()*6};
+    walkers.push(w);
+  }
+  for(let i=0;i<N;i++){ assignWalker(walkers[i], jobs[i]); }
+}
+function assignWalker(w, job){
+  if(w.workId===job.workId && w.homeId===job.homeId && w.toWork) return; // unchanged
+  w.workId=job.workId; w.homeId=job.homeId;
+  const home=buildingById(job.homeId), work=buildingById(job.workId);
+  if(!home||!work){ return; }
+  w.toWork=commutePoints(home,work);
+  w.toHome=w.toWork.slice().reverse();
+  // start resting at home, trickle out
+  w.phase='resting'; w.phaseT=Math.random()*4; w.points=null; w.seg=0; w.segT=0;
+  const p=w.toWork[0]; setWalkerPos(w,p[0],p[1],0);
+}
+function setWalkerPos(w,x,z,ang){
+  w.mesh.position.set(x, 0, z);
+  if(ang!==undefined) w.mesh.rotation.y=-ang+Math.PI/2;
+  w.x=x; w.z=z;
+}
+function updateWalkers(dt){
+  if(!walkers.length) return;
+  const moving = !paused;
+  const tscale = paused?0:gameSpeed;
+  const speed = 1.5*gameSpeed; // tiles/sec
+  for(const w of walkers){
+    if(w.phase==='resting'||w.phase==='working'){
+      w.phaseT-=dt*tscale;
+      // gentle idle bob (still while paused)
+      if(moving) w.mesh.position.y = Math.abs(Math.sin((performance.now()/1000)*2+w.bob))*0.01;
+      if(w.phaseT<=0 && moving){
+        w.phase = (w.phase==='resting')?'toWork':'toHome';
+        w.points = (w.phase==='toWork')?w.toWork:w.toHome;
+        w.seg=0; w.segT=0;
+        if(!w.points||w.points.length<2){ const end=w.points?w.points[w.points.length-1]:[w.x,w.z];
+          setWalkerPos(w,end[0],end[1]); w.phase=(w.phase==='toWork')?'working':'resting'; w.phaseT=randPause(); }
+      }
+      continue;
+    }
+    // moving
+    if(!w.points||w.points.length<2){ w.phase=(w.phase==='toWork')?'working':'resting'; w.phaseT=randPause(); continue; }
+    if(moving){
+      const a=w.points[w.seg], b=w.points[w.seg+1];
+      const dist=Math.max(0.001,Math.hypot(b[0]-a[0],b[1]-a[1]));
+      w.segT += (dt*speed)/dist;
+      while(w.segT>=1 && w.seg<w.points.length-1){ w.segT-=1; w.seg++; }
+      if(w.seg>=w.points.length-1){
+        const end=w.points[w.points.length-1]; setWalkerPos(w,end[0],end[1]);
+        w.phase=(w.phase==='toWork')?'working':'resting'; w.phaseT=randPause(); continue;
+      }
+      const a2=w.points[w.seg], b2=w.points[w.seg+1];
+      const x=a2[0]+(b2[0]-a2[0])*w.segT, z=a2[1]+(b2[1]-a2[1])*w.segT;
+      setWalkerPos(w,x,z, Math.atan2(b2[1]-a2[1], b2[0]-a2[0]));
+      // walking bob
+      w.mesh.position.y = Math.abs(Math.sin((performance.now()/1000)*9+w.bob))*0.04;
+    }
+  }
+}
 
 /* =====================================================================
    PARTICLE POOLS (smoke + dust) — parked off-screen until emitted
@@ -821,11 +987,53 @@ function makeGhost(){
   const fakeB={key:selectedBuild,col:0,row:0,w:def.w,h:def.h};
   ghost=makeBuildingMesh(fakeB);
   ghost.traverse(o=>{ if(o.material){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=0.55; } });
-  // footprint highlighter
-  const fp=new THREE.Mesh(new THREE.PlaneGeometry(def.w,def.h),
-    new THREE.MeshBasicMaterial({color:0x88ff88,transparent:true,opacity:0.3,side:THREE.DoubleSide}));
-  fp.rotation.x=-Math.PI/2; fp.position.y=0.02; fp.name='fp'; ghost.add(fp);
   buildGroup.add(ghost);
+}
+
+/* ---- placement / hover tile highlight overlay ---- */
+const hiGeo=new THREE.PlaneGeometry(0.92,0.92);
+const hiTiles=[];
+function getHiTile(i){
+  while(hiTiles.length<=i){
+    const m=new THREE.Mesh(hiGeo, new THREE.MeshBasicMaterial({transparent:true,opacity:0.42,side:THREE.DoubleSide,depthWrite:false}));
+    m.rotation.x=-Math.PI/2; m.position.y=0.045; m.visible=false; m.renderOrder=2; fxGroup.add(m); hiTiles.push(m);
+  }
+  return hiTiles[i];
+}
+function hideHiFrom(n){ for(let i=n;i<hiTiles.length;i++) hiTiles[i].visible=false; }
+// per-tile buildability (terrain/occupancy only — the footprint reasons)
+function tileBuildableSelf(c,r,key){
+  const g=state.grid; if(c<0||r<0||c>=g||r>=g) return false;
+  const tt=state.terrain[r*g+c];
+  if(tt===T.WATER) return false;
+  if(tt===T.ROCK && key!=='mine') return false;
+  if(tt===T.FOREST) return false;
+  if(state.occ[r*g+c]!==-1) return false;
+  return true;
+}
+function updateHoverHighlight(){
+  if(!state || state._vista || !hudShown() || hoverTile.col<0){ hideHiFrom(0); return; }
+  if(selectedBuild){
+    const def=BUILDINGS[selectedBuild];
+    const overall=canPlace(selectedBuild,hoverTile.col,hoverTile.row);
+    let idx=0;
+    for(let r=hoverTile.row;r<hoverTile.row+def.h;r++)for(let c=hoverTile.col;c<hoverTile.col+def.w;c++){
+      const m=getHiTile(idx++); const w=tileToWorld(c,r);
+      m.position.set(w[0],0.045,w[2]); m.visible=true;
+      const free=tileBuildableSelf(c,r,selectedBuild);
+      // red: tile itself blocked · green: good to build · amber: footprint ok but a
+      // requirement (road/adjacency/funds) isn't met
+      m.material.color.setHex(!free?0xff4433:(overall?0x55e06a:0xf0c23a));
+      m.material.opacity = !free?0.52:(overall?0.46:0.42);
+    }
+    hideHiFrom(idx);
+  } else if(selectedBuildingId<0){
+    // subtle single-tile cursor highlight when just looking around
+    const m=getHiTile(0); const w=tileToWorld(hoverTile.col,hoverTile.row);
+    m.position.set(w[0],0.045,w[2]); m.visible=true;
+    m.material.color.setHex(0xffffff); m.material.opacity=0.13;
+    hideHiFrom(1);
+  } else { hideHiFrom(0); }
 }
 function canPlace(key,col,row){
   const def=BUILDINGS[key];
@@ -916,6 +1124,7 @@ function recompute(){
   state._moraleBuild=moraleBuild;
   // tier unlock
   if(state.pop>=14 && state.tier<2){ state.tier=2; toast('Your holding grew to a Village! New buildings unlocked.'); buildDockDirty=true; }
+  syncWalkers();
 }
 
 /* one in-game day */
@@ -1351,7 +1560,10 @@ function animate(){
     sun.intensity=0.8+0.5*Math.sin(ang);
   }
 
-  // ghost follow
+  // commuting settlers
+  updateWalkers(dt);
+
+  // ghost follow + placement tile highlight
   updateGhost();
 
   // HUD refresh only when dirty
@@ -1382,6 +1594,7 @@ function stepWeather(dt,tg){
 let weatherAccum=0;
 
 function updateGhost(){
+  updateHoverHighlight();
   if(!ghost||!state){return;}
   if(hoverTile.col<0){ ghost.visible=false; return; }
   ghost.visible=true;
@@ -1390,9 +1603,7 @@ function updateGhost(){
   ghost.position.set(wx,0,wz);
   const ok=canPlace(selectedBuild,hoverTile.col,hoverTile.row);
   ghostValid=ok;
-  const fp=ghost.getObjectByName('fp');
-  if(fp) fp.material.color.setHex(ok?0x66ff66:0xff5544);
-  ghost.traverse(o=>{ if(o.material && o!==fp && o.name!=='fp'){ o.material.opacity=ok?0.6:0.35; } });
+  ghost.traverse(o=>{ if(o.material){ o.material.opacity=ok?0.62:0.32; } });
 }
 
 /* =====================================================================
@@ -1511,6 +1722,7 @@ function hudShown(){ return !document.getElementById('hud').classList.contains('
 function toMenu(){
   document.getElementById('hud').classList.add('hidden');
   hideScreens(); document.getElementById('menu').classList.remove('hidden');
+  clearWalkers(); hideHiFrom(0);
   menuVistaActive=true; setPaused(true);
   document.getElementById('m-continue').style.display = localStorage.getItem(SAVE_KEY)?'block':'none';
 }
@@ -1538,7 +1750,7 @@ function startGame(opts){
   menuVistaActive=false;
   state=newState(opts);
   // fresh scene
-  buildTerrain(); initPools(); rebuildAllBuildings();
+  buildTerrain(); initPools(); rebuildAllBuildings(); clearWalkers();
   // place the starting cabin / wigwam in the centre plaza
   const c=Math.floor(state.grid/2);
   const homeKey = state.faction==='frontier'?'cabin':'wigwam';
@@ -1592,7 +1804,7 @@ function loadGame(){
   warnLog={};
   Object.assign(market, raw.market||{});
   menuVistaActive=false;
-  buildTerrain(); initPools(); rebuildAllBuildings();
+  buildTerrain(); initPools(); rebuildAllBuildings(); clearWalkers();
   applySeasonVisuals();
   camTarget.set(0,0,0); viewSize=16; resizeCam();
   hideScreens(); document.getElementById('hud').classList.remove('hidden');
