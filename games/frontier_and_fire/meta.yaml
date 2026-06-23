@@ -1,0 +1,54 @@
+# Identity
+slug: frontier-and-fire
+title: Frontier & Fire
+tagline: An isometric colonial-era settlement builder on the eve of the American Revolution.
+description: |
+  A single-file, isometric settlement-builder set on the 1760s–70s frontier.
+  Play as the Colonial Frontiersman building a trading enterprise in £ sterling,
+  or the Native Confederacy growing population and standing. Gather raw goods,
+  refine them, trade for profit, feed your people, and survive the turning
+  seasons — without going bankrupt or letting your settlement collapse.
+
+# Categorization
+category: Strategy
+tags:
+  - city-builder
+  - isometric
+  - economy
+  - colonial
+  - trading
+  - three-js
+featured: true
+status: prototype   # released | wip | prototype | archived
+
+# Provenance
+created: 2026-06-23
+updated: 2026-06-23
+version: 0.1.0
+built_with:
+  provider: anthropic
+  model: Claude Opus 4.8
+
+# Assets (paths are relative to this game's folder)
+entry: index.html
+banner: banner.svg
+info_url:
+
+# Player-facing content
+features:
+  - Two asymmetric factions — Enterprise (wealth) and the People (population & standing)
+  - Procedurally generated wilderness with forests, rivers, rock, and fertile soil
+  - Isometric tile-space building grid with footprints, roads, and terrain adjacency
+  - Production chains — extract raw goods, refine them, and sell for profit
+  - Living world — flowing water, swaying trees, chimney smoke, seasons, and weather
+  - Turning seasons that shift production, food demand, and the palette
+  - Decision-card events tied to the coming revolution
+  - Supply-and-demand markets, morale, population growth, and failure states
+  - Main menu, faction select, settings, lifetime stats, and an in-world Almanac
+  - localStorage autosave with full save/load
+
+controls:
+  - Left-click a building in the dock, then click the map to place it
+  - Click a placed building to inspect, pause, or demolish it
+  - Drag to pan, scroll to zoom, R / Q to rotate the camera
+  - Spacebar to pause; 1 / 2 / 3 to set game speed
