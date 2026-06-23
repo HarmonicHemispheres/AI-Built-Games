@@ -50,5 +50,6 @@ features:
 controls:
   - Left-click a building in the dock, then click the map to place it
   - Click a placed building to inspect, pause, or demolish it
-  - Drag to pan, scroll to zoom, R / Q to rotate the camera
+  - Drag the map to pan, or use arrow keys / WASD to scroll the view
+  - Scroll to zoom, R / Q to rotate the camera
   - Spacebar to pause; 1 / 2 / 3 to set game speed

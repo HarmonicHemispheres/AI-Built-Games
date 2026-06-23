@@ -1219,7 +1219,7 @@ function updateHint(){
   if(selectedBuild){ const d=BUILDINGS[selectedBuild];
     h.textContent = `Placing ${d.name} — left-click to build · R rotate camera · Esc cancel`;
   } else if(selectedBuildingId>=0){ h.textContent='Inspecting building'; }
-  else h.textContent='Pick a building to place, or click one to inspect · drag to pan · scroll to zoom';
+  else h.textContent='Pick a building to place, or click one to inspect · drag or arrows/WASD to pan · scroll to zoom · R rotate';
 }
 
 /* ---------- toasts ---------- */
@@ -1261,7 +1261,8 @@ function animate(){
   requestAnimationFrame(animate);
   const now=performance.now()/1000; let dt=Math.min(0.05, now-lastT); lastT=now;
 
-  // camera ease
+  // arrow/WASD camera panning, then position the camera
+  updateKeyPan(dt);
   placeCamera();
 
   // economy
@@ -1363,28 +1364,40 @@ function updateGhost(){
    INPUT
    ===================================================================== */
 const dom=renderer.domElement;
-let dragging=false, dragStart={x:0,y:0}, camStart=new THREE.Vector3(), moved=false;
+// world-space ground point under a screen pixel (for 1:1 "grab and drag" panning)
+function groundPoint(mx,my){
+  ndc.x=(mx/innerWidth)*2-1; ndc.y=-(my/innerHeight)*2+1;
+  ray.setFromCamera(ndc,camera);
+  const pt=new THREE.Vector3();
+  if(!ray.ray.intersectPlane(groundPlane,pt)) return null;
+  return pt;
+}
+let dragging=false, dragStartPx={x:0,y:0}, grabPoint=null, moved=false;
 dom.addEventListener('pointerdown',e=>{
   if(!state||!hudShown())return;
-  dragging=true; moved=false; dragStart={x:e.clientX,y:e.clientY}; camStart.copy(camTarget);
+  dragging=true; moved=false; dragStartPx={x:e.clientX,y:e.clientY};
+  placeCamera(); grabPoint=groundPoint(e.clientX,e.clientY);
+  dom.setPointerCapture && dom.setPointerCapture(e.pointerId);
 });
 dom.addEventListener('pointermove',e=>{
   if(!state||!hudShown())return;
-  const tile=screenToTile(e.clientX,e.clientY);
-  hoverTile = tile||{col:-1,row:-1};
-  if(dragging){ const dx=e.clientX-dragStart.x, dy=e.clientY-dragStart.y;
-    if(Math.abs(dx)+Math.abs(dy)>4) moved=true;
-    const sp=0.045*viewSize/18*settings.camspeed;
-    // pan in camera-rotated space
-    const cos=Math.cos(camRot), sin=Math.sin(camRot);
-    camTarget.x = camStart.x - (dx*cos - dy*sin)*sp;
-    camTarget.z = camStart.z - (dx*sin + dy*cos)*sp;
-    clampCam();
+  if(dragging){
+    if(Math.abs(e.clientX-dragStartPx.x)+Math.abs(e.clientY-dragStartPx.y)>5) moved=true;
+    // keep the world point we grabbed pinned under the cursor (self-correcting, 1:1)
+    if(grabPoint){
+      placeCamera();
+      const now=groundPoint(e.clientX,e.clientY);
+      if(now){ camTarget.x += (grabPoint.x-now.x); camTarget.z += (grabPoint.z-now.z); clampCam(); placeCamera(); }
+    }
+  } else {
+    const tile=screenToTile(e.clientX,e.clientY);
+    hoverTile = tile||{col:-1,row:-1};
   }
 });
 dom.addEventListener('pointerup',e=>{
   if(!state||!hudShown())return;
-  dragging=false;
+  dragging=false; grabPoint=null;
+  dom.releasePointerCapture && dom.releasePointerCapture(e.pointerId);
   if(moved) return;
   const tile=screenToTile(e.clientX,e.clientY);
   if(!tile){ selectedBuildingId=-1; return; }
@@ -1413,16 +1426,40 @@ function setSelectedBuilding(id){
   ctxDirty=true; updateHint();
 }
 
+// keys held for continuous camera panning (arrows + WASD)
+const keysDown=new Set();
+const PAN_KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d']);
 addEventListener('keydown',e=>{
   if(e.key==='Escape'){ if(selectedBuild){selectBuild(selectedBuild);} else if(selectedBuildingId>=0){setSelectedBuilding(selectedBuildingId);} }
   if(!state||!hudShown())return;
-  if(e.key==='r'||e.key==='R'){ camRot += Math.PI/2; }
-  if(e.key==='q'||e.key==='Q'){ camRot -= Math.PI/2; }
+  const k=e.key.toLowerCase();
+  if(PAN_KEYS.has(k)){ e.preventDefault(); keysDown.add(k); return; }
+  if(k==='r'){ camRot += Math.PI/2; }
+  if(k==='q'){ camRot -= Math.PI/2; }
   if(e.key===' '){ e.preventDefault(); setPaused(!paused); }
-  if(e.key==='1') {setPaused(false);gameSpeed=1;hudDirty=true;}
-  if(e.key==='2') {setPaused(false);gameSpeed=2;hudDirty=true;}
-  if(e.key==='3') {setPaused(false);gameSpeed=3;hudDirty=true;}
+  if(k==='1') {setPaused(false);gameSpeed=1;hudDirty=true;}
+  if(k==='2') {setPaused(false);gameSpeed=2;hudDirty=true;}
+  if(k==='3') {setPaused(false);gameSpeed=3;hudDirty=true;}
 });
+addEventListener('keyup',e=>{ keysDown.delete(e.key.toLowerCase()); });
+addEventListener('blur',()=>keysDown.clear());
+// apply held-key panning each frame (called from animate)
+function updateKeyPan(dt){
+  if(!state||!hudShown()||!keysDown.size) return;
+  let fx=0, fy=0; // forward(+up) / right(+right) intent in screen space
+  if(keysDown.has('arrowup')||keysDown.has('w')) fy+=1;
+  if(keysDown.has('arrowdown')||keysDown.has('s')) fy-=1;
+  if(keysDown.has('arrowright')||keysDown.has('d')) fx+=1;
+  if(keysDown.has('arrowleft')||keysDown.has('a')) fx-=1;
+  if(!fx&&!fy) return;
+  const sp = viewSize*1.4*settings.camspeed*dt;
+  // ground-plane "up on screen" and "right on screen" relative to camera yaw
+  const upx=-Math.cos(camRot), upz=-Math.sin(camRot);
+  const rx=-Math.sin(camRot),  rz= Math.cos(camRot);
+  camTarget.x += (fy*upx + fx*rx)*sp;
+  camTarget.z += (fy*upz + fx*rz)*sp;
+  clampCam();
+}
 function clampCam(){ const lim=state.grid/2; camTarget.x=Math.max(-lim,Math.min(lim,camTarget.x)); camTarget.z=Math.max(-lim,Math.min(lim,camTarget.z)); }
 
 addEventListener('resize',()=>{ renderer.setSize(innerWidth,innerHeight); resizeCam(); });
