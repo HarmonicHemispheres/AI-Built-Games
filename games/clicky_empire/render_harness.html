@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clicky Empire — Render Harness (W1-Render)</title>
+
+  <!-- Same importmap as index.html: Three.js pinned, no bundler. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #1a1f29; overflow: hidden; }
+    #game-canvas { width: 100vw; height: 100vh; display: block; }
+    #hud {
+      position: fixed; top: 8px; left: 8px; z-index: 10;
+      font: 12px/1.5 system-ui, sans-serif; color: #eaf2fb;
+      background: rgba(20,24,30,0.6); padding: 8px 10px; border-radius: 6px;
+      max-width: 320px;
+    }
+    #hud b { color: #ffd24a; }
+    button { font: 12px system-ui; margin: 2px 2px 0 0; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="hud">
+    <div><b>Render harness</b> — manual browser check for meshes.js + fx.js</div>
+    <div id="log"></div>
+    <div style="margin-top:6px">
+      <button id="b-num">floatingNumber</button>
+      <button id="b-harvest">harvestPop</button>
+      <button id="b-topple">toppleFigure</button>
+      <button id="b-place">placePop</button>
+      <button id="b-shake">screenShake</button>
+    </div>
+    <div style="margin-top:4px; opacity:0.8">Drag = pan · wheel = zoom · Q/E = rotate</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { initScene, render, layers, cameraApi } from "./src/render/scene.js";
+    import {
+      buildTileMesh, buildFogMesh, buildBuildingMesh,
+      buildUnitGroup, buildEnemyGroup, disposeMesh,
+    } from "./src/render/meshes.js";
+    import {
+      initFx, floatingNumber, harvestPop, toppleFigure, placePop, screenShake,
+    } from "./src/render/fx.js";
+    import { runRenderers } from "./src/loop.js";
+    import { tileToWorld } from "./src/util/math.js";
+
+    const log = (m) => { document.getElementById("log").textContent = m; };
+
+    const canvas = document.getElementById("game-canvas");
+    initScene(canvas);
+    initFx();
+
+    // --- A few tiles of each type, in a row ---------------------------------
+    const tileTypes = [
+      { type: "grasslands", color: 0x5aa84b },
+      { type: "forest", color: 0x2f6b34 },
+      { type: "water", color: 0x3a78c2 },
+      { type: "mountain", color: 0x7d8794 },
+      { type: "ore_vein", color: 0x6f7e55 },
+      { type: "berry_patch", color: 0x4f8f3f },
+    ];
+    tileTypes.forEach((t, i) => {
+      const tile = { col: i - 2, row: -2, ...t };
+      layers.tiles.add(buildTileMesh(tile));
+    });
+
+    // A fog cloud and a couple of buildings.
+    layers.fog.add(buildFogMesh(3, -2));
+    const castle = buildBuildingMesh("castle", { col: 0, row: 0, id: "b_castle" });
+    layers.buildings.add(castle);
+    layers.buildings.add(buildBuildingMesh("watchtower", { col: -2, row: 0, id: "b_tower" }));
+    layers.buildings.add(buildBuildingMesh("lumber_camp", { col: -1, row: 1, id: "b_lumber" }));
+    layers.buildings.add(buildBuildingMesh("palisade", { col: 1, row: 1, id: "b_wall" }));
+    const placed = buildBuildingMesh("hamlet", { col: 2, row: 0, id: "b_hamlet" });
+    layers.buildings.add(placed);
+
+    // --- A player unit group (hp 5) and an enemy group (hp 4) ---------------
+    const unitDef = { id: "militia", color: 0x5b8def, hp: 5 };
+    const unit = buildUnitGroup(unitDef, 5);
+    const up = tileToWorld(0, 2);
+    unit.position.set(up.x, 0, up.z);
+    layers.units.add(unit);
+
+    const enemyDef = { id: "raider", color: 0xd6533c, hp: 4 };
+    const enemy = buildEnemyGroup(enemyDef, 4);
+    const ep = tileToWorld(2, 2);
+    enemy.position.set(ep.x, 0, ep.z);
+    layers.enemies.add(enemy);
+
+    cameraApi.centerOn(0, 0);
+
+    // --- Trigger the required effects once on load --------------------------
+    floatingNumber({ x: ep.x, y: 1, z: ep.z }, "5", 0xffffff);
+    let toppled = 0;
+    setTimeout(() => { toppleFigure(unit, toppled++); }, 400);
+    setTimeout(() => screenShake(0.8), 600);
+    placePop(placed);
+    log("Built 6 tiles, fog, 5 buildings, unit(hp5), enemy(hp4). Auto-fired number+topple+shake.");
+
+    // --- Manual buttons -----------------------------------------------------
+    document.getElementById("b-num").onclick = () =>
+      floatingNumber({ x: up.x, y: 1, z: up.z }, "-1", 0xffd24a);
+    document.getElementById("b-harvest").onclick = () =>
+      harvestPop(tileToWorld(-2, -2, 0.4), "wood");
+    document.getElementById("b-topple").onclick = () => {
+      toppleFigure(unit, toppled);
+      toppleFigure(enemy, toppled);
+      toppled++;
+    };
+    document.getElementById("b-place").onclick = () => placePop(castle);
+    document.getElementById("b-shake").onclick = () => screenShake(0.6);
+
+    // --- Q/E yaw rotate for sanity ------------------------------------------
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "q") cameraApi.rotateYaw(-1);
+      if (e.key === "e") cameraApi.rotateYaw(1);
+    });
+    // Simple drag-pan + wheel-zoom so the scene is inspectable.
+    let dragging = false, lx = 0, ly = 0;
+    canvas.addEventListener("pointerdown", (e) => { dragging = true; lx = e.clientX; ly = e.clientY; });
+    window.addEventListener("pointerup", () => { dragging = false; });
+    window.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      cameraApi.panBy((lx - e.clientX) * 0.02, (ly - e.clientY) * 0.02);
+      lx = e.clientX; ly = e.clientY;
+    });
+    canvas.addEventListener("wheel", (e) => { cameraApi.zoomBy(e.deltaY * 0.01); e.preventDefault(); }, { passive: false });
+
+    // --- Render loop --------------------------------------------------------
+    let last = performance.now();
+    function frame(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      runRenderers(dt); // advances fx effects (initFx registered an onRender)
+      render();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // Expose for console poking.
+    window.CE = { layers, cameraApi, buildUnitGroup, buildEnemyGroup, disposeMesh, unit, enemy };
+  </script>
+</body>
+</html>
