@@ -264,3 +264,97 @@ freely; keep the public surface as specified.
   Lazy-resume the AudioContext on first user gesture. Respect `state.meta.settings.sfxVolume`.
 - `music.js`: `initMusic()`, `setMusicPhase('build'|'combat')` with a short crossfade. Respect `musicVolume`.
   Degrade gracefully (no throw) if WebAudio is unavailable.
+
+---
+
+## 14. Wave 2 module exports + cross-module protocol (locked)
+
+Wave 2 has real coupling. It is resolved with: (a) the **init pattern** — each module self-registers its
+systems in an `init*()` the integrator calls; agents never edit `main.js`/`run.js`. (b) explicit **events**
+for cards↔placement and placement↔RTS. (c) shared **logic constructors** so render stays decoupled from logic.
+
+### Init pattern (every Wave 2 module)
+Export an `init*()` that registers via `run.registerSystems({...})` and/or `loop.onUpdate/onRender`. The
+integrator calls all inits once at Wave-2 wiring. **Logic** systems (move/attack/economy/upkeep/spawner)
+register through `run.registerSystems` (run only during a run, gated by phase). **Render reconcilers** register
+through `loop.onRender`.
+
+### Unit / order protocol (shared by W2-Units and W2-RTS)
+- Unit instance (extends §10): `{ id, unitId, def, pos:{x,y,z}, hp, maxHp, stance:'defensive', order:null|Order, attackCd:0, group?:null }`.
+- `Order = {type:'move', tile:{col,row}} | {type:'attack', targetId} | {type:'attackMove', tile} | {type:'stop'}`.
+- **W2-RTS** sets `unit.order` (and `state.selection`); never moves units directly.
+- **W2-Units** `updateUnits(dt)` reads `unit.order`, moves via `findPath`, attacks via `combat.resolveHit`,
+  clears `order` when complete, then falls back to stance (defensive = engage enemy within range, don't chase far).
+
+### W2-Units — `units/group.js` (three), `units/behavior.js` (logic), `units/upkeep.js` (logic)
+- `behavior.js` (LOGIC, node-testable, no three): `createUnit(unitId, col, row) -> unit` (builds the logic
+  instance, pushes to `state.units`, `group:null`), `updateUnits(dt)`, `initUnitsLogic()` → `registerSystems({updateUnits})`.
+- `group.js` (THREE): `syncEntities()` — the render reconciler for **both** `state.units` and `state.enemies`:
+  for any instance with `group==null` build it (`buildUnitGroup`/`buildEnemyGroup`) and add to the right layer;
+  position `group` at `instance.pos`; on hp drop topple figures (`fx.toppleFigure`); on removal `disposeMesh`.
+  `initUnitsRender()` → `loop.onRender(syncEntities)`.
+- `upkeep.js` (LOGIC): `applyUpkeep()` — sum living units' `def.foodCost`; if `state.resources.food` can't
+  cover, desert lowest-tier-first until balanced; deduct food. `initUpkeep()` → `registerSystems({applyUpkeep})`.
+
+### W2-Enemies — `enemies/behavior.js` (logic), `enemies/spawner.js` (logic) — NO three (render handled by group.js)
+- `behavior.js`: `createEnemy(enemyId, col, row) -> enemy` (instance per §10, `group:null`, pushes to
+  `state.enemies`), `updateEnemies(dt)` (path toward castle via `findPath`; attack buildings/units/castle in
+  range via `combat`; **SAPPER** trait targets nearest building/wall first; RANGED keeps distance; on death
+  `disposeMesh` is handled by render — logic just removes from `state.enemies` and drops `reward`),
+  `initEnemiesLogic()` → `registerSystems({updateEnemies})`.
+- `spawner.js`: `buildWave(round) -> {total, groups:[{enemyId,count}], edges:[...]}` (composition per
+  prompt.md: early raiders/wolves; skirmisher/sapper enter ~r4; warlord forced on round===5; seeded by
+  `makeRng(`${state.run.seed}:wave:${round}`)`), `startWave(plan)`, `updateSpawner(dt) -> bool` (spawns over
+  time at random **revealed-edge** tiles via `createEnemy`, returns true when all spawned),
+  `initSpawner()` → `registerSystems({buildWave, startWave, updateSpawner})`.
+
+### W2-Buildings — `buildings/catalog.js` (data), `buildings/economy.js` (logic), `buildings/defense.js` (logic+fx), `buildings/place.js` (three)
+- `catalog.js` (DATA): `BUILDINGS` keyed by defId, `getBuildingDef(defId)`. Fields:
+  `{ id, name, kind:'castle'|'economy'|'defense'|'wall'|'spawner', hp, yields?:{res:perTick}, tickRate?,
+  adjacency?:{hint:bonusMult}, attack?:{damage,range,attackSpeed}, spawns?:{unitId,interval,cap}, color }`.
+  Must include a `castle` def (high hp) and every v1 building defId referenced by cards
+  (lumber_camp, hamlet, wheat_field, militia_camp, watchtower, palisade, sawmill, mine, barracks, stone_wall, ballista_tower).
+- `economy.js` (LOGIC): `tickEconomy(dt)` (accrue `yields` per `tickRate` with adjacency bonuses by reading
+  neighbour tile `adjacency` hints; spawner buildings like militia_camp/barracks call `createUnit` from
+  `units/behavior.js` on their interval, respecting `cap`), `placeBuilding(defId, col, row) -> building`
+  (LOGIC: validate buildable+empty, create instance into `state.placed`, normalize forest→grass under it),
+  `initEconomy()` → `registerSystems({tickEconomy})`.
+- `defense.js` (LOGIC+fx): `updateDefense(dt)` — each `kind:'defense'` building fires hitscan at nearest enemy
+  in range on cooldown (`combat.applyDamage` + `fx` bolt/`screenShake` allowed), `initDefense()` →
+  `registerSystems({updateCombat: updateDefense})`. Also handle building death: hp<=0 removes from `state.placed`;
+  if the destroyed building is the castle, set `state.run.castleDown = true` (run.js triggers game over; a
+  standing `keep` would reprieve — keep is v2, ignore).
+- `place.js` (THREE): ghost-preview placement. Listens `placement-begin({cardId})`: enter ghost mode, follow
+  `pickGround` hover, show validity tint; on valid click → `economy.placeBuilding`, `spend(card.cost)`, remove
+  card from hand (`hand.consume(cardId)`), `fx.placePop`, `playSfx('place')`, `emit('card-played',{card})`,
+  `emit('placement-end')`; on right-click/Esc → `emit('placement-end')` no spend. Also the **building mesh
+  reconciler** via `loop.onRender`: build meshes for new `state.placed` entries lacking `group`, remove meshes
+  for destroyed ones. `initPlacement()` wires listeners + reconciler.
+
+### W2-Cards — `cards/hand.js` (logic), `cards/draft.js` (logic)
+- `hand.js`: `drawStarting()` (5 tier-1 cards into hand), `draw(n)`, `consume(cardId)` (remove one from hand,
+  `emit('hand-changed')`), `playCard(cardId) -> {pending?:bool}`: if `canAfford` fails → no-op; if card.type
+  ==='building' → `emit('placement-begin',{cardId})`, return `{pending:true}` (place.js finishes it); else
+  resolve now — unit→`createUnit` near castle + `spend` + `consume`; upgrade→apply to `state.playerStats` or
+  run upgrades + `spend` + `consume`; action→effect (`gain`/`healAll`/`areaDamage`) + `spend` + `consume`; then
+  `emit('card-played')`. `initHand()` if any per-frame need (likely none).
+- `draft.js`: `rollDraft() -> card[3]` from the unlocked pool [all tier-1 cards ∪ `state.meta.unlockedCards`]
+  filtered `tier<=state.run.tier`, seeded by `makeRng(`${state.run.seed}:draft:${state.run.round}`)`;
+  `chooseDraft(cardId)` → add to hand (respect `HAND_CAP`), if new add to `state.meta.unlockedCards`
+  (permanent unlock), then `advanceToNextRound()`. `initDraft()` → `registerSystems({rollDraft})`.
+
+### W2-RTS — `rts/input.js`, `rts/selection.js`, `rts/commands.js` (three: uses `pick`/`pickGround`)
+- `input.js`: pointer/keys → routes via `scene.pick`. LEFT-click: tile/enemy → `combat.resolveClick`
+  (respect `state.playerStats.clickCooldown`; `fx`/`playSfx` on result), unit → select. Box-drag → box-select.
+  RIGHT-click: issue order to selection (`commands.move`/`attack` based on `pick.kind`). Keys: `A` attack-move,
+  `S` stop. Suppress selection/click while a placement is active (track via `placement-begin`/`placement-end`).
+  `initInput(canvas)` attaches listeners.
+- `selection.js`: `select(ids)`, `addToSelection`, `boxSelect(rectWorld)`, `clearSelection`, manage
+  `state.selection`, `emit('unit-selected',{ids})`.
+- `commands.js`: `move(ids, tile)`, `attack(ids, targetId)`, `attackMove(ids, tile)`, `stop(ids)` — set each
+  unit's `order` per the protocol above.
+
+### Integrator owns (Wave-2 wiring, NOT agents)
+`roundPayout(round)` (resources scaled by round + `xp`), `recomputeTier()` (round≥4 ⇒ tier 2 for v1),
+creating the **castle** logic instance in `state.placed` at run start, calling every `init*()`, and
+`drawStarting()` at run start. Adds `state.run.castleDown` handling is already in run.js.
