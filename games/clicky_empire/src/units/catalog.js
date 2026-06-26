@@ -25,7 +25,30 @@ export const UNITS = {
     foodCost: 1,
     color: 0x5b8def,
   },
-  // --- Wave 1 Catalogs agent: add spearman, archer_band (v1) here.
+  spearman: {
+    id: "spearman",
+    name: "Spearman",
+    hp: 5, // 5 standing figures — medium HP, holds a line
+    damage: 2,
+    range: 1.1, // slightly longer reach (spears); anti-charge
+    attackSpeed: 0.9,
+    moveSpeed: 2.0,
+    tags: ["MELEE", "CHARGE"], // bonus damage vs FAST enemies
+    foodCost: 2,
+    color: 0x4a6fb5,
+  },
+  archer_band: {
+    id: "archer_band",
+    name: "Archer Band",
+    hp: 3, // 3 standing figures — fragile if reached
+    damage: 2,
+    range: 4.0, // ranged group, fires from a distance
+    attackSpeed: 1.1,
+    moveSpeed: 2.1,
+    tags: ["RANGED"],
+    foodCost: 2,
+    color: 0x6fb56f,
+  },
 };
 
 export function getUnitDef(id) {
