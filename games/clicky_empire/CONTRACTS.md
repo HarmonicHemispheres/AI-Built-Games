@@ -381,4 +381,70 @@ world-space rect (computed by `input.js` via `pickGround` at the drag corners) s
 `roundPayout(round)` (resources scaled by round + `xp`), `recomputeTier()` (round≥4 ⇒ tier 2 for v1),
 creating the **castle** logic instance in `state.placed` at run start, calling every `init*()`,
 `drawStarting()` at run start, and `on('combat-hit', …) → fx.floatingNumber`. `state.run.castleDown`
-handling is already in run.js.
+handling is already in run.js. **Done in Stage-2 integration** (`main.js` + `app.js`): all of the above,
+plus the `app.js` run-flow controller. **Fog-of-war expansion clicks + tile-revealed mesh refresh are also
+integrator-owned** (Wave-3 integration), NOT the UI agent.
+
+---
+
+## 15. Wave 3 — UI (solo agent: `W3-UI`)
+
+One agent owns ALL of: `index.html` HUD/menu markup (fill the existing mount points), `styles/main.css`
+(append component styles below the marked line), `styles/theme.css` (tokens only), and `src/ui/*`. No other
+agent runs concurrently. Do NOT edit any `src/` file outside `src/ui/`, nor any central file.
+
+### The app/control API the UI calls (already on `main`)
+- `app.js`: `startRun({mapSize, seed})`, `returnToMenu()`, `setSpeed(n)`.
+- `run.js`: `startAttackPhase()` (the DEFEND button).
+- `cards/hand.js`: `playCard(cardId)` (building cards trigger ghost placement via place.js automatically).
+- `cards/draft.js`: `chooseDraft(cardId)`.
+- `cards/catalog.js`: `CARDS`, `getCard` (for the collection screen).
+- `persistence.js`: `saveMeta()`, `wipeSave()`.
+- `state.js`: `state`, `SCENE`, `PHASE`, `on`, `emit`, `HAND_CAP`. `loop.js`: `onRender`.
+
+### Scene visibility is already handled
+`main.js` toggles `#menu-scene/#config-scene/#draft-scene/#result-scene/#cards-scene/#stats-scene/
+#settings-scene` and `#game-hud` based on `state.scene` (via `scene-changed`). The UI just FILLS those
+containers and wires buttons; it must change scenes by calling `app.*`/`setScene` or by emitting events that
+flip `state.scene` (e.g. menu PLAY → `setScene(SCENE.CONFIG)`; START → `app.startRun(...)`).
+
+### `src/ui/index.js`
+- Export `initUI()` that calls `initHud()`, `initMenu()`, `initCards()`, `initOverlays()`. The integrator calls
+  `initUI()` once in `main.js`. (This is the single entry point — keep the name exact.)
+
+### `src/ui/hud.js` — `initHud()`
+- Top bar (`#top-bar`): the four resources (gold/wood/iron/food) with per-round delta, round #, XP/tier meter,
+  seed (mono), build-phase timer. Castle HP banner (read `state.placed.find(b=>b.defId==='castle')` hp/maxHp;
+  pulse red when low). Refresh via `loop.onRender` (cheap DOM writes; only touch nodes whose value changed).
+- Bottom bar (`#bottom-bar`): hand container (delegate rendering to cards_ui), the **DEFEND** button
+  (`onclick → startAttackPhase()`, only meaningful in BUILD phase), and speed buttons 1×/2×/3× (`→ setSpeed`).
+- Selected-unit panel (`#selected-panel`): on `unit-selected`, show the first selected unit's name + figure-count
+  HP + damage/range; hide when selection empty.
+
+### `src/ui/cards_ui.js` — `initCards()`
+- Render `state.hand` into the bottom-bar hand container on `hand-changed` (and once at run start). Each card
+  shows name/type/cost; click (or drag onto the board) → `playCard(card.id)`. Dim/disable cards the player
+  can't afford (compare `state.resources`).
+- Draft screen (`#draft-scene`): on `scene-changed` to `SCENE.DRAFT`, render `state.draftOptions` as choosable
+  cards; click → `chooseDraft(card.id)`.
+
+### `src/ui/menu.js` — `initMenu()`
+- Main menu (`#menu-scene`): title + PLAY / CARDS / STATS / SETTINGS. PLAY → `setScene(SCENE.CONFIG)`.
+- Config (`#config-scene`): map size (3/4/5) + optional seed input; START → `app.startRun({mapSize, seed})`;
+  BACK → `setScene(SCENE.MENU)`.
+- Cards collection (`#cards-scene`): show all `CARDS` — unlocked (in `state.meta.unlockedCards` or tier 1) in
+  full, locked as silhouettes. BACK → menu.
+- Stats (`#stats-scene`): `state.records` (best round, total runs, kills, renown). BACK → menu.
+- Settings (`#settings-scene`): sfx/music volume sliders → write `state.meta.settings` + `saveMeta()`; WIPE SAVE
+  → `wipeSave()` then reload/refresh menu. BACK → menu.
+
+### `src/ui/overlays.js` — `initOverlays()`
+- `#overlay-root`: WAVE INCOMING banner on `wave-incoming`; tier-unlock toast on `tier-unlocked`.
+- Result screen (`#result-scene`): on `game-over` show rounds survived + kills (from payload + `state.records`);
+  MAIN MENU button → `app.returnToMenu()`.
+
+### Verify
+- `node --check` every `src/ui/*.js` file (must pass). Confirm every imported symbol resolves to a real export
+  in the merged tree (grep the source modules). The UI is DOM+three-adjacent so it can't be node-unit-tested;
+  do a careful self-review against this section and ensure `initUI()` and all button handlers reference only
+  the documented APIs. Optionally add `ui_harness.html` notes, but the real smoke is the integrated `index.html`.
