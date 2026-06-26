@@ -55,6 +55,14 @@ export function setSpeed(n) {
   state.speed = n;
 }
 
+// Rebuild tile + fog meshes from current revealed/frontier state. Called after
+// a fog-of-war expansion reveals a new tile (integrator wires it to
+// `tile-revealed`). Buildings/units/enemies have their own reconcilers.
+export function refreshWorldMeshes() {
+  clearWorldMeshes();
+  buildWorldMeshes();
+}
+
 // --- World mesh management (tiles + fog are built manually here) -------------
 
 function buildWorldMeshes() {

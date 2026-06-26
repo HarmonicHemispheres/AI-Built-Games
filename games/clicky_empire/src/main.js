@@ -5,12 +5,13 @@
 // ============================================================================
 
 import { state, SCENE, addResource } from "./state.js";
-import { initScene, render, cameraApi } from "./render/scene.js";
+import { initScene, render, cameraApi, pick } from "./render/scene.js";
 import { updateRun, registerSystems } from "./run.js";
 import { runUpdaters, runRenderers } from "./loop.js";
 import { loadSave, saveMeta } from "./persistence.js";
 import { on } from "./util/events.js";
-import { returnToMenu } from "./app.js";
+import { returnToMenu, refreshWorldMeshes } from "./app.js";
+import { expandTo, canExpandTo } from "./world/expand.js";
 // Wave 1 render/audio subsystems.
 import { initFx, floatingNumber } from "./render/fx.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
@@ -27,6 +28,8 @@ import { initUpkeep } from "./units/upkeep.js";
 import { initEnemiesLogic } from "./enemies/behavior.js";
 import { initSpawner } from "./enemies/spawner.js";
 import { initInput } from "./rts/input.js";
+// Wave 3 UI (ui/* owned by the UI agent; integrator just initializes it here).
+import { initUI } from "./ui/index.js";
 
 // Map of scene id -> DOM element id, for show/hide.
 const SCENE_DOM = {
@@ -66,9 +69,16 @@ function init() {
   initHand();
   initDraft();
   initInput(canvas);
+  setupExpansionInput(canvas);
+
+  // Wave 3 UI layer.
+  initUI();
 
   // Integrator-owned round systems: payout + tier from round number.
   registerSystems({ roundPayout, recomputeTier, save: saveMeta });
+
+  // Fog-of-war: rebuild tile/fog meshes whenever a tile is revealed.
+  on("tile-revealed", () => refreshWorldMeshes());
 
   // Reflect scene changes onto the DOM overlays + in-run HUD.
   on("scene-changed", ({ scene }) => applySceneDom(scene));
@@ -119,6 +129,39 @@ function applySceneDom(scene) {
   }
   const hud = document.getElementById("game-hud");
   if (hud) hud.classList.toggle("hidden", scene !== SCENE.RUN);
+}
+
+// --- Fog-of-war expansion clicks (integrator-owned) -------------------------
+// RTS input ignores 'fog' picks; the integrator handles them. A clean left
+// click (no drag) on a frontier fog tile spends gold to reveal it. Suppressed
+// during building placement so the ghost owns the pointer.
+function setupExpansionInput(canvas) {
+  let placing = false;
+  on("placement-begin", () => (placing = true));
+  on("placement-end", () => (placing = false));
+
+  let downX = 0;
+  let downY = 0;
+  let isLeftDown = false;
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 0) {
+      isLeftDown = true;
+      downX = e.clientX;
+      downY = e.clientY;
+    }
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (e.button !== 0 || !isLeftDown) return;
+    isLeftDown = false;
+    if (placing || state.scene !== SCENE.RUN) return;
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // a drag, not a click
+    const hit = pick(e);
+    if (!hit || hit.kind !== "fog") return;
+    const { col, row } = hit.tile;
+    if (canExpandTo(col, row) && expandTo(col, row)) {
+      playSfx("coin");
+    }
+  });
 }
 
 // --- Camera controls (integrator-owned; stable across waves) ----------------
