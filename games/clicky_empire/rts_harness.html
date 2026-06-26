@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clicky Empire — RTS Harness (W2-RTS)</title>
+
+  <!-- Same importmap as index.html: Three.js pinned, no bundler. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #1a1f29; overflow: hidden; }
+    #game-canvas { width: 100vw; height: 100vh; display: block; }
+    #hud {
+      position: fixed; top: 8px; left: 8px; z-index: 10;
+      font: 12px/1.5 system-ui, sans-serif; color: #eaf2fb;
+      background: rgba(20,24,30,0.6); padding: 8px 10px; border-radius: 6px;
+      max-width: 380px;
+    }
+    #hud b { color: #ffd24a; }
+    #log { white-space: pre-wrap; max-height: 220px; overflow-y: auto; margin-top: 6px;
+           font: 11px/1.4 ui-monospace, monospace; }
+    button { font: 12px system-ui; margin: 2px 2px 0 0; cursor: pointer; }
+    .pill { display:inline-block; padding:1px 6px; border-radius:8px; background:#33405a; }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="hud">
+    <div><b>RTS harness</b> — manual browser check for rts/input + selection + commands</div>
+    <div style="margin-top:4px; opacity:0.85">
+      LEFT-click unit = select · LEFT-drag = box-select · LEFT-click tile/enemy = clicker ·
+      RIGHT-click = move/attack · key <b>A</b> then LEFT-click = attack-move · key <b>S</b> = stop
+    </div>
+    <div style="margin-top:6px">
+      <button id="b-begin">placement-begin</button>
+      <button id="b-end">placement-end</button>
+      <button id="b-clearlog">clear log</button>
+    </div>
+    <div style="margin-top:4px">
+      placement: <span id="placement" class="pill">off</span>
+      &nbsp; selection: <span id="sel" class="pill">[]</span>
+    </div>
+    <div id="log"></div>
+    <div style="margin-top:4px; opacity:0.8">Middle-drag pan · wheel zoom · Q/E rotate (main.js-style)</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { initScene, render, layers, cameraApi } from "./src/render/scene.js";
+    import { initFx } from "./src/render/fx.js";
+    import { runRenderers } from "./src/loop.js";
+    import { tileToWorld, tileKey } from "./src/util/math.js";
+    import { getTileType, TILE } from "./src/world/tiles.js";
+    import { state } from "./src/state.js";
+    import { on, emit } from "./src/util/events.js";
+    import { initInput } from "./src/rts/input.js";
+
+    // ---- on-screen logging ----
+    const logEl = document.getElementById("log");
+    const lines = [];
+    function log(m) {
+      lines.unshift(m);
+      if (lines.length > 40) lines.pop();
+      logEl.textContent = lines.join("\n");
+    }
+    // Mirror the real events so we can SEE routing happen.
+    on("unit-selected", (p) => { log("unit-selected -> " + JSON.stringify(p.ids)); refresh(); });
+    on("resource-changed", (p) => log("resource-changed -> " + p.type + " +" + p.amount + " (=" + p.total + ")"));
+    on("enemy-killed", (p) => log("enemy-killed -> " + (p?.enemy?.id ?? "?")));
+
+    // ---- scene ----
+    const canvas = document.getElementById("game-canvas");
+    initScene(canvas);
+    initFx();
+
+    // ---- seed a minimal run state ----
+    state.scene = "run";
+    state.playerStats = {
+      attackChance: 1, attackDamage: 2, critChance: 0.25,
+      harvestChance: 1, harvestYield: 1, clickCooldown: 120,
+    };
+    state.map = { size: 5, seed: "RTS", tiles: new Map(), revealed: new Set(),
+                  castle: { col: 0, row: 0 }, bounds: { minCol:-2,maxCol:2,minRow:-2,maxRow:2 } };
+    state.units = [];
+    state.enemies = [];
+    state.selection = [];
+
+    // ---- ground tiles you can click (tile instances + simple meshes) ----
+    // One forest (wood), one ore (gold/iron) so the clicker path is visible.
+    function addTile(col, row, type) {
+      const tdef = getTileType(type);
+      const inst = { col, row, ...tdef };
+      state.map.tiles.set(tileKey(col, row), inst);
+      const mat = new THREE.MeshStandardMaterial({ color: tdef.color, roughness: 1 });
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.2, 0.94), mat);
+      const w = tileToWorld(col, row, 0.1);
+      mesh.position.set(w.x, w.y, w.z);
+      mesh.userData = { kind: "tile", id: tileKey(col, row) };
+      layers.tiles.add(mesh);
+    }
+    addTile(-2, -2, TILE.FOREST);
+    addTile(-1, -2, TILE.ORE);
+    addTile(0, -2, TILE.BERRY);
+
+    // ---- fake unit / enemy groups with correct userData {kind,id} ----
+    function fakeFigureGroup(colorHex, hp) {
+      const group = new THREE.Group();
+      const figs = [];
+      for (let i = 0; i < hp; i++) {
+        const m = new THREE.Mesh(
+          new THREE.CapsuleGeometry(0.08, 0.18, 3, 6),
+          new THREE.MeshStandardMaterial({ color: colorHex })
+        );
+        const a = (i / hp) * Math.PI * 2;
+        m.position.set(Math.cos(a) * 0.18, 0.2, Math.sin(a) * 0.18);
+        m.userData = { standing: true };
+        group.add(m);
+        figs.push(m);
+      }
+      group.userData.figures = figs;
+      return group;
+    }
+
+    function addUnit(id, col, row) {
+      const g = fakeFigureGroup(0x5b8def, 5); // player blue
+      const w = tileToWorld(col, row);
+      g.position.set(w.x, 0, w.z);
+      g.userData = { ...g.userData, kind: "unit", id };
+      layers.units.add(g);
+      state.units.push({
+        id, unitId: "militia", pos: { x: w.x, y: 0, z: w.z },
+        hp: 5, maxHp: 5, stance: "defensive", order: null, group: g,
+      });
+    }
+    function addEnemy(id, col, row) {
+      const g = fakeFigureGroup(0xd6533c, 4); // enemy red
+      const w = tileToWorld(col, row);
+      g.position.set(w.x, 0, w.z);
+      g.userData = { ...g.userData, kind: "enemy", id };
+      layers.enemies.add(g);
+      state.enemies.push({
+        id, enemyId: "raider", pos: { x: w.x, y: 0, z: w.z },
+        hp: 4, maxHp: 4, def: { id: "raider", reward: { gold: 2 } }, group: g,
+      });
+    }
+
+    addUnit("u1", 0, 0);
+    addUnit("u2", 1, 0);
+    addUnit("u3", -1, 1);
+    addEnemy("e1", 1, 2);
+    addEnemy("e2", -2, 2);
+
+    cameraApi.centerOn(0, 0);
+
+    // ---- wire the RTS input layer (the thing under test) ----
+    initInput(canvas);
+
+    // Watch unit.order changes by polling each frame and logging diffs.
+    const lastOrder = new Map();
+    function watchOrders() {
+      for (const u of state.units) {
+        const cur = JSON.stringify(u.order);
+        if (lastOrder.get(u.id) !== cur) {
+          lastOrder.set(u.id, cur);
+          if (u.order) log("order[" + u.id + "] = " + cur);
+        }
+      }
+    }
+
+    // ---- placement-suppression test buttons ----
+    document.getElementById("b-begin").onclick = () => { emit("placement-begin", { cardId: "lumber_camp" }); log("emit placement-begin (LEFT/RIGHT now suppressed)"); refresh(); };
+    document.getElementById("b-end").onclick = () => { emit("placement-end"); log("emit placement-end (input live again)"); refresh(); };
+    document.getElementById("b-clearlog").onclick = () => { lines.length = 0; logEl.textContent = ""; };
+
+    function refresh() {
+      document.getElementById("sel").textContent = JSON.stringify(state.selection);
+    }
+    // There's no public getter for placementActive; reflect our own emits.
+    on("placement-begin", () => document.getElementById("placement").textContent = "ON");
+    on("placement-end", () => document.getElementById("placement").textContent = "off");
+
+    // ---- main.js-style camera controls so the scene is navigable ----
+    window.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "q") cameraApi.rotateYaw(-1);
+      if (e.key.toLowerCase() === "e") cameraApi.rotateYaw(1);
+    });
+    let panning = false, lx = 0, ly = 0;
+    canvas.addEventListener("pointerdown", (e) => { if (e.button === 1) { panning = true; lx = e.clientX; ly = e.clientY; } });
+    window.addEventListener("pointerup", () => { panning = false; });
+    window.addEventListener("pointermove", (e) => {
+      if (!panning) return;
+      cameraApi.panBy((lx - e.clientX) * 0.02, (ly - e.clientY) * 0.02);
+      lx = e.clientX; ly = e.clientY;
+    });
+    canvas.addEventListener("wheel", (e) => { cameraApi.zoomBy(Math.sign(e.deltaY) * 1.4); e.preventDefault(); }, { passive: false });
+
+    // ---- render loop ----
+    let last = performance.now();
+    function frame(now) {
+      const dt = (now - last) / 1000; last = now;
+      watchOrders();
+      runRenderers(dt);
+      render();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    refresh();
+    log("ready: 3 units (blue), 2 enemies (red), 3 clickable tiles.");
+
+    window.CE = { state, layers, cameraApi };
+  </script>
+</body>
+</html>
