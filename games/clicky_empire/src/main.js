@@ -4,20 +4,32 @@
 // agents never edit this file.
 // ============================================================================
 
-import { state, SCENE, setScene, newRun } from "./state.js";
+import { state, SCENE, setScene, newRun, addResource } from "./state.js";
 import { initScene, render, cameraApi, layers } from "./render/scene.js";
-import { updateRun } from "./run.js";
+import { updateRun, registerSystems } from "./run.js";
 import { runUpdaters, runRenderers } from "./loop.js";
-import { loadSave } from "./persistence.js";
+import { loadSave, saveMeta } from "./persistence.js";
 import { makeRng, randSeedString } from "./util/rng.js";
 import { on } from "./util/events.js";
 // Wave 1 subsystems wired by the integrator.
 import { generateMap } from "./world/generate.js";
 import { frontier } from "./world/expand.js";
-import { buildTileMesh, buildFogMesh, buildBuildingMesh } from "./render/meshes.js";
-import { initFx } from "./render/fx.js";
+import { buildTileMesh, buildFogMesh } from "./render/meshes.js";
+import { initFx, floatingNumber } from "./render/fx.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
 import { initMusic, setMusicPhase } from "./audio/music.js";
+// Wave 2 subsystems.
+import { initHand, drawStarting } from "./cards/hand.js";
+import { initDraft } from "./cards/draft.js";
+import { initEconomy, placeBuilding } from "./buildings/economy.js";
+import { initDefense } from "./buildings/defense.js";
+import { initPlacement } from "./buildings/place.js";
+import { initUnitsLogic } from "./units/behavior.js";
+import { initUnitsRender } from "./units/group.js";
+import { initUpkeep } from "./units/upkeep.js";
+import { initEnemiesLogic } from "./enemies/behavior.js";
+import { initSpawner } from "./enemies/spawner.js";
+import { initInput } from "./rts/input.js";
 
 // Map of scene id -> DOM element id, for show/hide.
 const SCENE_DOM = {
@@ -39,9 +51,27 @@ function init() {
   const canvas = document.getElementById("game-canvas");
   initScene(canvas);
   setupCameraControls(canvas);
+
+  // Wave 1 render/audio subsystems.
   initFx();
   initAudio();
   initMusic();
+
+  // Wave 2 subsystems self-register their logic systems / render reconcilers.
+  initEconomy();
+  initDefense();
+  initPlacement();
+  initUnitsLogic();
+  initUnitsRender();
+  initUpkeep();
+  initEnemiesLogic();
+  initSpawner();
+  initHand();
+  initDraft();
+  initInput(canvas);
+
+  // Integrator-owned round systems: payout + tier from round number.
+  registerSystems({ roundPayout, recomputeTier, save: saveMeta });
 
   // Reflect scene changes onto the DOM overlays + in-run HUD.
   on("scene-changed", ({ scene }) => applySceneDom(scene));
@@ -51,12 +81,39 @@ function init() {
   on("phase-changed", ({ phase }) => setMusicPhase(phase === "attack" ? "combat" : "build"));
   on("wave-incoming", () => playSfx("klaxon"));
 
+  // Logic emits combat-hit; the integrator renders the floating damage number.
+  on("combat-hit", ({ x, z, amount, crit }) =>
+    floatingNumber({ x, y: 0.8, z }, String(Math.round(amount)), crit ? 0xffd24a : 0xffffff),
+  );
+
+  // Records + persistence on game over.
+  on("game-over", ({ round, kills }) => {
+    state.records.totalRuns += 1;
+    state.records.totalKills += kills;
+    if (round > state.records.bestRound) state.records.bestRound = round;
+    saveMeta();
+  });
+
   // Stage 1 has no menu UI yet (Wave 3). Boot straight into a demo run so the
-  // generated map + meshes + camera are verifiable. Wave 3 replaces this with
-  // the real menu → config → run flow.
+  // full systems loop is exercisable. Wave 3 replaces this with the real
+  // menu → config → run flow.
   bootDemoRun();
 
   requestAnimationFrame(loop);
+}
+
+// Resource + XP payout when an attack round is cleared (scaled by round).
+function roundPayout(round) {
+  addResource("gold", 10 + round * 5);
+  addResource("wood", 8 + round * 3);
+  addResource("food", 5 + round * 2);
+  addResource("iron", round * 2);
+  state.run.xp += round * 10;
+}
+
+// v1: tier from round number (T2 ~round 4). T3 cards are out of v1 scope.
+function recomputeTier() {
+  return state.run.round >= 8 ? 3 : state.run.round >= 4 ? 2 : 1;
 }
 
 function applySceneDom(scene) {
@@ -79,14 +136,21 @@ function bootDemoRun() {
   generateMap(seed, state.run.mapSize);
   buildMapMeshes();
 
+  // The castle is a real building instance (lose condition). The placement
+  // reconciler (buildings/place.js) builds its mesh on the next frame.
   const c = state.map.castle ?? { col: 0, row: 0 };
+  placeBuilding("castle", c.col, c.row);
+
+  // Deal the opening hand of 5 tier-1 cards.
+  drawStarting();
+
   cameraApi.centerOn(c.col, c.row);
   setScene(SCENE.RUN);
 }
 
-// Build meshes for every revealed tile, the frontier fog, and the castle.
-// (Wave 2 placement/expansion will incrementally add/remove meshes; this is the
-// initial build for a fresh map.)
+// Build meshes for every revealed tile and the frontier fog. Buildings/units/
+// enemies are rendered by their own reconcilers; the castle is created as a
+// logic instance in bootDemoRun.
 function buildMapMeshes() {
   for (const key of state.map.revealed) {
     const tile = state.map.tiles.get(key);
@@ -94,11 +158,6 @@ function buildMapMeshes() {
   }
   for (const f of frontier()) {
     layers.fog.add(buildFogMesh(f.col, f.row));
-  }
-  const c = state.map.castle;
-  if (c) {
-    const castle = buildBuildingMesh("castle", { col: c.col, row: c.row, id: "castle" });
-    layers.buildings.add(castle);
   }
 }
 

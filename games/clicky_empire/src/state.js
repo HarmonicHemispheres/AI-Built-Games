@@ -121,6 +121,8 @@ export function newRun({ seed, mapSize }) {
     startedAt: 0, // stamped by caller (Date.now unavailable in pure logic)
     revealedCount: 0,
     reprieveUsed: false, // keep one-time castle reprieve
+    upgrades: [], // run-scoped target-scoped upgrade descriptors (walls/ranged/etc.)
+    castleDown: false,
   };
   state.resources = { gold: 0, wood: 0, iron: 0, food: 0 };
   state.playerStats = { ...BASE_STATS };
