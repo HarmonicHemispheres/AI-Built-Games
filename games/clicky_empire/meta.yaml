@@ -23,3 +23,27 @@ built_with:
 
 # Assets (paths are relative to this game's folder)
 entry: index.html
+banner: unit_style.png
+
+# Detail page content
+description: >
+  Clicky Empire blends three loops into short, replayable runs. Click tiles to
+  harvest gold, wood, iron, and food; spend them to place buildings and raise an
+  economy; then survive escalating attack waves that path toward your castle. Each
+  round you draft a new card from a permanently-growing collection. Rendered in true
+  3D low-poly with Three.js on a seeded, fog-of-war map you expand at your own risk.
+  Lose the castle and the run ends — survive as long as you can.
+features:
+  - Three genres in one — clicker, city-builder, and roguelite
+  - True 3D low-poly world rendered with Three.js (no build step)
+  - Seeded, shareable procedural maps with fog-of-war expansion
+  - Card drafting across tiers with permanent between-run unlocks
+  - Figure-cluster units whose standing soldiers ARE their health
+  - Two-phase loop: build your economy, then DEFEND against the wave
+controls:
+  - Left-click — harvest a tile / attack an enemy / select a unit
+  - Left-drag — box-select units
+  - Right-click — move or attack-move selected units
+  - Drag a card from your hand to play it; click fog tiles to expand
+  - WASD / edge-scroll / middle-drag — pan · wheel — zoom · Q / E — rotate
+  - DEFEND — end the build phase early and start the wave
