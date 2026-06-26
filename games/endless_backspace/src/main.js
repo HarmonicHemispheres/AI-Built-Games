@@ -189,7 +189,31 @@ function enterRun() {
   );
   journal.render();
 
-  interactSys = new InteractSystem(player, world, state, hud, journal, flashlight);
+  interactSys = new InteractSystem(player, world, state, hud, journal, flashlight, {
+    onLevelTransition: () => {
+      // Toggle between level 0 (ground) and level 1 (subsector B) for V1.
+      const targetLevel = world.currentLevel === 0 ? 1 : 0;
+      // Drop player back at origin of the target level. For level 0 it's the start cubicle.
+      // For level 1 it's the stairwell_arrival chunk at (0,0). Position the player a couple
+      // of meters in from the door so they're not clipped into a wall.
+      world.switchToLevel(targetLevel, 0, 0);
+      const entry = world.loaded.get("0,0");
+      if (entry) {
+        // Drop at the chunk's center.
+        const cx = entry.ocx * 8 + 4;
+        const cz = entry.ocz * 8 + 4;
+        player.position.set(cx, 1.6, cz);
+        state.run.player.pos.x = cx;
+        state.run.player.pos.y = 1.6;
+        state.run.player.pos.z = cz;
+        state.run.player.yaw = 0;
+        state.run.player.pitch = 0;
+        player.yaw = 0;
+        player.pitch = 0;
+      }
+      hud.toast(targetLevel === 0 ? "Subsector A" : "Subsector B");
+    },
+  });
 
   pauseUi = new PauseUi(els, state, {
     onResume: () => resumeFromPause(),
@@ -370,13 +394,18 @@ function tick() {
     const [pcx, pcz] = world.chunkOf(player.position.x, player.position.z);
     world.update(pcx, pcz);
 
-    // Per-frame light pass: cull lights in chunks more than LIGHT_RADIUS away from the player
-    // (cheap perf cap — forward renderers slow down quickly with many active point lights), and
-    // run the flicker animation on those still active.
+    // Per-frame light pass: cull lights in chunks more than LIGHT_RADIUS away from the player.
+    // For multi-cell rooms (e.g. 2x2 grand lobby), use the nearest footprint cell so a light
+    // in the back of a big room still activates when the player is in the front.
     const LIGHT_RADIUS = 1;
     const now = performance.now() * 0.001;
     for (const entry of world.loaded.values()) {
-      const cd = Math.max(Math.abs(entry.cx - pcx), Math.abs(entry.cz - pcz));
+      const fp = entry.footprint ?? [[0, 0]];
+      let cd = Infinity;
+      for (const [dx, dz] of fp) {
+        const d = Math.max(Math.abs(entry.ocx + dx - pcx), Math.abs(entry.ocz + dz - pcz));
+        if (d < cd) cd = d;
+      }
       const active = cd <= LIGHT_RADIUS;
       entry.group.traverse((obj) => {
         if (!obj.isPointLight) return;

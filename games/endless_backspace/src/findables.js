@@ -180,6 +180,13 @@ export function findableMesh(type) {
       m.rotation.y = (Math.random() - 0.5) * 0.6;
       return m;
     }
+    case "door_up":
+    case "door_down": {
+      // Invisible volume — the visible door is rendered by the chunk builder; this is just a
+      // raycast target with no geometry of its own. Three.js still needs an Object3D for the
+      // group hierarchy + userData, so return a tiny empty Object3D.
+      return new THREE.Object3D();
+    }
     default: {
       const g = new THREE.BoxGeometry(0.1, 0.1, 0.1);
       return new THREE.Mesh(g, sharedMats.paper);

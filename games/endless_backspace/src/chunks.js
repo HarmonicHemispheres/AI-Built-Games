@@ -65,7 +65,104 @@ function buildFloorCeiling(group, opts = {}) {
   group.add(ceil);
 }
 
-// Build perimeter walls of a chunk with door openings on the listed sockets.
+// Build a perimeter around the union of footprint cells, with a door opening on each
+// (cellOffset, side) listed in `sockets`. Skips any wall segment that's internal to the
+// footprint (between two cells of the same room). Coordinates are room-local: cell [dx, dz]
+// covers world-local (dx*CHUNK_SIZE..(dx+1)*CHUNK_SIZE, dz*CHUNK_SIZE..(dz+1)*CHUNK_SIZE).
+function buildFootprintPerimeter(group, footprint, sockets) {
+  const cellSet = new Set(footprint.map(([dx, dz]) => `${dx},${dz}`));
+  const walls = [];
+
+  function addWallBox(x, z, w, d) {
+    walls.push({ x, z, w, d });
+    addBox(group, mats.wall, x, 0, z, w, WALL_HEIGHT, d);
+    const trimOut = 0.012;
+    addBox(group, mats.wallTrim, x - trimOut, 0, z - trimOut, w + trimOut * 2, 0.18, d + trimOut * 2);
+  }
+  function addLintel(x, y, z, w, h, d) {
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats.wall);
+    lintel.position.set(x + w / 2, y + h / 2, z + d / 2);
+    group.add(lintel);
+  }
+  const hasSocket = (dx, dz, side) =>
+    sockets.some((s) => s.cell[0] === dx && s.cell[1] === dz && s.side === side);
+
+  // Per-cell perimeter: for each cell, examine each side; if the neighbor cell is part of the
+  // footprint, skip the wall (it's interior). Otherwise build a wall (with optional door cut).
+  for (const [dx, dz] of footprint) {
+    const cx0 = dx * CHUNK_SIZE;
+    const cz0 = dz * CHUNK_SIZE;
+    const cx1 = cx0 + CHUNK_SIZE;
+    const cz1 = cz0 + CHUNK_SIZE;
+
+    // North side (z = cz0)
+    if (!cellSet.has(`${dx},${dz - 1}`)) {
+      if (hasSocket(dx, dz, "N")) {
+        const seg = CHUNK_SIZE / 2 - DOOR_HALF;
+        addWallBox(cx0, cz0, seg, WALL_THICKNESS);
+        addWallBox(cx0 + CHUNK_SIZE / 2 + DOOR_HALF, cz0, seg, WALL_THICKNESS);
+        addLintel(cx0 + CHUNK_SIZE / 2 - DOOR_HALF, WALL_HEIGHT - 0.5, cz0, DOOR_HALF * 2, 0.5, WALL_THICKNESS);
+      } else {
+        addWallBox(cx0, cz0, CHUNK_SIZE, WALL_THICKNESS);
+      }
+    }
+    // South side (z = cz1 - WALL_THICKNESS)
+    if (!cellSet.has(`${dx},${dz + 1}`)) {
+      if (hasSocket(dx, dz, "S")) {
+        const seg = CHUNK_SIZE / 2 - DOOR_HALF;
+        addWallBox(cx0, cz1 - WALL_THICKNESS, seg, WALL_THICKNESS);
+        addWallBox(cx0 + CHUNK_SIZE / 2 + DOOR_HALF, cz1 - WALL_THICKNESS, seg, WALL_THICKNESS);
+        addLintel(cx0 + CHUNK_SIZE / 2 - DOOR_HALF, WALL_HEIGHT - 0.5, cz1 - WALL_THICKNESS, DOOR_HALF * 2, 0.5, WALL_THICKNESS);
+      } else {
+        addWallBox(cx0, cz1 - WALL_THICKNESS, CHUNK_SIZE, WALL_THICKNESS);
+      }
+    }
+    // East side (x = cx1 - WALL_THICKNESS)
+    if (!cellSet.has(`${dx + 1},${dz}`)) {
+      if (hasSocket(dx, dz, "E")) {
+        const seg = CHUNK_SIZE / 2 - DOOR_HALF;
+        addWallBox(cx1 - WALL_THICKNESS, cz0, WALL_THICKNESS, seg);
+        addWallBox(cx1 - WALL_THICKNESS, cz0 + CHUNK_SIZE / 2 + DOOR_HALF, WALL_THICKNESS, seg);
+        addLintel(cx1 - WALL_THICKNESS, WALL_HEIGHT - 0.5, cz0 + CHUNK_SIZE / 2 - DOOR_HALF, WALL_THICKNESS, 0.5, DOOR_HALF * 2);
+      } else {
+        addWallBox(cx1 - WALL_THICKNESS, cz0, WALL_THICKNESS, CHUNK_SIZE);
+      }
+    }
+    // West side (x = cx0)
+    if (!cellSet.has(`${dx - 1},${dz}`)) {
+      if (hasSocket(dx, dz, "W")) {
+        const seg = CHUNK_SIZE / 2 - DOOR_HALF;
+        addWallBox(cx0, cz0, WALL_THICKNESS, seg);
+        addWallBox(cx0, cz0 + CHUNK_SIZE / 2 + DOOR_HALF, WALL_THICKNESS, seg);
+        addLintel(cx0, WALL_HEIGHT - 0.5, cz0 + CHUNK_SIZE / 2 - DOOR_HALF, WALL_THICKNESS, 0.5, DOOR_HALF * 2);
+      } else {
+        addWallBox(cx0, cz0, WALL_THICKNESS, CHUNK_SIZE);
+      }
+    }
+  }
+
+  return { walls };
+}
+
+// Build floor + ceiling planes for every cell in the footprint.
+function buildFootprintFloorCeiling(group, footprint, opts = {}) {
+  const floorMat = opts.floorMat ?? mats.floor;
+  const ceilMat = opts.ceilMat ?? mats.ceiling;
+  for (const [dx, dz] of footprint) {
+    const cx = dx * CHUNK_SIZE + CHUNK_SIZE / 2;
+    const cz = dz * CHUNK_SIZE + CHUNK_SIZE / 2;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(cx, 0, cz);
+    group.add(floor);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE), ceilMat);
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(cx, WALL_HEIGHT, cz);
+    group.add(ceil);
+  }
+}
+
+// Single-cell perimeter (preserved for compatibility with existing builders).
 function buildPerimeter(group, sockets) {
   const walls = [];
 
@@ -568,7 +665,115 @@ function buildStairwell(socket, rng) {
 
   // Single overhead light — concrete echoes
   buildCeilingLight(group, CHUNK_SIZE / 2, CHUNK_SIZE / 2, 0xfff0d8, 1.3, rng() < 0.2);
-  return { group, walls, interactables: [], kind: "stairwell" };
+
+  // The staircase itself is the interactable trigger. Place the prompt point ~0.3m in front
+  // of the foot of the stairs (on the player side), so when the player approaches the
+  // staircase and looks at it, they get the "ascend / descend" prompt within the 2.4m
+  // raycast range. Without this, the stairs block the player from getting close enough to
+  // the visual door at the top.
+  let promptX, promptZ;
+  if (opp === "N") {
+    promptX = baseX + STEP_W / 2;
+    promptZ = baseZ + 0.3;            // baseZ is south edge of step 0 when ascending north
+  } else if (opp === "S") {
+    promptX = baseX + STEP_W / 2;
+    promptZ = baseZ - 0.3;            // baseZ is north edge of step 0 when ascending south
+  } else if (opp === "E") {
+    promptX = baseX - 0.3;            // baseX is west edge of step 0 when ascending east
+    promptZ = baseZ + STEP_W / 2;
+  } else {
+    promptX = baseX + 0.3;            // baseX is east edge of step 0 when ascending west
+    promptZ = baseZ + STEP_W / 2;
+  }
+
+  const interactables = [{
+    type: "door_up",
+    id: `door_up`, // world streamer suffixes with chunk coords for uniqueness
+    persistent: true,
+    x: promptX, y: 1.5, z: promptZ,
+  }];
+
+  return { group, walls, interactables, kind: "stairwell" };
+}
+
+// 2x2 grand lobby: single external entry on one side, big open 16×16 interior.
+// Four variants generated by build-side: N / S / E / W. Footprint and entry cell are
+// computed so the entry cell is on the corresponding edge of the 2×2 block.
+function buildGrandLobby(entrySide, rng) {
+  const group = new THREE.Group();
+
+  // Footprint always [[0,0],[1,0],[0,1],[1,1]]. Entry cell MUST match the registry's
+  // entryCell for this variant — the planner positions the room based on the registry.
+  const footprint = [[0, 0], [1, 0], [0, 1], [1, 1]];
+  let entryCell;
+  if (entrySide === "N") entryCell = [0, 0];
+  else if (entrySide === "S") entryCell = [0, 1];
+  else if (entrySide === "W") entryCell = [0, 0];
+  else entryCell = [1, 0]; // E
+
+  buildFootprintFloorCeiling(group, footprint, { floorMat: mats.floorTile });
+  const sockets = [{ cell: entryCell, side: entrySide }];
+  const { walls } = buildFootprintPerimeter(group, footprint, sockets);
+
+  // Center the lobby visually around (CHUNK_SIZE, CHUNK_SIZE)
+  const cx = CHUNK_SIZE;     // center x of the 2x2 block
+  const cz = CHUNK_SIZE;     // center z
+
+  // Government seal centered on the floor
+  const seal = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 0.04, 48), mats.seal);
+  seal.position.set(cx, 0.02, cz);
+  group.add(seal);
+
+  // Four columns at the inner-corner positions
+  for (const [px, pz] of [
+    [cx - 3.6, cz - 3.6], [cx + 3.6, cz - 3.6],
+    [cx - 3.6, cz + 3.6], [cx + 3.6, cz + 3.6],
+  ]) {
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, WALL_HEIGHT, 16), mats.column);
+    col.position.set(px, WALL_HEIGHT / 2, pz);
+    group.add(col);
+    walls.push({ x: px - 0.42, z: pz - 0.42, w: 0.84, d: 0.84 });
+  }
+
+  // L-shaped reception counter against one wall (opposite the entry side)
+  const counterMat = mats.reception;
+  const topMat = mats.receptionTop;
+  if (entrySide === "S" || entrySide === "N") {
+    // counter on E wall
+    addBox(group, counterMat, cx + 5.2, 0, cz - 2.4, 0.7, 1.05, 4.8);
+    addBox(group, topMat, cx + 5.2, 1.05, cz - 2.4, 0.7, 0.05, 4.8);
+    walls.push({ x: cx + 5.2, z: cz - 2.4, w: 0.7, d: 4.8 });
+  } else {
+    // counter on N wall
+    addBox(group, counterMat, cx - 2.4, 0, cz - 5.0, 4.8, 1.05, 0.7);
+    addBox(group, topMat, cx - 2.4, 1.05, cz - 5.0, 4.8, 0.05, 0.7);
+    walls.push({ x: cx - 2.4, z: cz - 5.0, w: 4.8, d: 0.7 });
+  }
+
+  // Lounge cluster — six chairs in two rows around the seal
+  for (let i = 0; i < 3; i++) {
+    const cxi = cx - 1.6 + i * 1.6;
+    addBox(group, mats.velvet, cxi, 0.4, cz - 3.2, 0.6, 0.06, 0.6);
+    addBox(group, mats.velvet, cxi, 0.4, cz - 2.6, 0.6, 0.5, 0.06);
+    addBox(group, mats.velvet, cxi, 0.4, cz + 2.6, 0.6, 0.06, 0.6);
+    addBox(group, mats.velvet, cxi, 0.4, cz + 2.6, 0.6, 0.5, 0.06);
+  }
+
+  // Four ceiling lights — one per cell — for proper grand-lobby illumination
+  for (const [dx, dz] of footprint) {
+    buildCeilingLight(group, dx * CHUNK_SIZE + CHUNK_SIZE / 2, dz * CHUNK_SIZE + CHUNK_SIZE / 2,
+      0xfff6dc, 1.6, false);
+  }
+
+  const interactables = [];
+  if (rng() < 0.6) {
+    interactables.push({
+      type: "document",
+      id: `doc_${Math.floor(rng() * 1e9).toString(36)}`,
+      x: cx - 1.0, y: 1.12, z: cz - 4.8,
+    });
+  }
+  return { group, walls, interactables, kind: "grand_lobby" };
 }
 
 function buildDeadEnd(rng) {
@@ -580,6 +785,11 @@ function buildDeadEnd(rng) {
 }
 
 // ---------- chunk type registry ----------
+// Each entry supports two layouts:
+//   - Single-cell (default): { sockets: ["N", "S"], weight, build }
+//     Implicitly footprint = [[0,0]] and entry cell = [0, 0].
+//   - Multi-cell: { footprint: [[dx,dz]...], entryCell: [dx,dz], sockets: ["N"], weight, build }
+//     Sockets are ALL on the entry cell; perimeter walls on other cells are solid.
 
 export const CHUNK_TYPES = {
   start_cubicle: { sockets: ["S"], weight: 0, build: (rng) => buildStartCubicle(rng) },
@@ -604,15 +814,22 @@ export const CHUNK_TYPES = {
   cubicle_farm_ns: { sockets: ["N", "S"], weight: 1.2, build: (rng) => buildCubicleFarm(["N", "S"], rng) },
   cubicle_farm_ew: { sockets: ["E", "W"], weight: 1.2, build: (rng) => buildCubicleFarm(["E", "W"], rng) },
 
-  // Large rooms — sparse but present.
+  // Large 1×1 rooms — sparse but present.
   foyer: { sockets: ["N", "S", "E", "W"], weight: 1.0, build: (rng) => buildFoyer(["N", "S", "E", "W"], rng) },
-  lobby: { sockets: ["N", "S", "E", "W"], weight: 1.2, build: (rng) => buildLobby(rng) },
+  lobby: { sockets: ["N", "S", "E", "W"], weight: 1.0, build: (rng) => buildLobby(rng) },
+
+  // 2×2 GRAND LOBBY variants — entry on one side only, big 16x16 interior. Footprint covers
+  // 4 cells; entryCell varies per variant so the door is on the appropriate edge.
+  grand_lobby_n: { footprint: [[0,0],[1,0],[0,1],[1,1]], entryCell: [0,0], sockets: ["N"], weight: 0.5, build: (rng) => buildGrandLobby("N", rng) },
+  grand_lobby_s: { footprint: [[0,0],[1,0],[0,1],[1,1]], entryCell: [0,1], sockets: ["S"], weight: 0.5, build: (rng) => buildGrandLobby("S", rng) },
+  grand_lobby_w: { footprint: [[0,0],[1,0],[0,1],[1,1]], entryCell: [0,0], sockets: ["W"], weight: 0.5, build: (rng) => buildGrandLobby("W", rng) },
+  grand_lobby_e: { footprint: [[0,0],[1,0],[0,1],[1,1]], entryCell: [1,0], sockets: ["E"], weight: 0.5, build: (rng) => buildGrandLobby("E", rng) },
 
   // Labs — 2-socket pass-throughs, distinct floor + props.
   lab_ns: { sockets: ["N", "S"], weight: 1.5, build: (rng) => buildLab(["N", "S"], rng) },
   lab_ew: { sockets: ["E", "W"], weight: 1.5, build: (rng) => buildLab(["E", "W"], rng) },
 
-  // Stairwells — visual descent to a sealed lower-level door. Single-socket.
+  // Stairwells — sealed door at top is an interactable that transitions levels.
   stairwell_n: { sockets: ["N"], weight: 0.8, build: (rng) => buildStairwell("N", rng) },
   stairwell_s: { sockets: ["S"], weight: 0.8, build: (rng) => buildStairwell("S", rng) },
   stairwell_e: { sockets: ["E"], weight: 0.8, build: (rng) => buildStairwell("E", rng) },
@@ -621,6 +838,18 @@ export const CHUNK_TYPES = {
   // Dead-end cap is only placed when no compatible chunk fits.
   dead_end: { sockets: [], weight: 0, build: (rng) => buildDeadEnd(rng) },
 };
+
+// Normalize chunk type metadata — single-cell shorthand fills in defaults.
+for (const def of Object.values(CHUNK_TYPES)) {
+  if (!def.footprint) def.footprint = [[0, 0]];
+  if (!def.entryCell) def.entryCell = [0, 0];
+}
+
+// Get the maximum chunk distance from origin cell to any footprint cell — used by streamer
+// to decide load/unload bounds for multi-cell rooms.
+export function footprintCells(def) {
+  return def.footprint ?? [[0, 0]];
+}
 
 export function oppositeSocket(side) {
   switch (side) {

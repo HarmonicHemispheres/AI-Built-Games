@@ -3,13 +3,18 @@ import { CHUNK_TYPES, CHUNK_SIZE, neighborCoord, oppositeSocket } from "./chunks
 import { chunkRng, weightedPick } from "./rng.js";
 import { findableMesh } from "./findables.js";
 
-// World owns the streaming + generator.
-// - Chunks live on integer grid (cx, cz).
-// - The start cubicle is (0, 0).
-// - Chunks load when within `loadRadius` of player chunk, unload at `unloadRadius`.
-// - Layout is deterministic from the master seed: a chunk's type is picked once from
-//   the source socket that first brought us to it; we record `chunkPlan[key]` so re-entry
-//   rebuilds identically without keeping geometry in memory.
+// World owns:
+//   - Per-level chunk planning + streaming
+//   - Collision + raycast against the active level's loaded chunks
+//   - Level transitions (up/down stairs)
+//
+// Chunks live on a 2D integer grid (cx, cz) per level. Multi-cell rooms occupy a contiguous
+// footprint of cells but expose external sockets only on the entry cell (others are interior).
+// `chunkPlan` entries are tagged:
+//   { kind: "origin", typeId, ocx, ocz, footprint, entryCell, sockets }
+//   { kind: "claim",  ocx, ocz }   // non-origin cell of a multi-cell room; ocx/ocz point to origin
+
+const STARTER_TYPE_PER_LEVEL = (level) => (level === 0 ? "start_cubicle" : "stairwell_n");
 
 export class World {
   constructor(scene, seed, opts = {}) {
@@ -17,199 +22,332 @@ export class World {
     this.seed = seed;
     this.loadRadius = opts.loadRadius ?? 3;
     this.unloadRadius = opts.unloadRadius ?? 5;
-    this.chunkPlan = new Map();   // "cx,cz" -> { typeId, sockets }
-    this.loaded = new Map();      // "cx,cz" -> { group, walls, interactables, typeId, cx, cz }
-    this.frontier = [];           // { fromCx, fromCz, side } — open sockets waiting on a neighbor
-    this.foundIds = opts.foundIds ?? new Set(); // suppress already-collected interactables
+    this.foundIds = opts.foundIds ?? new Set();
     this.onChunkLoaded = opts.onChunkLoaded ?? (() => {});
-    this._planStart();
+    this.onLevelChanged = opts.onLevelChanged ?? (() => {});
+
+    this.levels = new Map(); // level (number) -> LevelData
+    this.currentLevel = 0;
+    this._ensureLevel(0);
+  }
+
+  // ---------- level management ----------
+
+  _ensureLevel(level) {
+    if (this.levels.has(level)) return this.levels.get(level);
+    const data = {
+      level,
+      chunkPlan: new Map(),
+      loaded: new Map(),
+      frontier: [],
+    };
+    // Plant the starter chunk for this level.
+    const typeId = STARTER_TYPE_PER_LEVEL(level);
+    const def = CHUNK_TYPES[typeId];
+    data.chunkPlan.set(this.key(0, 0), {
+      kind: "origin",
+      typeId,
+      ocx: 0, ocz: 0,
+      footprint: def.footprint,
+      entryCell: def.entryCell,
+      sockets: def.sockets.slice(),
+    });
+    for (const side of def.sockets) {
+      data.frontier.push({ fromCx: 0, fromCz: 0, side });
+    }
+    this.levels.set(level, data);
+    return data;
+  }
+
+  _level() {
+    return this.levels.get(this.currentLevel);
+  }
+
+  get loaded() { return this._level().loaded; }
+  get chunkPlan() { return this._level().chunkPlan; }
+  get frontier() { return this._level().frontier; }
+
+  // Unload all of the current level's chunks from the scene, switch to a new level (creating
+  // it if needed), and immediately stream around the player's target position so the first
+  // frame on the new level has geometry.
+  switchToLevel(newLevel, playerTargetCx, playerTargetCz) {
+    if (newLevel === this.currentLevel) return;
+    // Unload current level's geometry
+    for (const [, entry] of this._level().loaded) {
+      entry.group.traverse((o) => o.geometry?.dispose?.());
+      this.scene.remove(entry.group);
+    }
+    this._level().loaded.clear();
+
+    this.currentLevel = newLevel;
+    this._ensureLevel(newLevel);
+
+    if (playerTargetCx !== undefined && playerTargetCz !== undefined) {
+      this.planUntilContains(playerTargetCx, playerTargetCz);
+      this.update(playerTargetCx, playerTargetCz);
+    }
+    this.onLevelChanged(newLevel);
   }
 
   key(cx, cz) { return `${cx},${cz}`; }
 
-  _planStart() {
-    // Pre-plan the start cubicle so layout is deterministic.
-    const k = this.key(0, 0);
-    this.chunkPlan.set(k, { typeId: "start_cubicle", sockets: CHUNK_TYPES.start_cubicle.sockets });
-    for (const side of CHUNK_TYPES.start_cubicle.sockets) {
-      this.frontier.push({ fromCx: 0, fromCz: 0, side });
-    }
-  }
+  // ---------- chunk placement / planning ----------
 
-  // Determine the type for a chunk based on which side it's being entered from AND on which
-  // adjacent chunks are already planned. Constraints:
-  //   - MUST have a socket on `requiredSocket` (matches the source that brought us here).
-  //   - For every other side: if the neighbor is already planned, our socket on that side must
-  //     match (both open or both sealed). Mismatches create one-sided doorways, so we filter
-  //     them out at pick time.
-  _pickChunkType(cx, cz, requiredSocket) {
-    const rng = chunkRng(this.seed, cx, cz);
+  // Pick a chunk type to satisfy an incoming socket at cell (cx, cz). Considers:
+  //   - existing planned neighbors (avoid one-sided doorways)
+  //   - multi-cell candidates (their footprint cells must all be unplanned)
+  // Returns an object describing the placement: { typeId, originCx, originCz } or null.
+  _pickPlacement(cx, cz, requiredSocket) {
+    const lvl = this._level();
+    const rng = chunkRng(`${this.seed}|L${this.currentLevel}`, cx, cz);
     const must = new Set([requiredSocket]);
     const forbidden = new Set();
     for (const side of ["N", "S", "E", "W"]) {
       if (side === requiredSocket) continue;
       const [ncx, ncz] = neighborCoord(cx, cz, side);
-      const neighbor = this.chunkPlan.get(this.key(ncx, ncz));
-      if (!neighbor) continue; // unconstrained — outer edge stays open for future expansion
-      if (neighbor.sockets.includes(oppositeSocket(side))) must.add(side);
+      const neighborPlan = lvl.chunkPlan.get(this.key(ncx, ncz));
+      if (!neighborPlan) continue;
+      // Resolve to the origin chunk's sockets on its entry cell
+      let originPlan = neighborPlan;
+      if (neighborPlan.kind === "claim") {
+        originPlan = lvl.chunkPlan.get(this.key(neighborPlan.ocx, neighborPlan.ocz));
+      }
+      // Check whether the neighbor's perimeter cell facing back has a matching socket.
+      // For single-cell neighbors this is just `originPlan.sockets.includes(opposite)`.
+      // For multi-cell neighbors, the socket has to be on the cell at (ncx, ncz). The neighbor
+      // exposes sockets only on its entry cell — so a multi-cell neighbor at a non-entry cell
+      // is always sealed on its outer perimeter.
+      const neighborEntryGlobal = [
+        originPlan.ocx + (originPlan.entryCell?.[0] ?? 0),
+        originPlan.ocz + (originPlan.entryCell?.[1] ?? 0),
+      ];
+      const neighborSocketAtThisCell =
+        neighborEntryGlobal[0] === ncx &&
+        neighborEntryGlobal[1] === ncz &&
+        (originPlan.sockets ?? []).includes(oppositeSocket(side));
+      if (neighborSocketAtThisCell) must.add(side);
       else forbidden.add(side);
     }
-    const fits = (def) => {
-      for (const s of must) if (!def.sockets.includes(s)) return false;
-      for (const s of forbidden) if (def.sockets.includes(s)) return false;
-      return true;
-    };
+
+    // Build candidate (type, origin) pairs.
     const candidates = [];
     for (const [id, def] of Object.entries(CHUNK_TYPES)) {
       if (id === "start_cubicle" || id === "dead_end") continue;
       if (def.weight <= 0) continue;
-      if (!fits(def)) continue;
-      candidates.push([id, def.weight]);
+      if (!def.sockets.includes(requiredSocket)) continue;
+
+      // Multi-cell: origin is offset by entryCell so the entry cell aligns with (cx, cz)
+      const ox = cx - def.entryCell[0];
+      const oz = cz - def.entryCell[1];
+
+      // All footprint cells must be unplanned on this level
+      const footprintFree = def.footprint.every(([dx, dz]) =>
+        !lvl.chunkPlan.has(this.key(ox + dx, oz + dz)),
+      );
+      if (!footprintFree) continue;
+
+      // Entry-cell socket constraints (must / forbidden) — only applies to the entry cell
+      // (other footprint cells are interior). For sockets that are required by an already-
+      // planned neighbor of the ENTRY cell, our entry cell must have them; for forbidden,
+      // must not have them.
+      let ok = true;
+      for (const s of must) if (!def.sockets.includes(s)) { ok = false; break; }
+      if (!ok) continue;
+      for (const s of forbidden) if (def.sockets.includes(s)) { ok = false; break; }
+      if (!ok) continue;
+
+      candidates.push([{ typeId: id, originCx: ox, originCz: oz }, def.weight]);
     }
     if (candidates.length > 0) return weightedPick(rng, candidates);
-    // Relaxed pass: drop the forbidden constraint (accept a one-sided doorway as the lesser
-    // of two evils) but still respect required sockets so connectivity to source holds.
+
+    // Relaxed: drop forbidden, accept one-sided doorways
     const relaxed = [];
     for (const [id, def] of Object.entries(CHUNK_TYPES)) {
       if (id === "start_cubicle" || id === "dead_end") continue;
       if (def.weight <= 0) continue;
+      if (!def.sockets.includes(requiredSocket)) continue;
+      const ox = cx - def.entryCell[0];
+      const oz = cz - def.entryCell[1];
+      const footprintFree = def.footprint.every(([dx, dz]) =>
+        !lvl.chunkPlan.has(this.key(ox + dx, oz + dz)),
+      );
+      if (!footprintFree) continue;
       let ok = true;
       for (const s of must) if (!def.sockets.includes(s)) { ok = false; break; }
-      if (ok) relaxed.push([id, def.weight]);
+      if (ok) relaxed.push([{ typeId: id, originCx: ox, originCz: oz }, def.weight]);
     }
     if (relaxed.length > 0) return weightedPick(rng, relaxed);
-    return "dead_end";
+
+    return { typeId: "dead_end", originCx: cx, originCz: cz };
   }
 
   _ensurePlanned(cx, cz, requiredSocket) {
+    const lvl = this._level();
     const k = this.key(cx, cz);
-    if (this.chunkPlan.has(k)) return this.chunkPlan.get(k);
-    const typeId = this._pickChunkType(cx, cz, requiredSocket);
-    const def = CHUNK_TYPES[typeId];
-    const plan = { typeId, sockets: def.sockets.slice() };
-    this.chunkPlan.set(k, plan);
-    // Add its remaining sockets to frontier (excluding the side we came in on).
-    for (const side of def.sockets) {
-      if (side === requiredSocket) continue;
-      this.frontier.push({ fromCx: cx, fromCz: cz, side });
+    if (lvl.chunkPlan.has(k)) return lvl.chunkPlan.get(k);
+    const placement = this._pickPlacement(cx, cz, requiredSocket);
+    const def = CHUNK_TYPES[placement.typeId];
+    const ocx = placement.originCx;
+    const oz = placement.originCz;
+
+    // Origin entry
+    lvl.chunkPlan.set(this.key(ocx, oz), {
+      kind: "origin",
+      typeId: placement.typeId,
+      ocx, ocz: oz,
+      footprint: def.footprint,
+      entryCell: def.entryCell,
+      sockets: def.sockets.slice(),
+    });
+    // Claim non-origin footprint cells (for multi-cell rooms)
+    for (const [dx, dz] of def.footprint) {
+      if (dx === 0 && dz === 0) continue;
+      const cellKey = this.key(ocx + dx, oz + dz);
+      if (lvl.chunkPlan.has(cellKey)) continue; // shouldn't happen — we checked
+      lvl.chunkPlan.set(cellKey, { kind: "claim", ocx, ocz: oz });
     }
-    return plan;
+
+    // Add unsatisfied sockets to frontier (only sockets on the entry cell, minus the side that
+    // brought us here).
+    const entryGlobalCx = ocx + def.entryCell[0];
+    const entryGlobalCz = oz + def.entryCell[1];
+    for (const side of def.sockets) {
+      if (entryGlobalCx === cx && entryGlobalCz === cz && side === requiredSocket) continue;
+      lvl.frontier.push({ fromCx: entryGlobalCx, fromCz: entryGlobalCz, side });
+    }
+    return lvl.chunkPlan.get(k);
   }
 
-  _loadChunk(cx, cz) {
-    const k = this.key(cx, cz);
-    if (this.loaded.has(k)) return;
-    const plan = this.chunkPlan.get(k);
-    if (!plan) return; // not planned yet
-    const def = CHUNK_TYPES[plan.typeId];
-    const rng = chunkRng(this.seed, cx, cz);
+  // ---------- chunk loading ----------
+
+  _loadOriginChunk(originPlan) {
+    const lvl = this._level();
+    const k = this.key(originPlan.ocx, originPlan.ocz);
+    if (lvl.loaded.has(k)) return;
+    const def = CHUNK_TYPES[originPlan.typeId];
+    const rng = chunkRng(`${this.seed}|L${this.currentLevel}`, originPlan.ocx, originPlan.ocz);
     const built = def.build(rng);
-    built.group.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
+
+    // Position the room so its local origin = world (ocx*CHUNK_SIZE, 0, ocz*CHUNK_SIZE).
+    built.group.position.set(originPlan.ocx * CHUNK_SIZE, 0, originPlan.ocz * CHUNK_SIZE);
     this.scene.add(built.group);
 
-    // Offset walls into world coordinates
+    // World-coord walls
     const worldWalls = built.walls.map((w) => ({
-      x: w.x + cx * CHUNK_SIZE,
-      z: w.z + cz * CHUNK_SIZE,
+      x: w.x + originPlan.ocx * CHUNK_SIZE,
+      z: w.z + originPlan.ocz * CHUNK_SIZE,
       w: w.w,
       d: w.d,
     }));
 
-    // Place interactable meshes (skip ones already collected)
+    // Place interactable meshes (skip already-collected ones).
+    // For multi-instance interactables that need a unique id per chunk (e.g. door_up), suffix
+    // the id with the chunk's origin coords.
     const placedInteractables = [];
     for (const it of built.interactables) {
-      if (this.foundIds.has(it.id)) continue;
+      const persistent = !!it.persistent;
+      const baseId = it.id;
+      const id = persistent ? `${baseId}@L${this.currentLevel}_${originPlan.ocx}_${originPlan.ocz}` : baseId;
+      if (!persistent && this.foundIds.has(id)) continue;
       const mesh = findableMesh(it.type);
-      mesh.position.set(it.x + cx * CHUNK_SIZE, it.y, it.z + cz * CHUNK_SIZE);
-      mesh.userData = { interactable: { ...it, worldX: mesh.position.x, worldZ: mesh.position.z } };
+      mesh.position.set(it.x + originPlan.ocx * CHUNK_SIZE, it.y, it.z + originPlan.ocz * CHUNK_SIZE);
+      mesh.userData = {
+        interactable: { ...it, id, worldX: mesh.position.x, worldZ: mesh.position.z },
+      };
       built.group.add(mesh);
-      placedInteractables.push({ ...it, mesh, worldX: mesh.position.x, worldZ: mesh.position.z });
+      placedInteractables.push({
+        ...it, id, mesh,
+        worldX: mesh.position.x, worldZ: mesh.position.z,
+      });
     }
 
     const entry = {
       group: built.group,
       walls: worldWalls,
       interactables: placedInteractables,
-      typeId: plan.typeId,
-      cx, cz,
+      typeId: originPlan.typeId,
+      ocx: originPlan.ocx,
+      ocz: originPlan.ocz,
+      footprint: originPlan.footprint,
     };
-    this.loaded.set(k, entry);
+    lvl.loaded.set(k, entry);
     this.onChunkLoaded(entry);
   }
 
-  _unloadChunk(cx, cz) {
-    const k = this.key(cx, cz);
-    const entry = this.loaded.get(k);
+  _unloadOriginChunk(originKey) {
+    const lvl = this._level();
+    const entry = lvl.loaded.get(originKey);
     if (!entry) return;
-    // Dispose geometry to avoid GPU leaks during long sessions
-    entry.group.traverse((obj) => {
-      if (obj.geometry) obj.geometry.dispose?.();
-    });
+    entry.group.traverse((o) => o.geometry?.dispose?.());
     this.scene.remove(entry.group);
-    this.loaded.delete(k);
+    lvl.loaded.delete(originKey);
   }
 
-  // Plan-only (no mesh build) expansion until a target chunk is planned or the frontier dies.
-  // Used on resume so the streamer has plan data ready before the first paint.
+  // Plan-only expansion until a target cell is planned (used on resume + level switch).
   planUntilContains(targetCx, targetCz, maxIter = 5000) {
+    const lvl = this._level();
     const target = this.key(targetCx, targetCz);
     let iter = 0;
-    while (this.frontier.length > 0 && iter < maxIter) {
-      if (this.chunkPlan.has(target)) return true;
-      const f = this.frontier.shift();
+    while (lvl.frontier.length > 0 && iter < maxIter) {
+      if (lvl.chunkPlan.has(target)) return true;
+      const f = lvl.frontier.shift();
       const [ncx, ncz] = neighborCoord(f.fromCx, f.fromCz, f.side);
-      const k = this.key(ncx, ncz);
-      if (this.chunkPlan.has(k)) { iter++; continue; }
+      if (lvl.chunkPlan.has(this.key(ncx, ncz))) { iter++; continue; }
       this._ensurePlanned(ncx, ncz, oppositeSocket(f.side));
       iter++;
     }
-    return this.chunkPlan.has(target);
+    return lvl.chunkPlan.has(target);
   }
 
-  // Called every frame with current player chunk coord.
+  // Streaming pass — called every frame.
   update(playerCx, playerCz) {
-    // 1) Expand the plan from frontier sockets within load radius.
+    const lvl = this._level();
+
+    // 1) Expand frontier within load radius.
     const stillPending = [];
-    for (const f of this.frontier) {
+    for (const f of lvl.frontier) {
       const [ncx, ncz] = neighborCoord(f.fromCx, f.fromCz, f.side);
       const dist = Math.max(Math.abs(ncx - playerCx), Math.abs(ncz - playerCz));
       if (dist > this.loadRadius + 1) {
         stillPending.push(f);
         continue;
       }
-      const k = this.key(ncx, ncz);
-      if (this.chunkPlan.has(k)) {
-        // Already planned; just verify socket compatibility (if not compatible, leave a sealed
-        // cap on this side by skipping placement — handled implicitly: walls stay closed).
-        continue;
-      }
-      const required = oppositeSocket(f.side);
-      this._ensurePlanned(ncx, ncz, required);
+      if (lvl.chunkPlan.has(this.key(ncx, ncz))) continue;
+      this._ensurePlanned(ncx, ncz, oppositeSocket(f.side));
     }
-    this.frontier = stillPending;
+    lvl.frontier = stillPending;
 
-    // 2) Load every planned chunk within load radius.
-    for (const [k, plan] of this.chunkPlan) {
-      if (this.loaded.has(k)) continue;
-      const [cx, cz] = k.split(",").map(Number);
-      const dist = Math.max(Math.abs(cx - playerCx), Math.abs(cz - playerCz));
-      if (dist <= this.loadRadius) {
-        this._loadChunk(cx, cz);
-      }
+    // 2) Load every origin chunk whose footprint intersects the load radius.
+    for (const [, plan] of lvl.chunkPlan) {
+      if (plan.kind !== "origin") continue;
+      const k = this.key(plan.ocx, plan.ocz);
+      if (lvl.loaded.has(k)) continue;
+      const minDist = this._minDistToFootprint(plan, playerCx, playerCz);
+      if (minDist <= this.loadRadius) this._loadOriginChunk(plan);
     }
 
-    // 3) Unload chunks outside unload radius.
-    for (const [k, entry] of this.loaded) {
-      const dist = Math.max(Math.abs(entry.cx - playerCx), Math.abs(entry.cz - playerCz));
-      if (dist > this.unloadRadius) {
-        this._unloadChunk(entry.cx, entry.cz);
-      }
+    // 3) Unload origin chunks whose entire footprint is beyond the unload radius.
+    for (const [k, entry] of lvl.loaded) {
+      const minDist = this._minDistToFootprint(entry, playerCx, playerCz);
+      if (minDist > this.unloadRadius) this._unloadOriginChunk(k);
     }
   }
 
-  // Collision: returns true if a point with `radius` would overlap any wall in loaded chunks.
+  _minDistToFootprint(originLike, playerCx, playerCz) {
+    let best = Infinity;
+    const fp = originLike.footprint ?? [[0, 0]];
+    for (const [dx, dz] of fp) {
+      const d = Math.max(Math.abs(originLike.ocx + dx - playerCx),
+                         Math.abs(originLike.ocz + dz - playerCz));
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  // ---------- collision + raycast ----------
+
   isBlocked(x, z, radius = 0.3) {
-    for (const entry of this.loaded.values()) {
+    for (const entry of this._level().loaded.values()) {
       for (const w of entry.walls) {
         if (
           x + radius > w.x && x - radius < w.x + w.w &&
@@ -222,22 +360,20 @@ export class World {
     return false;
   }
 
-  // Find the nearest interactable in front of the camera within `range`.
   raycastInteractable(originX, originZ, dirX, dirZ, range = 2.0) {
     let best = null;
     let bestT = Infinity;
-    for (const entry of this.loaded.values()) {
+    for (const entry of this._level().loaded.values()) {
       for (const it of entry.interactables) {
         if (it.mesh.userData.collected) continue;
         const dx = it.worldX - originX;
         const dz = it.worldZ - originZ;
-        const t = dx * dirX + dz * dirZ; // distance along ray
+        const t = dx * dirX + dz * dirZ;
         if (t < 0 || t > range) continue;
-        // perpendicular distance from ray
         const px = dx - dirX * t;
         const pz = dz - dirZ * t;
         const perp2 = px * px + pz * pz;
-        if (perp2 > 0.45 * 0.45) continue; // ~ radius around interactable
+        if (perp2 > 0.45 * 0.45) continue;
         if (t < bestT) {
           bestT = t;
           best = it;
@@ -247,7 +383,6 @@ export class World {
     return best;
   }
 
-  // Player-chunk coord of a world position.
   chunkOf(x, z) {
     return [Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)];
   }
@@ -257,7 +392,6 @@ export class World {
     it.mesh.visible = false;
   }
 
-  // Used on resume to mark all known foundIds as collected (suppresses re-spawn).
   registerFound(id) {
     this.foundIds.add(id);
   }
