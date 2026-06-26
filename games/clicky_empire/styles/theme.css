@@ -1,0 +1,37 @@
+/* Palette + design tokens (CSS variables). Owned by Stage 0 base; the Wave 3
+   UI agent extends this with component styles. Keep this file to tokens only. */
+:root {
+  /* Surface / ink */
+  --bg: #0e1b14;
+  --panel: #16261c;
+  --panel-2: #1d3326;
+  --ink: #eaf5ec;
+  --ink-dim: #9db5a4;
+  --line: #2c4633;
+
+  /* Brand / accents */
+  --grass: #5aa84b;
+  --grass-deep: #3c7a34;
+  --gold: #e7b84b;
+  --wood: #a9763f;
+  --iron: #9aa7b0;
+  --food: #d65f5f;
+  --renown: #b277e0;
+
+  /* Faction reads */
+  --friendly: #5b8def;
+  --enemy: #d6533c;
+
+  /* State */
+  --danger: #d6533c;
+  --ok: #5aa84b;
+  --warn: #e7b84b;
+
+  /* Type */
+  --font: system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  /* Geometry */
+  --radius: 10px;
+  --shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+}

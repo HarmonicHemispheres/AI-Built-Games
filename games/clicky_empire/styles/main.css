@@ -1,0 +1,45 @@
+/* Base layout + canvas. Stage 0 ships the shell; the Wave 3 UI agent owns the
+   HUD / menu / card component styles appended below the marked line. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  font-family: var(--font);
+  color: var(--ink);
+  user-select: none;
+}
+
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* Scenes are full-screen overlays toggled by the scene manager. */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.hidden { display: none !important; }
+
+/* HUD bars float above the canvas during a run. */
+.hud-bar { position: absolute; z-index: 5; }
+#top-bar { top: 0; left: 0; right: 0; }
+#bottom-bar { bottom: 0; left: 0; right: 0; }
+
+/* ============================================================
+   WAVE 3 UI COMPONENT STYLES BELOW THIS LINE (owned by W3-UI)
+   ============================================================ */

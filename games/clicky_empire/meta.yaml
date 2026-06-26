@@ -1,0 +1,25 @@
+# Identity
+slug: clicky-empire
+title: Clicky Empire
+tagline: Settle, click, build, and defend your castle against escalating roguelite waves.
+
+# Categorization
+category: Strategy
+tags:
+  - clicker
+  - city-builder
+  - roguelite
+  - rts
+  - procedural
+  - 3d
+status: in-development
+
+# Provenance
+created: 2026-06-25
+updated: 2026-06-25
+built_with:
+  provider: anthropic
+  model: Claude Opus 4.8
+
+# Assets (paths are relative to this game's folder)
+entry: index.html

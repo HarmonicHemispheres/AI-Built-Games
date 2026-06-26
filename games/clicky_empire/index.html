@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clicky Empire</title>
+  <link rel="stylesheet" href="styles/theme.css" />
+  <link rel="stylesheet" href="styles/main.css" />
+
+  <!-- Three.js pinned via importmap. No bundler, no build step. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <!-- Three.js renders into this canvas. -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- ============================================================
+         HUD mount points. Stage 0 ships them empty; the Wave 3 UI
+         agent owns and fills this markup. No other agent edits it.
+         ============================================================ -->
+
+    <!-- Main menu scene -->
+    <div id="menu-scene" class="scene"></div>
+
+    <!-- Pregame config (map size + seed) -->
+    <div id="config-scene" class="scene hidden"></div>
+
+    <!-- In-run HUD -->
+    <div id="game-hud" class="hidden">
+      <div id="top-bar" class="hud-bar"></div>
+      <div id="bottom-bar" class="hud-bar"></div>
+      <div id="selected-panel" class="hidden"></div>
+      <div id="minimap" class="hidden"></div>
+      <div id="overlay-root"></div>
+    </div>
+
+    <!-- End-of-round draft -->
+    <div id="draft-scene" class="scene hidden"></div>
+
+    <!-- Game over -->
+    <div id="result-scene" class="scene hidden"></div>
+
+    <!-- Menus: cards collection, stats, settings -->
+    <div id="cards-scene" class="scene hidden"></div>
+    <div id="stats-scene" class="scene hidden"></div>
+    <div id="settings-scene" class="scene hidden"></div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
