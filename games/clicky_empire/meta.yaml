@@ -12,11 +12,11 @@ tags:
   - rts
   - procedural
   - 3d
-status: in-development
+status: prototype
 
 # Provenance
 created: 2026-06-25
-updated: 2026-06-25
+updated: 2026-06-26
 built_with:
   provider: anthropic
   model: Claude Opus 4.8
