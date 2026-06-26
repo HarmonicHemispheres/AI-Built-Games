@@ -5,12 +5,19 @@
 // ============================================================================
 
 import { state, SCENE, setScene, newRun } from "./state.js";
-import { initScene, render, cameraApi } from "./render/scene.js";
+import { initScene, render, cameraApi, layers } from "./render/scene.js";
 import { updateRun } from "./run.js";
 import { runUpdaters, runRenderers } from "./loop.js";
 import { loadSave } from "./persistence.js";
 import { makeRng, randSeedString } from "./util/rng.js";
 import { on } from "./util/events.js";
+// Wave 1 subsystems wired by the integrator.
+import { generateMap } from "./world/generate.js";
+import { frontier } from "./world/expand.js";
+import { buildTileMesh, buildFogMesh, buildBuildingMesh } from "./render/meshes.js";
+import { initFx } from "./render/fx.js";
+import { initAudio, playSfx } from "./audio/sfx.js";
+import { initMusic, setMusicPhase } from "./audio/music.js";
 
 // Map of scene id -> DOM element id, for show/hide.
 const SCENE_DOM = {
@@ -32,13 +39,21 @@ function init() {
   const canvas = document.getElementById("game-canvas");
   initScene(canvas);
   setupCameraControls(canvas);
+  initFx();
+  initAudio();
+  initMusic();
 
   // Reflect scene changes onto the DOM overlays + in-run HUD.
   on("scene-changed", ({ scene }) => applySceneDom(scene));
   applySceneDom(state.scene);
 
-  // Stage 0 has no menu UI yet (Wave 3). Boot straight into a demo run so the
-  // 3D scene + camera are verifiable. Wave 3 replaces this with the real menu.
+  // Audio reactions to the phase machine.
+  on("phase-changed", ({ phase }) => setMusicPhase(phase === "attack" ? "combat" : "build"));
+  on("wave-incoming", () => playSfx("klaxon"));
+
+  // Stage 1 has no menu UI yet (Wave 3). Boot straight into a demo run so the
+  // generated map + meshes + camera are verifiable. Wave 3 replaces this with
+  // the real menu → config → run flow.
   bootDemoRun();
 
   requestAnimationFrame(loop);
@@ -53,15 +68,38 @@ function applySceneDom(scene) {
   if (hud) hud.classList.toggle("hidden", scene !== SCENE.RUN);
 }
 
-// Temporary Stage-0 entry: start a small run and center the camera so the
-// orbit/pan/zoom/rotate controls are testable over the ground plane.
+// Temporary Stage-1 entry: generate a seeded map, build its meshes, drop the
+// castle, and center the camera. Verifies World + Render + scene together.
+// Wave 3 replaces this with the menu/config flow.
 function bootDemoRun() {
   const seed = randSeedString(makeRng(String(performance.now())));
   newRun({ seed, mapSize: 5 });
   state.run.startedAt = Date.now();
-  // World generation lands in Wave 1; for now center on origin.
-  cameraApi.centerOn(2, 2);
+
+  generateMap(seed, state.run.mapSize);
+  buildMapMeshes();
+
+  const c = state.map.castle ?? { col: 0, row: 0 };
+  cameraApi.centerOn(c.col, c.row);
   setScene(SCENE.RUN);
+}
+
+// Build meshes for every revealed tile, the frontier fog, and the castle.
+// (Wave 2 placement/expansion will incrementally add/remove meshes; this is the
+// initial build for a fresh map.)
+function buildMapMeshes() {
+  for (const key of state.map.revealed) {
+    const tile = state.map.tiles.get(key);
+    if (tile) layers.tiles.add(buildTileMesh(tile));
+  }
+  for (const f of frontier()) {
+    layers.fog.add(buildFogMesh(f.col, f.row));
+  }
+  const c = state.map.castle;
+  if (c) {
+    const castle = buildBuildingMesh("castle", { col: c.col, row: c.row, id: "castle" });
+    layers.buildings.add(castle);
+  }
 }
 
 // --- Camera controls (integrator-owned; stable across waves) ----------------
