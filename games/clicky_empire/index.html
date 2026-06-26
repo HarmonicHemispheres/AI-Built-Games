@@ -28,30 +28,193 @@
          ============================================================ -->
 
     <!-- Main menu scene -->
-    <div id="menu-scene" class="scene"></div>
+    <div id="menu-scene" class="scene">
+      <div class="menu-card">
+        <h1 class="game-title">CLICKY<span class="accent">EMPIRE</span></h1>
+        <p class="tagline">Settle the land. Build your realm. Defend the castle.</p>
+        <div class="menu-buttons">
+          <button id="btn-play" class="btn primary">PLAY</button>
+          <button id="btn-cards" class="btn">CARDS</button>
+          <button id="btn-stats" class="btn">STATS</button>
+          <button id="btn-settings" class="btn">SETTINGS</button>
+        </div>
+        <div class="meta-strip">
+          <span>Best round <b id="menu-best">0</b></span>
+          <span>Cards <b id="menu-cards-count">0</b></span>
+          <span>Renown <b id="menu-renown">0</b></span>
+        </div>
+      </div>
+    </div>
 
     <!-- Pregame config (map size + seed) -->
-    <div id="config-scene" class="scene hidden"></div>
+    <div id="config-scene" class="scene hidden">
+      <div class="menu-card">
+        <h2 class="panel-title">NEW REALM</h2>
+        <div class="config-group">
+          <span class="config-label">STARTING MAP SIZE</span>
+          <div id="config-sizes" class="seg-group">
+            <button class="seg-btn" data-size="3">3 &times; 3</button>
+            <button class="seg-btn active" data-size="4">4 &times; 4</button>
+            <button class="seg-btn" data-size="5">5 &times; 5</button>
+          </div>
+        </div>
+        <div class="config-group">
+          <span class="config-label">SEED <em>(blank = random)</em></span>
+          <input id="config-seed" class="text-input" type="text" placeholder="random seed&hellip;" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="menu-buttons row">
+          <button id="btn-config-back" class="btn">BACK</button>
+          <button id="btn-config-start" class="btn primary">START</button>
+        </div>
+      </div>
+    </div>
 
     <!-- In-run HUD -->
     <div id="game-hud" class="hidden">
-      <div id="top-bar" class="hud-bar"></div>
-      <div id="bottom-bar" class="hud-bar"></div>
-      <div id="selected-panel" class="hidden"></div>
+      <div id="top-bar" class="hud-bar">
+        <div class="res-cluster">
+          <div class="res-cell" data-res="gold" title="Gold">
+            <span class="res-icon i-gold">&#9679;</span>
+            <span class="res-amt" id="res-gold">0</span>
+            <span class="res-delta" id="delta-gold"></span>
+          </div>
+          <div class="res-cell" data-res="wood" title="Wood">
+            <span class="res-icon i-wood">&#9650;</span>
+            <span class="res-amt" id="res-wood">0</span>
+            <span class="res-delta" id="delta-wood"></span>
+          </div>
+          <div class="res-cell" data-res="iron" title="Iron">
+            <span class="res-icon i-iron">&#9670;</span>
+            <span class="res-amt" id="res-iron">0</span>
+            <span class="res-delta" id="delta-iron"></span>
+          </div>
+          <div class="res-cell" data-res="food" title="Food">
+            <span class="res-icon i-food">&#9829;</span>
+            <span class="res-amt" id="res-food">0</span>
+            <span class="res-delta" id="delta-food"></span>
+          </div>
+        </div>
+        <div class="hud-sep"></div>
+        <div class="hud-cell">
+          <span class="label">ROUND</span>
+          <span class="value" id="hud-round">1</span>
+        </div>
+        <div class="hud-cell xp-cell">
+          <span class="label">TIER <b id="hud-tier">1</b></span>
+          <div class="xp-meter"><div class="xp-fill" id="hud-xp-fill"></div></div>
+        </div>
+        <div class="hud-cell">
+          <span class="label">SEED</span>
+          <span class="value mono" id="hud-seed">&mdash;</span>
+        </div>
+        <div class="hud-cell phase-cell">
+          <span class="label" id="hud-phase">BUILD</span>
+          <span class="value timer" id="hud-timer">60</span>
+        </div>
+      </div>
+
+      <!-- Castle HP banner (prominent, mirrors top bar) -->
+      <div id="castle-banner" class="castle-banner hidden">
+        <span class="castle-label">CASTLE</span>
+        <div class="castle-hp-bar"><div class="castle-hp-fill" id="castle-hp-fill"></div></div>
+        <span class="castle-hp-text" id="castle-hp-text">0 / 0</span>
+      </div>
+
+      <div id="bottom-bar" class="hud-bar">
+        <div id="hand" class="hand"></div>
+        <div class="bottom-controls">
+          <button id="btn-defend" class="btn primary defend">DEFEND</button>
+          <div class="speed-group" id="speed-group">
+            <button class="speed-btn active" data-speed="1">1&times;</button>
+            <button class="speed-btn" data-speed="2">2&times;</button>
+            <button class="speed-btn" data-speed="3">3&times;</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="selected-panel" class="selected-panel hidden">
+        <div class="sel-name" id="sel-name">&mdash;</div>
+        <div class="sel-bar"><div class="sel-hp-fill" id="sel-hp-fill"></div></div>
+        <div class="sel-stats">
+          <span>HP <b id="sel-hp">&mdash;</b></span>
+          <span>DMG <b id="sel-dmg">&mdash;</b></span>
+          <span>RNG <b id="sel-range">&mdash;</b></span>
+        </div>
+        <div class="sel-tags" id="sel-tags"></div>
+      </div>
+
       <div id="minimap" class="hidden"></div>
       <div id="overlay-root"></div>
     </div>
 
     <!-- End-of-round draft -->
-    <div id="draft-scene" class="scene hidden"></div>
+    <div id="draft-scene" class="scene hidden">
+      <div class="draft-panel">
+        <h2 class="panel-title">CHOOSE A CARD</h2>
+        <p class="panel-sub">Draft one to add to your hand. New cards unlock permanently.</p>
+        <div id="draft-options" class="card-pool"></div>
+      </div>
+    </div>
 
     <!-- Game over -->
-    <div id="result-scene" class="scene hidden"></div>
+    <div id="result-scene" class="scene hidden">
+      <div class="menu-card">
+        <h2 id="result-title" class="result-title">YOUR CASTLE HAS FALLEN</h2>
+        <p class="tagline">The realm remembers your reign.</p>
+        <div class="result-stats">
+          <div class="result-stat"><span class="rs-val" id="result-rounds">0</span><span class="rs-label">ROUNDS SURVIVED</span></div>
+          <div class="result-stat"><span class="rs-val" id="result-kills">0</span><span class="rs-label">ENEMIES SLAIN</span></div>
+          <div class="result-stat"><span class="rs-val" id="result-best">0</span><span class="rs-label">BEST ROUND</span></div>
+        </div>
+        <div class="menu-buttons">
+          <button id="btn-result-menu" class="btn primary">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Menus: cards collection, stats, settings -->
-    <div id="cards-scene" class="scene hidden"></div>
-    <div id="stats-scene" class="scene hidden"></div>
-    <div id="settings-scene" class="scene hidden"></div>
+    <div id="cards-scene" class="scene hidden">
+      <div class="menu-card wide">
+        <h2 class="panel-title">CARD COLLECTION</h2>
+        <p class="panel-sub" id="cards-progress">0 / 0 unlocked</p>
+        <div id="cards-list" class="card-pool"></div>
+        <div class="menu-buttons">
+          <button id="btn-cards-back" class="btn">BACK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stats-scene" class="scene hidden">
+      <div class="menu-card">
+        <h2 class="panel-title">RECORDS</h2>
+        <div class="stat-rows">
+          <div class="stat-row"><span>Best round</span><b id="stat-best">0</b></div>
+          <div class="stat-row"><span>Total runs</span><b id="stat-runs">0</b></div>
+          <div class="stat-row"><span>Total kills</span><b id="stat-kills">0</b></div>
+          <div class="stat-row"><span>Renown earned</span><b id="stat-renown">0</b></div>
+          <div class="stat-row"><span>Cards unlocked</span><b id="stat-cards">0</b></div>
+        </div>
+        <div class="menu-buttons">
+          <button id="btn-stats-back" class="btn">BACK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="settings-scene" class="scene hidden">
+      <div class="menu-card">
+        <h2 class="panel-title">SETTINGS</h2>
+        <label class="setting-row">SFX volume
+          <input id="set-sfx" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="setting-row">Music volume
+          <input id="set-music" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <div class="menu-buttons row">
+          <button id="btn-settings-back" class="btn">BACK</button>
+          <button id="btn-wipe-save" class="btn danger">WIPE SAVE</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="src/main.js"></script>
