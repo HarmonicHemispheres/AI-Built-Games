@@ -198,3 +198,69 @@ areaDamage(center:{x,z}, radius, amount, filter?) , heal(target, amt) , applyBuf
 | `enemies/spawner.js`, `enemies/behavior.js` | W2-Enemies |
 | `rts/input.js`, `rts/selection.js`, `rts/commands.js` | W2-RTS |
 | `ui/*`, `index.html` HUD markup, `styles/*` (components) | W3-UI (solo, Wave 3) |
+
+---
+
+## 13. Wave 1 module exports (locked signatures)
+
+Implement exactly these names so integration glue and downstream waves resolve. Add private helpers
+freely; keep the public surface as specified.
+
+### `world/generate.js` (pure logic — no three/DOM)
+- `generateMap(seed, size) -> map` — mutates and returns `state.map`. Fills `tiles:Map<key,tileInstance>`
+  for a generous area, reveals the central `size×size` block, forces `castle` on the exact center tile
+  (terrain normalized to grasslands), sets `bounds`. A tile instance is
+  `{ col, row, type, ...getTileType(type) }` (spread the type def so callers read buildable/walkable/clickYield).
+  Uses biome-weighted noise via `makeRng(seed)` so the same seed reproduces the same map.
+- `tileAt(col,row) -> tileInstance | null` (reads `state.map.tiles`).
+- `rollTileType(col, row, rng) -> typeString` — exported so `expand.js` reuses the same biome weighting.
+
+### `world/expand.js` (pure logic)
+- `expansionCost(revealedCount) -> number` — `Math.ceil(5 * revealedCount ** 1.15)`. Strictly increasing.
+- `frontier() -> [{col,row,cost}]` — fog tiles 4-adjacent to a revealed tile.
+- `canExpandTo(col,row) -> boolean` — is frontier & affordable (gold).
+- `expandTo(col,row) -> boolean` — if valid: `spend({gold:cost})`, roll type, add to `tiles`/`revealed`,
+  update `bounds` and `state.run.revealedCount`, `emit('tile-revealed',{col,row})`. Returns success.
+
+### `world/pathfind.js` (pure logic)
+- `isWalkable(col,row) -> boolean` — from the tile's `walkable` (unrevealed/missing = false).
+- `findPath(start, goal) -> [{col,row}...] | null` — A*/BFS over revealed walkable tiles, 4-neighbour.
+- `nearestWalkableToward(from, goal) -> {col,row}` — fallback step when no full path.
+
+### `combat/damage.js` (pure logic) — see §9
+- `applyDamage(target, amount, opts={}) -> { dealt, killed }`, `resolveHit(attacker, target) -> { dealt, killed, crit }`.
+
+### `combat/clicker.js` (pure logic) — see §9
+- `resolveClick(target, playerStats) -> { type, amount, killed? }`. For tiles: rolls harvest chance/yield →
+  `addResource`. For enemies: rolls attack chance, crit (×3), `applyDamage`. Respects nothing about cooldown
+  (caller enforces `clickCooldown`).
+
+### `combat/effects.js` (pure logic)
+- `areaDamage(center, radius, amount, filter?) -> hitCount`, `heal(target, amt)`, `applyBuff(target, buff)`.
+
+### `render/meshes.js` (three) — builders return `THREE.Object3D` with correct `userData`
+- `buildTileMesh(tile) -> Object3D` (`userData={kind:'tile', id:tileKey(col,row)}`, positioned via `tileToWorld`).
+- `buildFogMesh(col,row) -> Object3D` (`kind:'fog'`).
+- `buildBuildingMesh(defId, opts?) -> Object3D` (`kind:'building'`).
+- `buildUnitGroup(unitDef, hp) -> Object3D` (`kind:'unit'`; a cluster of `hp` low-poly figures + center pole/flag;
+  expose per-figure children so fx can topple them, e.g. `group.userData.figures = [meshes]`).
+- `buildEnemyGroup(enemyDef, hp) -> Object3D` (`kind:'enemy'`; same figure-cluster pattern).
+- `disposeMesh(obj)` — free geometry/material and detach.
+
+### `render/fx.js` (three)
+- `initFx()` — registers an `onRender` updater for particles/shake/floating-number lifetimes.
+- `floatingNumber(worldPos, text, colorHex)`, `harvestPop(worldPos, resourceType)`,
+  `toppleFigure(unitOrEnemyGroup, figureIndex)`, `placePop(group)`, `screenShake(amount)`.
+
+### `cards/catalog.js`, `units/catalog.js`, `enemies/catalog.js` (pure data)
+- Fill the full **v1** sets from prompt.md keyed by id (see DEV_PLAN §8 scope guard). Keep `getCard`/
+  `cardsAtOrBelowTier`/`getUnitDef`/`getEnemyDef` working. Building cards' `effect.defId` and unit cards'
+  `effect.unitId` must reference real ids. Also add **building defs** the economy/defense systems read:
+  export `BUILDINGS` from `cards/catalog.js`? No — put building runtime defs in a new file
+  `buildings/catalog.js`? That's Wave 2. For Wave 1, just ensure card `effect` descriptors are complete.
+
+### `audio/sfx.js`, `audio/music.js` (WebAudio; synthesize tones, NO external asset files for v1)
+- `sfx.js`: `initAudio()`, `playSfx(name)` for names `harvest|attack|crit|place|click|death|coin|klaxon`.
+  Lazy-resume the AudioContext on first user gesture. Respect `state.meta.settings.sfxVolume`.
+- `music.js`: `initMusic()`, `setMusicPhase('build'|'combat')` with a short crossfade. Respect `musicVolume`.
+  Degrade gracefully (no throw) if WebAudio is unavailable.
