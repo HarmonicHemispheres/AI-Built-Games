@@ -45,7 +45,34 @@ export const TILE_TYPES = {
     adjacency: null,
     color: 0x3a78c2,
   },
-  // --- Wave 1 World agent: complete MOUNTAIN, ORE, BERRY below to this schema.
+  [TILE.MOUNTAIN]: {
+    type: TILE.MOUNTAIN,
+    buildable: false,
+    walkable: false,
+    clickYield: null,
+    adjacency: "mountain", // mines get an adjacency bonus next to it
+    color: 0x7d8794,
+  },
+  [TILE.ORE]: {
+    type: TILE.ORE,
+    buildable: true,
+    walkable: true,
+    // click -> gold or iron (50/50). weighted[] form.
+    clickYield: [
+      { resource: "gold", amount: 1, weight: 1 },
+      { resource: "iron", amount: 1, weight: 1 },
+    ],
+    adjacency: "ore", // mines placed here yield iron faster
+    color: 0xb0764a,
+  },
+  [TILE.BERRY]: {
+    type: TILE.BERRY,
+    buildable: true,
+    walkable: true,
+    clickYield: { resource: "food", amount: 1 },
+    adjacency: "berry", // farms / granaries get an adjacency bonus here
+    color: 0x9c4fa0,
+  },
 };
 
 export function getTileType(type) {
