@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clicky Empire — Audio Harness</title>
+
+  <!-- Same importmap as index.html (kept in sync; audio doesn't use three,
+       but importing it keeps the module-resolution environment identical). -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1f3a24;
+      color: #eafce0;
+      margin: 0;
+      padding: 24px;
+    }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 28px; opacity: 0.85; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+    button {
+      background: #3b7a44;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:hover { background: #4a9a55; }
+    button.phase { background: #6a4ea0; }
+    button.phase.active { background: #b07ddd; outline: 2px solid #fff; }
+    label { display: inline-flex; align-items: center; gap: 8px; }
+    .hint { opacity: 0.7; font-size: 13px; max-width: 640px; line-height: 1.5; }
+    code { background: #0003; padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Clicky Empire — Audio Harness</h1>
+  <p class="hint">
+    Manual verification for the synthesized audio subsystem (no asset files).
+    The AudioContext unlocks on your first click anywhere (browser autoplay
+    policy) — <code>initAudio()</code>/<code>initMusic()</code> wire that for us.
+    Then use the buttons below. Tweak the sliders to confirm volume is live.
+  </p>
+
+  <h2>SFX — one-shots (<code>playSfx(name)</code>)</h2>
+  <div class="row" id="sfx-row"></div>
+
+  <h2>Music layers (<code>setMusicPhase(...)</code>)</h2>
+  <div class="row">
+    <button class="phase active" id="phase-build">BUILD (calm pad + arpeggio)</button>
+    <button class="phase" id="phase-combat">COMBAT (tense pulse + drive)</button>
+    <button id="music-stop">stop music</button>
+  </div>
+
+  <h2>Volume (live — reads <code>state.meta.settings</code>)</h2>
+  <div class="row">
+    <label>SFX <input type="range" id="sfx-vol" min="0" max="1" step="0.05" value="0.8" /> <span id="sfx-vol-v">0.80</span></label>
+    <label>Music <input type="range" id="music-vol" min="0" max="1" step="0.05" value="0.6" /> <span id="music-vol-v">0.60</span></label>
+  </div>
+
+  <p class="hint" id="status">Status: waiting for first user gesture to unlock audio…</p>
+
+  <script type="module">
+    import { state } from "./src/state.js";
+    import { initAudio, playSfx } from "./src/audio/sfx.js";
+    import { initMusic, setMusicPhase, stopMusic } from "./src/audio/music.js";
+
+    // Wire the lazy gesture-based unlock for both subsystems.
+    initAudio();
+    initMusic();
+
+    const status = document.getElementById("status");
+    window.addEventListener("pointerdown", () => {
+      status.textContent = "Status: audio unlocked. Play away.";
+    }, { once: true });
+
+    // SFX buttons.
+    const SFX = ["harvest", "attack", "crit", "place", "click", "death", "coin", "klaxon"];
+    const row = document.getElementById("sfx-row");
+    for (const name of SFX) {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.addEventListener("click", () => playSfx(name));
+      row.appendChild(b);
+    }
+
+    // Music phase toggles.
+    const bBuild = document.getElementById("phase-build");
+    const bCombat = document.getElementById("phase-combat");
+    function setPhase(p) {
+      setMusicPhase(p);
+      bBuild.classList.toggle("active", p === "build");
+      bCombat.classList.toggle("active", p === "combat");
+    }
+    bBuild.addEventListener("click", () => setPhase("build"));
+    bCombat.addEventListener("click", () => setPhase("combat"));
+    document.getElementById("music-stop").addEventListener("click", () => stopMusic());
+
+    // Live volume sliders write straight into state.meta.settings.
+    const sfxVol = document.getElementById("sfx-vol");
+    const sfxVolV = document.getElementById("sfx-vol-v");
+    const musicVol = document.getElementById("music-vol");
+    const musicVolV = document.getElementById("music-vol-v");
+    sfxVol.addEventListener("input", () => {
+      state.meta.settings.sfxVolume = parseFloat(sfxVol.value);
+      sfxVolV.textContent = parseFloat(sfxVol.value).toFixed(2);
+    });
+    musicVol.addEventListener("input", () => {
+      state.meta.settings.musicVolume = parseFloat(musicVol.value);
+      musicVolV.textContent = parseFloat(musicVol.value).toFixed(2);
+    });
+  </script>
+</body>
+</html>
