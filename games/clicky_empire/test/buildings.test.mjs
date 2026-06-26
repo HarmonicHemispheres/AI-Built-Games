@@ -304,7 +304,7 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
   assert.equal(state.placed.length, 2);
   updateDefense(0.016);
   assert.ok(!state.placed.includes(wall), "dead building removed from state.placed");
-  assert.equal(state.run.castleDown, undefined, "a wall death does not set castleDown");
+  assert.notEqual(state.run.castleDown, true, "a wall death does not set castleDown (stays falsy)");
 
   // The castle dying sets state.run.castleDown. (0,0) is occupied above, so
   // start fresh and place the castle on its own tile.

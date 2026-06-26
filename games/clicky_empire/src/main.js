@@ -4,24 +4,21 @@
 // agents never edit this file.
 // ============================================================================
 
-import { state, SCENE, setScene, newRun, addResource } from "./state.js";
-import { initScene, render, cameraApi, layers } from "./render/scene.js";
+import { state, SCENE, addResource } from "./state.js";
+import { initScene, render, cameraApi } from "./render/scene.js";
 import { updateRun, registerSystems } from "./run.js";
 import { runUpdaters, runRenderers } from "./loop.js";
 import { loadSave, saveMeta } from "./persistence.js";
-import { makeRng, randSeedString } from "./util/rng.js";
 import { on } from "./util/events.js";
-// Wave 1 subsystems wired by the integrator.
-import { generateMap } from "./world/generate.js";
-import { frontier } from "./world/expand.js";
-import { buildTileMesh, buildFogMesh } from "./render/meshes.js";
+import { returnToMenu } from "./app.js";
+// Wave 1 render/audio subsystems.
 import { initFx, floatingNumber } from "./render/fx.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
 import { initMusic, setMusicPhase } from "./audio/music.js";
 // Wave 2 subsystems.
-import { initHand, drawStarting } from "./cards/hand.js";
+import { initHand } from "./cards/hand.js";
 import { initDraft } from "./cards/draft.js";
-import { initEconomy, placeBuilding } from "./buildings/economy.js";
+import { initEconomy } from "./buildings/economy.js";
 import { initDefense } from "./buildings/defense.js";
 import { initPlacement } from "./buildings/place.js";
 import { initUnitsLogic } from "./units/behavior.js";
@@ -94,10 +91,9 @@ function init() {
     saveMeta();
   });
 
-  // Stage 1 has no menu UI yet (Wave 3). Boot straight into a demo run so the
-  // full systems loop is exercisable. Wave 3 replaces this with the real
-  // menu → config → run flow.
-  bootDemoRun();
+  // Boot to the main menu. The UI layer (Wave 3) drives menu → config →
+  // app.startRun → run; until ui/* is wired, the menu scene is an empty shell.
+  returnToMenu();
 
   requestAnimationFrame(loop);
 }
@@ -123,42 +119,6 @@ function applySceneDom(scene) {
   }
   const hud = document.getElementById("game-hud");
   if (hud) hud.classList.toggle("hidden", scene !== SCENE.RUN);
-}
-
-// Temporary Stage-1 entry: generate a seeded map, build its meshes, drop the
-// castle, and center the camera. Verifies World + Render + scene together.
-// Wave 3 replaces this with the menu/config flow.
-function bootDemoRun() {
-  const seed = randSeedString(makeRng(String(performance.now())));
-  newRun({ seed, mapSize: 5 });
-  state.run.startedAt = Date.now();
-
-  generateMap(seed, state.run.mapSize);
-  buildMapMeshes();
-
-  // The castle is a real building instance (lose condition). The placement
-  // reconciler (buildings/place.js) builds its mesh on the next frame.
-  const c = state.map.castle ?? { col: 0, row: 0 };
-  placeBuilding("castle", c.col, c.row);
-
-  // Deal the opening hand of 5 tier-1 cards.
-  drawStarting();
-
-  cameraApi.centerOn(c.col, c.row);
-  setScene(SCENE.RUN);
-}
-
-// Build meshes for every revealed tile and the frontier fog. Buildings/units/
-// enemies are rendered by their own reconcilers; the castle is created as a
-// logic instance in bootDemoRun.
-function buildMapMeshes() {
-  for (const key of state.map.revealed) {
-    const tile = state.map.tiles.get(key);
-    if (tile) layers.tiles.add(buildTileMesh(tile));
-  }
-  for (const f of frontier()) {
-    layers.fog.add(buildFogMesh(f.col, f.row));
-  }
 }
 
 // --- Camera controls (integrator-owned; stable across waves) ----------------
