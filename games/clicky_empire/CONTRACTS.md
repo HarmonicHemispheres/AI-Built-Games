@@ -354,7 +354,31 @@ through `loop.onRender`.
 - `commands.js`: `move(ids, tile)`, `attack(ids, targetId)`, `attackMove(ids, tile)`, `stop(ids)` — set each
   unit's `order` per the protocol above.
 
+### Cross-module decoupling (IMPORTANT — read before coding)
+A Wave-2 agent's worktree contains ONLY its own new files + everything merged through Wave 1. It does
+**NOT** contain sibling Wave-2 files. Therefore: **a module may only `import` from (a) Wave-1/Stage-0
+merged files, or (b) its OWN sibling files.** All cross-Wave-2 coupling goes through the event bus, never
+imports. Canonical Wave-2 events:
+- `spawn-unit {unitId, col, row}` — emitted by `buildings/economy.js` (militia_camp/barracks) and
+  `cards/hand.js` (unit card). **`units/behavior.js` listens** (in `initUnitsLogic`) and calls `createUnit`.
+  (So economy/hand do NOT import units.)
+- `placement-begin {cardId}` / `placement-end` — cards↔placement↔RTS handshake (place.js shows ghost; RTS
+  suppresses selection between begin and end).
+- `hand-consume {cardId}` — emitted by `place.js` after a successful building placement; **`cards/hand.js`
+  listens** and removes the card. (place.js does `spend(getCard(cardId).cost)` itself using Wave-1 imports,
+  then `economy.placeBuilding(...)` (its own sibling), then emits `hand-consume` + `card-played`.)
+- `combat-hit {x, z, amount, crit}` — emitted by any logic damage-dealer (`defense.js`, optionally
+  units/enemies behavior). The **integrator** wires `on('combat-hit', …)` → `fx.floatingNumber`. This keeps
+  `defense.js` PURE (no `fx`/three import) and node-testable.
+
+Consequence: `buildings/defense.js`, `cards/hand.js`, `cards/draft.js`, `buildings/economy.js`,
+`units/behavior.js`, `units/upkeep.js`, `enemies/behavior.js`, `enemies/spawner.js`, `rts/commands.js`,
+`rts/selection.js` are all PURE-LOGIC (no three/DOM) and must be node-tested. Only `units/group.js`,
+`buildings/place.js`, `rts/input.js` touch three (harness-only). `rts/selection.boxSelect(worldRect)` takes a
+world-space rect (computed by `input.js` via `pickGround` at the drag corners) so selection stays pure.
+
 ### Integrator owns (Wave-2 wiring, NOT agents)
 `roundPayout(round)` (resources scaled by round + `xp`), `recomputeTier()` (round≥4 ⇒ tier 2 for v1),
-creating the **castle** logic instance in `state.placed` at run start, calling every `init*()`, and
-`drawStarting()` at run start. Adds `state.run.castleDown` handling is already in run.js.
+creating the **castle** logic instance in `state.placed` at run start, calling every `init*()`,
+`drawStarting()` at run start, and `on('combat-hit', …) → fx.floatingNumber`. `state.run.castleDown`
+handling is already in run.js.
