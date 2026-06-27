@@ -345,18 +345,82 @@ function updateBar(b) {
 // Track meshes we've built keyed by building id so we can dispose on removal.
 const meshById = new Map(); // id -> THREE.Object3D
 
+// Walls auto-connect: a wall's mesh depends on which orthogonal neighbours are
+// ALSO walls. We recompute that set each frame and rebuild a wall whenever it
+// changes, so placing or losing a wall reshapes its neighbours' arms too.
+function isWallDef(defId) {
+  const d = getBuildingDef(defId);
+  return !!(d && d.kind === "wall");
+}
+
+// Directions (in fixed N,S,E,W order for a stable signature) whose neighbour is
+// a wall, given a position->building lookup for the current frame.
+function wallConnections(b, byPos) {
+  const dirs = [];
+  const at = (col, row) => {
+    const nb = byPos.get(`${col},${row}`);
+    return nb && isWallDef(nb.defId);
+  };
+  if (at(b.col, b.row - 1)) dirs.push("N");
+  if (at(b.col, b.row + 1)) dirs.push("S");
+  if (at(b.col + 1, b.row)) dirs.push("E");
+  if (at(b.col - 1, b.row)) dirs.push("W");
+  return dirs;
+}
+
 function reconcile() {
   const live = new Set();
+
+  // Position -> building lookup for this frame (wall-connection neighbour tests).
+  const byPos = new Map();
+  for (const b of state.placed) byPos.set(`${b.col},${b.row}`, b);
 
   // Build meshes for new buildings.
   for (const b of state.placed) {
     live.add(b.id);
+
+    // Compute this wall's current connection set + signature (null for non-walls).
+    const wallConn = isWallDef(b.defId) ? wallConnections(b, byPos) : null;
+    const wallSig = wallConn ? wallConn.join("") : null;
+
+    // In-place upgrade: the building's defId changed under an existing mesh
+    // (hamlet -> village -> city). Drop the old mesh + its production bar so the
+    // block below rebuilds the new structure (with a placement pop).
+    if (b.group && b._meshDefId != null && b._meshDefId !== b.defId) {
+      layers.buildings.remove(b.group);
+      disposeMesh(b.group); // also frees the bar (a child of the group)
+      meshById.delete(b.id);
+      b.group = null;
+      b._bar = null;
+      b._barInit = false;
+      b._popOnBuild = true;
+    }
+
+    // Wall connections changed (a neighbouring wall was placed/removed): rebuild
+    // this wall's mesh so its arms match. No placement pop — it's a reshape, not
+    // a fresh build.
+    if (b.group && wallSig != null && b._wallSig !== wallSig) {
+      layers.buildings.remove(b.group);
+      disposeMesh(b.group);
+      meshById.delete(b.id);
+      b.group = null;
+      b._bar = null;
+      b._barInit = false;
+    }
+
     if (b.group == null) {
-      const mesh = buildBuildingMesh(b.defId, { col: b.col, row: b.row, id: b.id });
+      const mesh = buildBuildingMesh(b.defId, {
+        col: b.col,
+        row: b.row,
+        id: b.id,
+        connections: wallConn,
+      });
+      b._wallSig = wallSig;
       const w = tileToWorld(b.col, b.row, 0);
       mesh.position.set(w.x, 0, w.z);
       layers.buildings.add(mesh);
       b.group = mesh;
+      b._meshDefId = b.defId;
       meshById.set(b.id, mesh);
       if (b._popOnBuild) {
         placePop(mesh);
@@ -366,6 +430,7 @@ function reconcile() {
       // A group set elsewhere (e.g. castle created by integrator) — adopt it so
       // we can dispose it later if the building is removed.
       meshById.set(b.id, b.group);
+      b._meshDefId = b.defId;
       if (b.group.parent == null) layers.buildings.add(b.group);
     }
 

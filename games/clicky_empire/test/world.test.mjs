@@ -5,12 +5,18 @@
 
 import assert from "node:assert/strict";
 
-import { tileKey } from "../src/util/math.js";
+import { tileKey, chebyshev } from "../src/util/math.js";
 import { state, newRun, addResource } from "../src/state.js";
 import { clearAll, on } from "../src/util/events.js";
 import { TILE, getTileType } from "../src/world/tiles.js";
 import { generateMap, tileAt, rollTileType } from "../src/world/generate.js";
-import { expansionCost, frontier, canExpandTo, expandTo } from "../src/world/expand.js";
+import {
+  tileExpansionCost,
+  EXPAND_GOLD_PER_TILE,
+  frontier,
+  canExpandTo,
+  expandTo,
+} from "../src/world/expand.js";
 import { isWalkable, findPath, nearestWalkableToward } from "../src/world/pathfind.js";
 
 let passed = 0;
@@ -106,32 +112,41 @@ ok("castle centered + grasslands; reveal block is size×size for 3/4/5");
 }
 ok("rollTileType deterministic + order-independent");
 
-// --- expansionCost strictly increasing ---
+// --- tileExpansionCost scales LINEARLY with distance from the castle (0,0) ---
+const castle0 = { col: 0, row: 0 };
 let prev = -Infinity;
-for (let n = 1; n <= 300; n++) {
-  const c = expansionCost(n);
-  assert.ok(c > prev, `expansionCost(${n})=${c} > prev=${prev}`);
+for (let d = 1; d <= 50; d++) {
+  // A tile d tiles east of the castle is at Chebyshev distance d.
+  const c = tileExpansionCost(d, 0, castle0);
+  assert.equal(c, Math.ceil(EXPAND_GOLD_PER_TILE * d), `cost(${d} away) = ceil(${EXPAND_GOLD_PER_TILE}*${d})`);
+  assert.ok(c > prev, `tileExpansionCost grows with distance (${c} > ${prev})`);
   assert.ok(Number.isInteger(c), "cost is an integer (ceil)");
   prev = c;
 }
-// First purchase past the baseline is cheap; cost ramps from there.
-assert.equal(expansionCost(9, 9), 5, "first tile past the baseline costs 5");
-assert.equal(expansionCost(25), Math.ceil(5 * 26 ** 1.1), "cost formula matches contract");
-assert.ok(expansionCost(40, 30) < expansionCost(40, 9), "fewer tiles bought => cheaper");
-ok("expansionCost strictly increasing (integer, 5*(bought+1)^1.1)");
+// Chebyshev (king-move) distance: a diagonal tile costs the same as a straight
+// one the same number of rings out.
+assert.equal(
+  tileExpansionCost(3, 3, castle0),
+  tileExpansionCost(3, 0, castle0),
+  "diagonal and orthogonal tiles 3 rings out cost the same (Chebyshev)",
+);
+// Cost depends ONLY on distance, NOT on how many tiles you've already bought:
+// a near tile stays cheap even after a large reveal (the old pain point).
+assert.equal(tileExpansionCost(2, 0, castle0), EXPAND_GOLD_PER_TILE * 2, "near tile stays cheap regardless of reveal count");
+ok("tileExpansionCost is linear in Chebyshev distance from the castle");
 
 // --- frontier + expand ---
 newRun({ seed: "EXP", mapSize: 3 });
 generateMap("EXP", 3);
+assert.deepEqual(state.map.castle, castle0, "castle at origin for the expand test");
 const fr = frontier();
 // A 3x3 block has 12 orthogonally-adjacent fog tiles (4 sides x 3, corners excluded by N4).
 assert.equal(fr.length, 12, "3x3 frontier has 12 N4-adjacent fog tiles");
 for (const f of fr) {
-  assert.equal(
-    f.cost,
-    expansionCost(state.map.revealed.size, state.map.baseRevealed),
-    "frontier cost = expansionCost(revealed, base)",
-  );
+  // Every frontier tile of a 3x3 start sits at Chebyshev distance 2 from center.
+  assert.equal(chebyshev(f, castle0), 2, "3x3 frontier tiles are 2 rings out");
+  assert.equal(f.cost, tileExpansionCost(f.col, f.row), "frontier cost = per-tile distance cost");
+  assert.equal(f.cost, EXPAND_GOLD_PER_TILE * 2, "frontier cost = perTile * distance");
   assert.ok(!state.map.revealed.has(tileKey(f.col, f.row)), "frontier tiles are fog");
 }
 
@@ -150,7 +165,7 @@ clearAll();
 let emitted = null;
 on("tile-revealed", (p) => (emitted = p));
 addResource("gold", 1000);
-const cost = expansionCost(state.map.revealed.size, state.map.baseRevealed);
+const cost = tileExpansionCost(target.col, target.row);
 const beforeCount = state.map.revealed.size;
 const beforeGold = state.resources.gold;
 assert.equal(canExpandTo(target.col, target.row), true, "with gold => can expand");

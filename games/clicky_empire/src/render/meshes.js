@@ -55,6 +55,46 @@ function sharedMat(colorHex, roughness = 0.85, extra = "") {
   return m;
 }
 
+// ---------------------------------------------------------------------------
+// Animated "flowing water" material (shared). A single MeshStandardMaterial whose
+// vertex shader nudges each vertex up/down by a sum of sines in WORLD space, so
+// adjacent water tiles undulate as one continuous, drifting sheet. Because the
+// material is flat-shaded, three derives face normals from screen-space
+// derivatives of the displaced position — the lighting (sun + env reflections)
+// shimmers across the moving surface for free, reading as flow. render/ambient.js
+// owns the per-frame clock and writes `uTime` (the only state this animation
+// needs — one uniform, shared by every water tile).
+// ---------------------------------------------------------------------------
+let _waterMat = null;
+export function waterMaterial() {
+  if (_waterMat) return _waterMat;
+  const m = new THREE.MeshStandardMaterial({
+    color: 0x3f86c4,
+    roughness: 0.22,
+    metalness: 0.0,
+    flatShading: true,
+    transparent: true,
+    opacity: 0.9,
+  });
+  m.userData.__shared = true;
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: 0 };
+    shader.vertexShader = "uniform float uTime;\n" + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
+        vec3 _wp = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        float _wave = sin(_wp.x * 1.7 + uTime * 1.3) * 0.5
+                    + sin(_wp.z * 2.2 - uTime * 1.05) * 0.32
+                    + sin((_wp.x + _wp.z) * 1.1 + uTime * 0.7) * 0.2;
+        transformed.y += _wave * 0.05;`,
+    );
+    // Stash the live shader so the animator can bump uTime each frame.
+    m.userData.shader = shader;
+  };
+  return m;
+}
+
 // Small palette helpers ------------------------------------------------------
 
 function shade(hex, factor) {
@@ -91,6 +131,11 @@ const G = {
   ico: () => sharedGeo("ico", () => new THREE.IcosahedronGeometry(0.5, 0)),
   plane: () => sharedGeo("plane1", () => new THREE.PlaneGeometry(1, 1)),
   tileBox: () => sharedGeo("tilebox", () => new THREE.BoxGeometry(0.96, 1, 0.96)),
+  // A subdivided sheet laid flat in the XZ plane (normal +Y), so the animated
+  // water material has enough vertices to ripple. Rotated into XZ at build time
+  // so the shader can displace local +Y straight up in world space.
+  waterTop: () =>
+    sharedGeo("watertop", () => new THREE.PlaneGeometry(0.96, 0.96, 6, 6).rotateX(-Math.PI / 2)),
 };
 
 // Make a mesh from a shared geometry + a (shared) material, then scale/position.
@@ -143,22 +188,36 @@ export function buildTileMesh(tile) {
   // group's userData tag via parent-walk in pick()).
   switch (type) {
     case "forest": {
-      // 1–2 chunky conifers: brown trunk + green cone canopy.
+      // 1–2 chunky conifers: brown trunk + green cone canopy. Each conifer is
+      // its own pivot group planted at the trunk base on the slab top, so
+      // render/ambient.js can gently sway the whole tree in the wind (the base
+      // stays rooted; the canopy leans). `userData.sway` carries a deterministic
+      // phase (from the tile coords) so neighbouring trees don't sway in lockstep.
       const trunkMat = sharedMat(POLE, 0.95);
       const leafMat = sharedMat(shade(baseColor, 1.15), 0.95);
       const spots = [
         { x: -0.18, z: -0.12, s: 1.0 },
         { x: 0.2, z: 0.18, s: 0.78 },
       ];
+      let idx = 0;
       for (const sp of spots) {
+        const tree = new THREE.Group();
+        tree.position.set(sp.x, h, sp.z); // pivot at the trunk's foot
         const trunk = meshOf(G.cyl6(), trunkMat);
         trunk.scale.set(0.08, 0.22 * sp.s, 0.08);
-        trunk.position.set(sp.x, h + 0.11 * sp.s, sp.z);
-        group.add(trunk);
+        trunk.position.set(0, 0.11 * sp.s, 0);
+        tree.add(trunk);
         const canopy = meshOf(G.cone6(), leafMat);
         canopy.scale.set(0.46 * sp.s, 0.62 * sp.s, 0.46 * sp.s);
-        canopy.position.set(sp.x, h + 0.22 * sp.s + 0.31 * sp.s, sp.z);
-        group.add(canopy);
+        canopy.position.set(0, 0.22 * sp.s + 0.31 * sp.s, 0);
+        tree.add(canopy);
+        // Smaller trees sway a touch more; phase varies per tile + tree.
+        tree.userData.sway = {
+          phase: col * 1.7 + row * 0.9 + idx * 2.3,
+          amp: 0.04 + (1 - sp.s) * 0.07,
+        };
+        group.add(tree);
+        idx++;
       }
       break;
     }
@@ -213,9 +272,17 @@ export function buildTileMesh(tile) {
       break;
     }
     case "water": {
-      // Slightly translucent, shinier slab — handled by slab material above.
+      // The slab below is the dark, still water "body"; a rippling surface sheet
+      // sits just on top of it. The sheet uses the shared animated waterMaterial
+      // (render/ambient.js drives it), giving the visible flow/shimmer. The slab
+      // stays translucent so the body reads as depth beneath the moving surface.
       slabMat.transparent = true;
       slabMat.opacity = 0.92;
+      const surface = new THREE.Mesh(G.waterTop(), waterMaterial());
+      surface.position.y = h + 0.015; // just above the slab top to avoid z-fight
+      surface.castShadow = false;
+      surface.receiveShadow = false;
+      group.add(surface);
       break;
     }
     default:
@@ -282,7 +349,9 @@ export function buildBuildingMesh(defId, opts = {}) {
   group.add(content);
 
   const builder = BUILDING_BUILDERS[defId] ?? buildGenericHut;
-  builder(content, opts.color);
+  // Pass the full opts through so connection-aware builders (walls) can read
+  // opts.connections; simpler builders ignore the extra argument.
+  builder(content, opts.color, opts);
 
   if (opts.col != null && opts.row != null) {
     const w = tileToWorld(opts.col, opts.row, 0);
@@ -371,38 +440,96 @@ function buildBallista(group, color = 0x8a949e) {
   group.add(bolt);
 }
 
-// --- Walls (palisade / stone wall) -----------------------------------------
-function buildPalisade(group, color = 0x7a5630) {
-  // A row of pointed logs.
-  for (let i = -1; i <= 1; i++) {
-    const log = meshOf(G.cyl6(), sharedMat(color, 0.95));
-    log.scale.set(0.12, 0.5, 0.12);
-    log.position.set(i * 0.26, 0.25, 0);
-    group.add(log);
-    const tip = meshOf(G.cone6(), sharedMat(shade(color, 0.85), 0.95));
-    tip.scale.set(0.12, 0.14, 0.12);
-    tip.position.set(i * 0.26, 0.57, 0);
-    group.add(tip);
+// --- Walls (palisade / stone wall) — auto-connecting ------------------------
+// Walls build as a central hub plus an ARM reaching to each tile edge that has a
+// neighbouring wall, so adjacent segments meet at the boundary and read as one
+// continuous wall (classic grid auto-tiling). `opts.connections` is an array of
+// the directions ('N'|'S'|'E'|'W') whose neighbour is also a wall; the placement
+// reconciler computes it and rebuilds a wall whenever that set changes.
+//
+// Local axes match the world grid (see tileToWorld): +x = East (+col),
+// +z = South (+row). A lone wall with no connections falls back to an E–W bar so
+// it still reads as a wall rather than a lone post.
+const WALL_VEC = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+
+function wallDirsToDraw(connections) {
+  return connections && connections.length ? connections : ["E", "W"];
+}
+
+// One pointed palisade log (+ tip) centred at local (x,z).
+function addPaliLog(group, color, x, z) {
+  const log = meshOf(G.cyl6(), sharedMat(color, 0.95));
+  log.scale.set(0.12, 0.5, 0.12);
+  log.position.set(x, 0.25, z);
+  group.add(log);
+  const tip = meshOf(G.cone6(), sharedMat(shade(color, 0.85), 0.95));
+  tip.scale.set(0.12, 0.14, 0.12);
+  tip.position.set(x, 0.57, z);
+  group.add(tip);
+}
+
+function buildPalisade(group, color = 0x7a5630, opts = {}) {
+  // Central log, then a pair of logs marching out along each connected edge so
+  // the row reaches the tile boundary and meets the neighbour's logs.
+  addPaliLog(group, color, 0, 0);
+  for (const dir of wallDirsToDraw(opts.connections)) {
+    const [ux, uz] = WALL_VEC[dir];
+    addPaliLog(group, color, ux * 0.2, uz * 0.2);
+    addPaliLog(group, color, ux * 0.4, uz * 0.4);
   }
 }
 
-function buildStoneWall(group, color = 0x9b9ea3) {
-  addBox(group, color, 0, 0, 0, 0.9, 0.5, 0.28, 1.0);
-  // merlons
-  for (let i = -1; i <= 1; i++) {
-    addBox(group, shade(color, 0.95), i * 0.3, 0.5, 0, 0.18, 0.16, 0.28, 1.0);
+// Shared connection-aware stone-wall builder (stone wall + the heftier castle
+// wall). Draws a hub block and an arm block toward each connected edge, with
+// merlons along the top (and an optional mid-height banded course).
+function buildStoneWallGeneric(group, color, connections, o) {
+  const { thick, height, merlonH, merlonW, band } = o;
+  // Central hub block (also the end-cap for a wall that terminates here).
+  addBox(group, color, 0, 0, 0, thick, height, thick, 1.0);
+  addBox(group, shade(color, 0.96), 0, height, 0, merlonW, merlonH, merlonW, 1.0);
+
+  for (const dir of wallDirsToDraw(connections)) {
+    const [ux, uz] = WALL_VEC[dir];
+    const horiz = ux !== 0; // arm runs along x (E/W) vs z (N/S)
+    const cx = ux * 0.25;
+    const cz = uz * 0.25;
+    const sx = horiz ? 0.5 : thick;
+    const sz = horiz ? thick : 0.5;
+    // Arm body from the hub out to the tile edge.
+    addBox(group, color, cx, 0, cz, sx, height, sz, 1.0);
+    if (band) {
+      addBox(group, shade(color, 0.88), cx, height * 0.48, cz, sx + 0.02, 0.06, sz + 0.02, 1.0);
+    }
+    // Two merlons along the arm's top.
+    for (const t of [0.18, 0.38]) {
+      const mx = ux * t;
+      const mz = uz * t;
+      const msx = horiz ? merlonW : thick;
+      const msz = horiz ? thick : merlonW;
+      addBox(group, shade(color, 0.96), mx, height, mz, msx, merlonH, msz, 1.0);
+    }
   }
+}
+
+function buildStoneWall(group, color = 0x9b9ea3, opts = {}) {
+  buildStoneWallGeneric(group, color, opts.connections, {
+    thick: 0.28,
+    height: 0.5,
+    merlonH: 0.16,
+    merlonW: 0.18,
+    band: false,
+  });
 }
 
 // --- Castle wall (Tier 3): a taller, thicker stone wall with more merlons -----
-function buildCastleWall(group, color = 0xb4b7bc) {
-  addBox(group, color, 0, 0, 0, 0.94, 0.72, 0.34, 1.0);
-  // a banded course line for heft
-  addBox(group, shade(color, 0.88), 0, 0.34, 0, 0.96, 0.06, 0.36, 1.0);
-  // five chunky merlons
-  for (let i = -2; i <= 2; i++) {
-    addBox(group, shade(color, 0.96), i * 0.2, 0.72, 0, 0.14, 0.2, 0.34, 1.0);
-  }
+function buildCastleWall(group, color = 0xb4b7bc, opts = {}) {
+  buildStoneWallGeneric(group, color, opts.connections, {
+    thick: 0.34,
+    height: 0.72,
+    merlonH: 0.2,
+    merlonW: 0.16,
+    band: true,
+  });
 }
 
 // --- Economy buildings ------------------------------------------------------
@@ -424,6 +551,75 @@ function buildHamlet(group, color = 0xcaa06a) {
   addRoof(group, 0xa85a3c, 0.3, 0.52, 0.52, 0.26);
   addBox(group, shade(color, 0.92), 0.22, 0, 0.12, 0.28, 0.22, 0.28);
   addRoof(group, 0xa85a3c, 0.22, 0.38, 0.38, 0.2);
+}
+
+// --- Village (Tier 2 gold): a denser cluster of cottages around a small well. --
+function buildVillage(group, color = 0xc9a063) {
+  const roof = 0x9c5436;
+  // Three cottages of varying size, tighter and taller than a hamlet.
+  addBox(group, color, -0.2, 0, -0.08, 0.36, 0.34, 0.36);
+  addRoof(group, roof, 0.34, 0.5, 0.5, 0.26);
+  addBox(group, shade(color, 1.06), 0.18, 0, -0.16, 0.3, 0.28, 0.3);
+  addRoof(group, roof, 0.28, 0.42, 0.42, 0.22);
+  addBox(group, shade(color, 0.9), 0.08, 0, 0.22, 0.32, 0.24, 0.3);
+  addRoof(group, roof, 0.24, 0.44, 0.42, 0.22);
+  // A little stone well in the middle for "town square" flavour.
+  const well = meshOf(G.cyl8(), sharedMat(0x9b9ea3, 1.0));
+  well.scale.set(0.12, 0.12, 0.12);
+  well.position.set(-0.04, 0.06, 0.04);
+  group.add(well);
+}
+
+// --- City (Tier 3 gold): a walled cluster of tall townhouses + a watch spire. --
+function buildCity(group, color = 0xcab68a) {
+  const roof = 0x8c4a30;
+  // A low stone curtain platform the city sits on.
+  addBox(group, 0xb7b3a6, 0, 0, 0, 0.86, 0.1, 0.86, 1.0);
+  // Several townhouses of differing heights for a skyline silhouette.
+  const houses = [
+    { x: -0.24, z: -0.2, w: 0.3, hh: 0.5 },
+    { x: 0.16, z: -0.24, w: 0.26, hh: 0.4 },
+    { x: 0.24, z: 0.16, w: 0.3, hh: 0.46 },
+    { x: -0.18, z: 0.22, w: 0.26, hh: 0.36 },
+  ];
+  for (const ho of houses) {
+    addBox(group, shade(color, 0.92 + ho.hh * 0.2), ho.x, 0.1, ho.z, ho.w, ho.hh, ho.w);
+    addRoof(group, roof, 0.1 + ho.hh, ho.w * 1.35, ho.w * 1.35, 0.2);
+  }
+  // Central watch spire with a banner — the city's civic heart.
+  addBox(group, shade(color, 1.1), 0, 0.1, 0, 0.26, 0.66, 0.26, 1.0);
+  addRoof(group, 0x3f63c8, 0.76, 0.34, 0.34, 0.34, 6);
+  const pole = meshOf(G.cyl6(), sharedMat(SILVER, 0.6));
+  pole.scale.set(0.022, 0.26, 0.022);
+  pole.position.y = 0.76 + 0.34 + 0.12;
+  group.add(pole);
+  const flag = meshOf(G.plane(), sharedMat(0xe7b84b, 0.9, "flag"));
+  flag.material.side = THREE.DoubleSide;
+  flag.scale.set(0.18, 0.12, 1);
+  flag.position.set(0.09, 0.76 + 0.34 + 0.2, 0);
+  group.add(flag);
+}
+
+// --- Archery range (Tier 2 spawner): an open shelter + a straw target butt. ----
+function buildArcheryRange(group, color = 0x9a7b4f) {
+  // Open-fronted thatched shelter where the archers muster.
+  addBox(group, color, -0.16, 0, 0, 0.46, 0.3, 0.5);
+  addRoof(group, shade(color, 0.65), 0.3, 0.66, 0.66, 0.3);
+  // A round straw target on a post (concentric rings via stacked discs).
+  const post = meshOf(G.cyl6(), sharedMat(POLE, 0.95));
+  post.scale.set(0.04, 0.34, 0.04);
+  post.position.set(0.3, 0.17, 0.16);
+  group.add(post);
+  const target = meshOf(G.cyl8(), sharedMat(0xe8e0c8, 0.9));
+  target.scale.set(0.18, 0.05, 0.18);
+  target.rotation.x = Math.PI / 2;
+  target.position.set(0.3, 0.34, 0.16);
+  group.add(target);
+  const bull = meshOf(G.cyl8(), sharedMat(0xcf3b4a, 0.8));
+  bull.scale.set(0.07, 0.06, 0.07);
+  bull.rotation.x = Math.PI / 2;
+  bull.position.set(0.3, 0.34, 0.165);
+  group.add(bull);
 }
 
 function buildWheatField(group, color = 0xe0c34c) {
@@ -532,8 +728,11 @@ const BUILDING_BUILDERS = {
   stone_wall: buildStoneWall,
   lumber_camp: buildLumberCamp,
   hamlet: buildHamlet,
+  village: buildVillage,
+  city: buildCity,
   wheat_field: buildWheatField,
   militia_camp: buildMilitiaCamp,
+  archery_range: buildArcheryRange,
   sawmill: buildSawmill,
   market: buildMarket,
   mine: buildMine,
@@ -606,16 +805,16 @@ function buildBannerPole(flagColor) {
   pole.position.y = 0.45;
   banner.add(pole);
 
-  // Tall hanging banner (like the d20 flag in unit_style.png). It flies toward
-  // the BACK of the formation (+z) — the cloth extends along the depth axis from
-  // the pole, not across the front (which read as a sideways flag). Rotated so
-  // the plane's width maps to world +z; offset by half its width so the near
-  // edge sits at the pole and the cloth trails backward.
+  // Tall hanging banner (like the d20 flag in unit_style.png). The cloth extends
+  // along the depth axis from the pole toward the FRONT of the formation (-z) so
+  // it reads as a banner carried ahead of the regiment rather than trailing off
+  // the back. Rotated so the plane's width maps to world -z; offset by half its
+  // width so the near edge sits at the pole and the cloth flies forward.
   const flag = meshOf(G.plane(), sharedMat(flagColor, 0.85, "flag"));
   flag.material.side = THREE.DoubleSide;
   flag.scale.set(0.34, 0.5, 1);
-  flag.rotation.y = -Math.PI / 2;
-  flag.position.set(0.0, 0.6, 0.17);
+  flag.rotation.y = Math.PI / 2;
+  flag.position.set(0.0, 0.6, -0.17);
   banner.add(flag);
 
   // No userData.kind (see buildFigure): clicks on the banner should resolve to

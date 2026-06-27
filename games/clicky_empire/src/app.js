@@ -10,6 +10,7 @@ import { cameraApi, layers } from "./render/scene.js";
 import { generateMap } from "./world/generate.js";
 import { frontier } from "./world/expand.js";
 import { buildTileMesh, buildFogMesh, disposeMesh } from "./render/meshes.js";
+import { collectAmbient, clearAmbient } from "./render/ambient.js";
 import { placeBuilding } from "./buildings/economy.js";
 import { drawStarting } from "./cards/hand.js";
 import { startBuildPhase } from "./run.js";
@@ -73,9 +74,14 @@ function buildWorldMeshes() {
   for (const f of frontier()) {
     layers.fog.add(buildFogMesh(f.col, f.row));
   }
+  // Register any swaying trees on the freshly built tiles with the ambient
+  // animator (water flows off the shared material, so it needs no collection).
+  collectAmbient(layers.tiles);
 }
 
 function clearWorldMeshes() {
+  // Drop ambient sway refs before the meshes they point at are disposed.
+  clearAmbient();
   for (const layer of [layers.tiles, layers.fog]) {
     for (const child of [...layer.children]) {
       layer.remove(child);

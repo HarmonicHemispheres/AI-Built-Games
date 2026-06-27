@@ -11,7 +11,7 @@
 import { state, SCENE, on } from "../state.js";
 import { pickGround } from "../render/scene.js";
 import { getTileName } from "../world/tiles.js";
-import { expansionCost } from "../world/expand.js";
+import { tileExpansionCost } from "../world/expand.js";
 import { N4, worldToTile } from "../util/math.js";
 import { getBuildingDef } from "../buildings/catalog.js";
 import { getUnitDef } from "../units/catalog.js";
@@ -104,7 +104,7 @@ function showFor(event) {
       }
     }
     if (onFrontier) {
-      const cost = expansionCost(state.map.revealed.size, state.map.baseRevealed);
+      const cost = tileExpansionCost(col, row);
       const afford = (state.resources.gold || 0) >= cost;
       text = afford ? `Reveal · ${cost} gold` : `Reveal · ${cost} gold (need more)`;
     } else {

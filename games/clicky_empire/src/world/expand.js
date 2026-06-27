@@ -11,26 +11,27 @@
 // a known resource cluster is a deliberate push.
 // ============================================================================
 
-import { N4, tileKey, parseTileKey } from "../util/math.js";
+import { N4, tileKey, parseTileKey, chebyshev } from "../util/math.js";
 import { makeRng } from "../util/rng.js";
 import { state, spend, emit } from "../state.js";
 import { getTileType } from "./tiles.js";
 import { rollTileType } from "./generate.js";
 
-// Expansion cost as a function of how many tiles you've revealed PAST the
-// starting block. The first purchased tile is cheap; each one after is a little
-// pricier. Cost = `ceil(5 * (bought + 1)^1.1)` where bought = revealedCount -
-// baseRevealed (the size of the initial reveal). Strictly increasing in
-// revealedCount. `baseRevealed` defaults to 0 so the bare 1-arg form (and old
-// tests) still get a strictly-increasing curve.
-export function expansionCost(revealedCount, baseRevealed = 0) {
-  const bought = Math.max(0, revealedCount - baseRevealed);
-  return Math.ceil(5 * (bought + 1) ** 1.1);
-}
+// Gold per tile of distance from the starting castle. The expansion cost is a
+// LINEAR function of how far the target tile sits from the castle, so nearby
+// frontier stays cheap no matter how much you've already revealed, and pushing
+// out toward a distant gem vein costs proportionally more.
+export const EXPAND_GOLD_PER_TILE = 2;
 
-// The current expansion cost for the live map (reads the run's base reveal).
-function currentCost() {
-  return expansionCost(state.map.revealed.size, state.map.baseRevealed || 0);
+// Cost (in gold) to reveal a SPECIFIC fog tile, scaled by its Chebyshev (king-
+// move) distance from the player's starting castle. The castle always sits at the
+// grid origin (0,0); `castle` defaults to the live run's castle, falling back to
+// the origin so callers/tests can omit it. Distance — not how many tiles you've
+// bought — drives the price, so expansion no longer balloons with map size.
+export function tileExpansionCost(col, row, castle = state.map?.castle) {
+  const cc = castle || { col: 0, row: 0 };
+  const dist = chebyshev({ col, row }, cc);
+  return Math.ceil(EXPAND_GOLD_PER_TILE * dist);
 }
 
 // Is a tile currently revealed?
@@ -38,12 +39,10 @@ function isRevealed(col, row) {
   return state.map.revealed.has(tileKey(col, row));
 }
 
-// All fog tiles (not yet revealed) that are 4-adjacent to a revealed tile,
-// each annotated with the current expansion cost. The cost is uniform across
-// the frontier this turn (it depends only on revealedCount), but is returned
-// per-tile for the UI's convenience.
+// All fog tiles (not yet revealed) that are 4-adjacent to a revealed tile, each
+// annotated with its OWN expansion cost (cost grows with the tile's distance
+// from the castle, so a frontier tile far out costs more than one near home).
 export function frontier() {
-  const cost = currentCost();
   const seen = new Set();
   const out = [];
   for (const key of state.map.revealed) {
@@ -55,7 +54,7 @@ export function frontier() {
       if (state.map.revealed.has(k)) continue; // already revealed
       if (seen.has(k)) continue; // dedupe frontier tile reachable from many
       seen.add(k);
-      out.push({ col: c, row: r, cost });
+      out.push({ col: c, row: r, cost: tileExpansionCost(c, r) });
     }
   }
   return out;
@@ -74,7 +73,7 @@ export function canExpandTo(col, row) {
     }
   }
   if (!adjacent) return false;
-  return (state.resources.gold || 0) >= currentCost();
+  return (state.resources.gold || 0) >= tileExpansionCost(col, row);
 }
 
 // Purchase and reveal a frontier tile. Spends gold, rolls/ensures the tile type,
@@ -83,7 +82,7 @@ export function canExpandTo(col, row) {
 export function expandTo(col, row) {
   if (!canExpandTo(col, row)) return false;
 
-  const cost = currentCost();
+  const cost = tileExpansionCost(col, row);
   if (!spend({ gold: cost })) return false; // unaffordable (race-safe no-op)
 
   const key = tileKey(col, row);

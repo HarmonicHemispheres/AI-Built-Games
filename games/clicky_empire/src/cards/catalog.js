@@ -168,6 +168,15 @@ export const CARDS = {
     cost: { wood: 30, iron: 30 },
     effect: { defId: "mine" }, // yields iron (+100% adj. mountain / on ore vein)
   },
+  village: {
+    id: "village",
+    name: "Village",
+    type: "building",
+    tier: 2,
+    rarity: "rare",
+    cost: { wood: 65, gold: 35 },
+    effect: { defId: "village" }, // strong gold yield; hamlets upgrade into it
+  },
   barracks: {
     id: "barracks",
     name: "Barracks",
@@ -176,6 +185,15 @@ export const CARDS = {
     rarity: "rare",
     cost: { wood: 50, iron: 40 },
     effect: { defId: "barracks" }, // periodically spawns a spearman
+  },
+  archery_range: {
+    id: "archery_range",
+    name: "Archery Range",
+    type: "building",
+    tier: 2,
+    rarity: "rare",
+    cost: { wood: 45, iron: 25 },
+    effect: { defId: "archery_range" }, // trains free archer bands on a timer
   },
   stone_wall: {
     id: "stone_wall",
@@ -262,6 +280,15 @@ export const CARDS = {
   // Tier 3 — buildings (unlocks at tier 3 / ~round 8). These are constructed
   // from the BUILD menu (not drafted). Cathedral/foundry are still deferred.
   // ---------------------------------------------------------------------------
+  city: {
+    id: "city",
+    name: "City",
+    type: "building",
+    tier: 3,
+    rarity: "epic",
+    cost: { wood: 130, gold: 90 },
+    effect: { defId: "city" }, // top gold tier; villages upgrade into it
+  },
   keep: {
     id: "keep",
     name: "Keep",

@@ -249,6 +249,7 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 // ===========================================================================
 {
   freshRun();
+  state.resources.food = 1000; // spawners now consume food to train units
   setTile(0, 0, TILE.GRASS);
   setTile(1, 0, TILE.GRASS); // walkable neighbour to spawn onto
   const camp = placeBuilding("militia_camp", 0, 0);
@@ -287,11 +288,45 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 }
 
 // ===========================================================================
+// 4a2. spawners require FOOD to train units — starved camps stall, then resume
+// ===========================================================================
+{
+  freshRun();
+  setTile(0, 0, TILE.GRASS);
+  setTile(1, 0, TILE.GRASS); // walkable neighbour to spawn onto
+  const camp = placeBuilding("militia_camp", 0, 0);
+  assert.ok(camp);
+
+  const spawns = [];
+  on("spawn-unit", ({ unitId, col, row, sourceId }) => {
+    spawns.push({ unitId, col, row, sourceId });
+    state.units.push({ id: nextId("u"), unitId, spawnerId: sourceId, hp: 4, maxHp: 4, pos: { x: col, y: 0, z: row } });
+  });
+
+  const { interval, foodCost } = getBuildingDef("militia_camp").spawns;
+  assert.ok(foodCost > 0, "militia camp has a positive per-spawn food cost");
+
+  // With zero food, the camp cannot train anyone no matter how long it runs.
+  state.resources.food = 0;
+  tickEconomy(interval * 5);
+  assert.equal(spawns.length, 0, "no food => spawner trains nobody");
+  assert.equal(state.units.length, 0, "no units raised while starved");
+
+  // Add exactly enough for ONE militia; the held-full timer pops it immediately.
+  state.resources.food = foodCost;
+  tickEconomy(interval);
+  assert.equal(spawns.length, 1, "food arrives => one unit trains");
+  assert.equal(state.resources.food, 0, "training consumed the food");
+  ok("spawners require food: starve to stall, resume the instant food is paid");
+}
+
+// ===========================================================================
 // 4b. spawner places units on a visible, building-free tile (never under the
 //     building, even when every direct neighbour is built up)
 // ===========================================================================
 {
   freshRun();
+  state.resources.food = 1000; // fund spawner production
   // A revealed 5x5 grass block around the camp.
   for (let r = -2; r <= 2; r++) {
     for (let c = -2; c <= 2; c++) {
@@ -332,6 +367,7 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 // ===========================================================================
 {
   freshRun();
+  state.resources.food = 1000; // fund spawner production
   // Two militia camps far apart, each with revealed grass room around it.
   for (const cx of [0, 8]) {
     for (let r = -1; r <= 1; r++) {

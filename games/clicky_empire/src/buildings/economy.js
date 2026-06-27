@@ -18,7 +18,7 @@
 //   - initEconomy() -> registerSystems({ tickEconomy }).
 // ============================================================================
 
-import { state, addResource, nextId } from "../state.js";
+import { state, addResource, nextId, canAfford, spend } from "../state.js";
 import { emit } from "../util/events.js";
 import { registerSystems } from "../run.js";
 import { N4, N8, tileToWorld, worldToTile, tileKey } from "../util/math.js";
@@ -72,6 +72,46 @@ export function placeBuilding(defId, col, row) {
   };
   state.placed.push(building);
   return building;
+}
+
+// ---------------------------------------------------------------------------
+// In-place upgrades (hamlet -> village -> city, etc.)
+// ---------------------------------------------------------------------------
+
+// upgradeOption(building) -> { defId, def, cost, tierReq, tierMet } | null
+//   Describes the next tier a building can grow into, if any. A def opts in via
+//   `upgradesTo` (the next defId) + `upgradeCost`. The target def may carry an
+//   `unlockTier` gate (you can't grow a hamlet into a Tier-2 village until the run
+//   reaches Tier 2). The UI reads this to render the upgrade button + its state.
+export function upgradeOption(building) {
+  if (!building) return null;
+  const def = getBuildingDef(building.defId);
+  if (!def || !def.upgradesTo) return null;
+  const nextDef = getBuildingDef(def.upgradesTo);
+  if (!nextDef) return null;
+  const tierReq = nextDef.unlockTier || 1;
+  const tierMet = (state.run?.tier ?? 1) >= tierReq;
+  return { defId: def.upgradesTo, def: nextDef, cost: def.upgradeCost || {}, tierReq, tierMet };
+}
+
+// upgradeBuilding(building) -> boolean
+//   Grow a building into its next tier in place: keep the same instance/tile/id,
+//   pay the upgrade cost, swap the defId, and reset hp/timer to the new def. The
+//   render reconciler (place.js) notices the defId changed and rebuilds the mesh
+//   (and its production bar) with a placement pop. Returns false (no spend) if
+//   there's no upgrade, the tier gate isn't met, or it's unaffordable.
+export function upgradeBuilding(building) {
+  const opt = upgradeOption(building);
+  if (!opt || !opt.tierMet) return false;
+  if (!canAfford(opt.cost)) return false;
+
+  spend(opt.cost);
+  building.defId = opt.defId;
+  building.maxHp = opt.def.hp;
+  building.hp = opt.def.hp; // a fresh, fully-built structure
+  building.cd = 0; // restart its production timer
+  emit("building-upgraded", { id: building.id, defId: building.defId });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,7 +257,7 @@ export function tickEconomy(dt) {
 
     // --- Spawner buildings --------------------------------------------------
     else if (def.spawns) {
-      const { unitId, interval, cap } = def.spawns;
+      const { unitId, interval, cap, foodCost = 0 } = def.spawns;
       const every = interval || 1;
 
       // At cap: STOP loading. Hold the timer at 0 so the production bar freezes
@@ -231,18 +271,24 @@ export function tickEconomy(dt) {
 
       b.cd += dt;
       while (b.cd >= every) {
-        b.cd -= every;
-        if (livingFromSpawner(b.id) < cap) {
-          const { col, row } = spawnTileNear(b.col, b.row);
-          // units/behavior.js listens and calls createUnit (no import). It stamps
-          // the spawned unit with sourceId so this camp can count its own roster.
-          emit("spawn-unit", { unitId, col, row, sourceId: b.id });
-        } else {
+        if (livingFromSpawner(b.id) >= cap) {
           // Hit the cap mid-tick: stop draining the timer and don't bank a
           // backlog of free units to dump the instant one dies.
           b.cd = 0;
           break;
         }
+        // Raising a unit costs food. If the larder can't cover it, pause with the
+        // timer held full so the unit pops the instant food is harvested/earned
+        // (rather than silently dropping the trained unit or draining the bar).
+        if (foodCost > 0 && !spend({ food: foodCost })) {
+          b.cd = every;
+          break;
+        }
+        b.cd -= every;
+        const { col, row } = spawnTileNear(b.col, b.row);
+        // units/behavior.js listens and calls createUnit (no import). It stamps
+        // the spawned unit with sourceId so this camp can count its own roster.
+        emit("spawn-unit", { unitId, col, row, sourceId: b.id });
       }
     }
   }

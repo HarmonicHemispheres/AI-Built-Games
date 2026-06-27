@@ -449,6 +449,42 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
 .sel-tags { margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
 .sel-tag { font-size: 8px; font-weight: 800; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.4); color: var(--ink-dim); }
 
+/* ---- Building info + upgrade panel (left side, mirrors the unit panel) ---- */
+.building-panel {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  width: 210px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+.building-panel.hidden { display: none; }
+.bp-name { font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; text-align: center; text-transform: uppercase; font-size: 13px; color: var(--gold, #e7b84b); }
+.bp-info { font-size: 11px; color: var(--ink-dim); text-align: center; margin-bottom: 10px; }
+.bp-upgrade {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #1b140a;
+  background: linear-gradient(180deg, #f0cf6a, var(--gold, #e7b84b));
+  border: 1px solid #b9912f;
+  transition: filter 0.12s ease, opacity 0.12s ease;
+}
+.bp-upgrade:hover:not(:disabled) { filter: brightness(1.08); }
+.bp-upgrade.hidden { display: none; }
+.bp-upgrade:disabled { cursor: not-allowed; opacity: 0.5; filter: grayscale(0.4); }
+
 /* ---- Draft / collection / stats panels ---- */
 .draft-panel {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));

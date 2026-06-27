@@ -216,8 +216,10 @@ freely; keep the public surface as specified.
 - `rollTileType(col, row, rng) -> typeString` — exported so `expand.js` reuses the same biome weighting.
 
 ### `world/expand.js` (pure logic)
-- `expansionCost(revealedCount) -> number` — `Math.ceil(5 * revealedCount ** 1.15)`. Strictly increasing.
-- `frontier() -> [{col,row,cost}]` — fog tiles 4-adjacent to a revealed tile.
+- `tileExpansionCost(col,row,castle?) -> number` — `Math.ceil(EXPAND_GOLD_PER_TILE * chebyshev({col,row}, castle))`.
+  Gold cost to reveal a tile, scaling LINEARLY with its Chebyshev distance from the starting castle (origin).
+  Distance-based — not reveal-count-based — so nearby frontier stays cheap no matter how much you've expanded.
+- `frontier() -> [{col,row,cost}]` — fog tiles 4-adjacent to a revealed tile, each with its own per-tile cost.
 - `canExpandTo(col,row) -> boolean` — is frontier & affordable (gold).
 - `expandTo(col,row) -> boolean` — if valid: `spend({gold:cost})`, roll type, add to `tiles`/`revealed`,
   update `bounds` and `state.run.revealedCount`, `emit('tile-revealed',{col,row})`. Returns success.

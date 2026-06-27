@@ -299,7 +299,7 @@ ok("rollDraft: excludes buildings even when unlocked at the current tier");
 // buildingCardsForTier feeds the build menu and is gated purely by tier.
 assert.equal(buildingCardsForTier(1).length, 6, "6 tier-1 buildings available");
 assert.ok(buildingCardsForTier(1).every((c) => c.type === "building" && c.tier <= 1));
-assert.equal(buildingCardsForTier(2).length, 11, "11 buildings available by tier 2");
+assert.equal(buildingCardsForTier(2).length, 13, "13 buildings available by tier 2 (incl. village + archery range)");
 assert.ok(buildingCardsForTier(2).every((c) => c.type === "building" && c.tier <= 2));
 ok("buildingCardsForTier: tier-gated building list for the build menu");
 

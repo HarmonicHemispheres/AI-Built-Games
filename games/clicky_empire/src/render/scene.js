@@ -217,13 +217,14 @@ export function initScene(canvas) {
   scene.add(new THREE.AmbientLight(0xbfd2f0, 0.2));
   scene.add(new THREE.HemisphereLight(0xdfe2f2, 0x4a6b3a, 0.24));
 
-  // A large ground plane under the board. Slightly deeper/desaturated than the
-  // tiles so the play area reads as the hero; fog melts its far edge into the sky.
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x4f9a45, roughness: 1 });
+  // The "cloud sea" the diorama floats on. A flat, UNLIT cloud-white plane (NOT
+  // green) matched to the fog/sky, so everything beyond the board reads as cloud
+  // cover instead of an endless grass field. Unlit + fog-enabled keeps it a
+  // uniform cloud at every distance; the board tiles are the only green left.
+  const groundMat = new THREE.MeshBasicMaterial({ color: 0xd6dfe7, fog: true });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.01;
-  ground.receiveShadow = true;
   ground.userData = { kind: "ground" };
   layers.ground.add(ground);
 
@@ -249,11 +250,14 @@ const TiltShiftCloudShader = {
     tDiffuse: { value: null },
     uResolution: { value: new THREE.Vector2(1, 1) },
     uBlurStrength: { value: 7.0 }, // max edge blur radius, in px
-    uFocusRadius: { value: 0.26 }, // aspect-corrected radius kept sharp
-    uFocusSoftness: { value: 0.42 }, // how far the blur ramps to full
+    // The sharp focus circle is kept LARGE so most of the board stays crisp and
+    // playable — the miniature blur only kicks in near the outer edge/corners
+    // rather than squeezing the player into a tiny central window.
+    uFocusRadius: { value: 0.46 }, // aspect-corrected radius kept sharp
+    uFocusSoftness: { value: 0.26 }, // how far the blur ramps to full past that
     uCloudColor: { value: new THREE.Vector3(0.86, 0.9, 0.93) }, // sRGB cloud-white
-    uCloudStart: { value: 0.4 }, // edge cloud fade begins
-    uCloudEnd: { value: 0.72 }, // fully cloud by here (corners)
+    uCloudStart: { value: 0.6 }, // edge cloud fade begins (pushed out to the rim)
+    uCloudEnd: { value: 0.95 }, // fully cloud only in the far corners
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;

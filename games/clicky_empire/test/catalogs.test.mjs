@@ -22,19 +22,19 @@ const EXPECTED_CARDS = [
   "supply_wagon", "tax_collection", "forage_run",
   "militia",
   // Tier 2 subset
-  "sawmill", "mine", "barracks", "stone_wall", "ballista_tower",
+  "sawmill", "mine", "village", "barracks", "archery_range", "stone_wall", "ballista_tower",
   "spearman", "archer_band",
   "masonry", "fletching",
   "rally", "volley",
   // Tier 3 buildings (constructed from the BUILD menu, not drafted)
-  "keep", "wizard_tower", "castle_wall",
+  "city", "keep", "wizard_tower", "castle_wall",
 ];
 const EXPECTED_UNITS = ["militia", "spearman", "archer_band"];
 const EXPECTED_ENEMIES = ["raider", "wolf", "skirmisher", "sapper", "warlord"];
 
 // --- counts ---
 assert.equal(Object.keys(CARDS).length, EXPECTED_CARDS.length, "card count matches expected set");
-assert.equal(Object.keys(CARDS).length, 27, "card count is exactly 27 (24 v1 + 3 T3 buildings)");
+assert.equal(Object.keys(CARDS).length, 30, "card count is exactly 30 (27 + village/city/archery_range)");
 assert.equal(Object.keys(UNITS).length, 3, "unit count = 3");
 assert.equal(Object.keys(ENEMIES).length, 5, "enemy count = 5");
 ok(`counts: cards=${Object.keys(CARDS).length}, units=3, enemies=5`);
@@ -153,9 +153,9 @@ ok("no out-of-scope ids present (no market/knight/dragon/etc.)");
 const t1 = cardsAtOrBelowTier(1);
 assert.equal(t1.length, 13, "exactly 13 tier-1 cards");
 assert.ok(t1.every((c) => c.tier === 1), "cardsAtOrBelowTier(1) is all tier 1");
-assert.equal(cardsAtOrBelowTier(2).length, 24, "tier<=2 is the original v1 set");
-assert.equal(cardsAtOrBelowTier(3).length, 27, "tier<=3 adds the 3 T3 buildings");
-ok("cardsAtOrBelowTier gates by tier (13 @ T1, 24 @ T2, 27 @ T3)");
+assert.equal(cardsAtOrBelowTier(2).length, 26, "tier<=2 adds village + archery_range to the v1 set");
+assert.equal(cardsAtOrBelowTier(3).length, 30, "tier<=3 adds the T3 buildings incl. city");
+ok("cardsAtOrBelowTier gates by tier (13 @ T1, 26 @ T2, 30 @ T3)");
 
 // --- unit schema (hp = combat health; figures = cosmetic roster; tags; ...) ---
 const UTAGS = new Set(["MELEE", "RANGED", "SIEGE", "CHARGE", "SUPPORT"]);

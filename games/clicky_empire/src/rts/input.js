@@ -12,8 +12,10 @@
 //
 // Routing per the contract:
 //   LEFT-click (no drag):
-//     hit.kind 'tile'|'enemy' -> enforce clickCooldown, resolveClick(target,
-//       playerStats); show fx + playSfx by result type.
+//     hit.kind 'tile'         -> enforce clickCooldown, resolveClick(target,
+//       playerStats); show fx + playSfx by result type. (Harvesting only — the
+//       cursor no longer attacks: clicking an ENEMY is inert. Enemies are killed
+//       by units, ordered via right-click.)
 //     hit.kind 'unit'         -> selection.select([id]).
 //     (A-mode armed) -> next LEFT-click issues commands.attackMove to the tile.
 //   LEFT-drag -> box-select: record start, on release build a world rect via
@@ -30,7 +32,7 @@
 // ============================================================================
 
 import { pick, pickGround } from "../render/scene.js";
-import { state, on } from "../state.js";
+import { state, on, emit } from "../state.js";
 import { resolveClick } from "../combat/clicker.js";
 import * as fx from "../render/fx.js";
 import { playSfx } from "../audio/sfx.js";
@@ -61,12 +63,11 @@ function now() {
     : Date.now();
 }
 
-// --- Click resolution (tiles + enemies) -------------------------------------
+// --- Click resolution (tiles only) ------------------------------------------
+// The cursor harvests resource tiles; it does NOT damage enemies (enemy clicks
+// are routed to an inert no-op in handleLeftClick).
 
 function resolveTarget(hit) {
-  if (hit.kind === "enemy") {
-    return state.enemies.find((e) => e.id === hit.id) ?? null;
-  }
   if (hit.kind === "tile") {
     return state.map?.tiles?.get(hit.id) ?? null;
   }
@@ -101,7 +102,7 @@ function feedback(result, hit, target) {
   }
 }
 
-// A counted tile/enemy click: enforce cooldown, resolve, give feedback.
+// A counted tile click (harvest): enforce cooldown, resolve, give feedback.
 function handleClickTarget(hit) {
   const stats = state.playerStats || {};
   const cooldown = Number.isFinite(stats.clickCooldown) ? stats.clickCooldown : 0;
@@ -130,14 +131,30 @@ function handleLeftClick(event) {
     return;
   }
 
+  // A left-click on one of our buildings opens its info/upgrade panel (handled by
+  // ui/building_panel.js). Anything else dismisses that panel (id:null).
+  if (hit?.kind === "building") {
+    emit("building-clicked", { id: hit.id });
+    return;
+  }
+  emit("building-clicked", { id: null });
+
   if (!hit) {
     // Clicked empty ground -> clear selection.
     selection.clearSelection();
     return;
   }
 
-  if (hit.kind === "tile" || hit.kind === "enemy") {
+  if (hit.kind === "tile") {
     handleClickTarget(hit);
+    return;
+  }
+
+  if (hit.kind === "enemy") {
+    // Clicking an enemy is inert — the cursor no longer deals click damage.
+    // Enemies are fought with units (right-click to order an attack), not taps.
+    // We do NOT clear the current selection so a stray click on a passing enemy
+    // doesn't drop the units the player just box-selected.
     return;
   }
 
@@ -175,6 +192,49 @@ function handleBoxSelect(downEvent, upEvent) {
   };
   // Shift-drag adds the boxed units to the current selection.
   selection.boxSelect(rect, { additive: !!upEvent.shiftKey });
+}
+
+// --- Selection marquee (the visible drag rectangle) -------------------------
+// A lightweight DOM overlay drawn from the pointer-down point to the current
+// pointer position while the player box-selects. Purely cosmetic — the real
+// selection is computed in world space on release (handleBoxSelect). Created
+// lazily and styled inline so it needs no CSS and disappears when not dragging.
+let marqueeEl = null;
+
+function ensureMarquee() {
+  if (marqueeEl || typeof document === "undefined") return marqueeEl;
+  const el = document.createElement("div");
+  el.id = "selection-marquee";
+  Object.assign(el.style, {
+    position: "fixed",
+    pointerEvents: "none",
+    border: "1px solid rgba(126, 206, 255, 0.95)",
+    background: "rgba(126, 206, 255, 0.16)",
+    borderRadius: "1px",
+    zIndex: "60",
+    left: "0px",
+    top: "0px",
+    width: "0px",
+    height: "0px",
+    display: "none",
+  });
+  document.body.appendChild(el);
+  marqueeEl = el;
+  return el;
+}
+
+function showMarquee(x0, y0, x1, y1) {
+  const el = ensureMarquee();
+  if (!el) return;
+  el.style.left = `${Math.min(x0, x1)}px`;
+  el.style.top = `${Math.min(y0, y1)}px`;
+  el.style.width = `${Math.abs(x1 - x0)}px`;
+  el.style.height = `${Math.abs(y1 - y0)}px`;
+  el.style.display = "block";
+}
+
+function hideMarquee() {
+  if (marqueeEl) marqueeEl.style.display = "none";
 }
 
 // --- Right click: issue an order to the current selection -------------------
@@ -219,16 +279,21 @@ export function initInput(canvas) {
     down = { event: e, x: e.clientX, y: e.clientY, dragging: false };
   });
 
-  // Pointer move: promote to a drag once past the pixel threshold.
+  // Pointer move: promote to a drag once past the pixel threshold, then keep the
+  // selection marquee tracking the cursor for the rest of the drag.
   canvas.addEventListener("pointermove", (e) => {
-    if (!down || down.dragging) return;
-    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > DRAG_THRESHOLD_PX) {
+    if (!down) return;
+    if (!down.dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > DRAG_THRESHOLD_PX) {
       down.dragging = true;
+    }
+    if (down.dragging && !placementActive) {
+      showMarquee(down.x, down.y, e.clientX, e.clientY);
     }
   });
 
   // Pointer up: resolve a left click vs a box-select.
   const finishLeft = (e) => {
+    hideMarquee();
     if (!down) return;
     const start = down;
     down = null;
@@ -242,6 +307,7 @@ export function initInput(canvas) {
   canvas.addEventListener("pointerup", finishLeft);
   canvas.addEventListener("pointercancel", () => {
     down = null;
+    hideMarquee();
   });
 
   // Right-click: issue orders. Suppress the browser context menu so right-drag

@@ -9,6 +9,7 @@ import { initHud } from "./hud.js";
 import { initMenu } from "./menu.js";
 import { initCards } from "./cards_ui.js";
 import { initBuildMenu } from "./build_menu.js";
+import { initBuildingPanel } from "./building_panel.js";
 import { initTileTooltip } from "./tile_tooltip.js";
 import { initOverlays } from "./overlays.js";
 
@@ -17,6 +18,7 @@ export function initUI() {
   initMenu();
   initCards();
   initBuildMenu();
+  initBuildingPanel();
   initTileTooltip();
   initOverlays();
 }

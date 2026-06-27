@@ -1,5 +1,5 @@
 # Overview
-In Clicky Empire you play as a brave lord who decides to settle a new land and grow their empire. It blends three loops: the **clicker** loop (tap tiles for resources, tap enemies to fight), the **city-management** loop (spend resources to place buildings and raise an economy), and the **roguelite** loop (survive escalating attack rounds, draft cards, unlock new ones permanently between runs). The single rule that ties it together: protect your **castle**. If it falls, the run ends.
+In Clicky Empire you play as a brave lord who decides to settle a new land and grow their empire. It blends three loops: the **clicker** loop (tap resource tiles to harvest), the **city-management** loop (spend resources to place buildings and raise an economy), and the **roguelite** loop (survive escalating attack rounds, draft cards, unlock new ones permanently between runs). The single rule that ties it together: protect your **castle**. If it falls, the run ends. Enemies are fought by your **army**, not your cursor — click resolves to harvesting and selection, never combat damage.
 
 # Tech & Rendering
 - **Stack:** browser-based, **no build step**. Vanilla HTML / CSS / JS as ES modules, loaded directly via `index.html`. Matches the repo convention (see `undead_defense`).
@@ -29,22 +29,20 @@ In Clicky Empire you play as a brave lord who decides to settle a new land and g
 
 # Game Rules
 - **units** : controlled RTS-style by the player. each unit is a multi-figure group with a single pole and flag in the center. when the unit takes a hit, one of the individual minimal low-poly troops falls over — the **number of standing figures = the unit's current health**. (full detail in [Units & Combat].)
-- **map expansion (fog of war)** : edge-of-map fog tiles can be hovered (shows their cost) and **purchased** by the player to create an ever-expanding map. expanding the map costs **gold**, and cost scales with how much you've already revealed (see [Map Generation]).
-- **clicking** : the player can click on **resource tiles** to collect them or **enemy units** to deal damage, based on the player's stats:
-  - **attack chance** : % : chance a click lands an attack and deals *attack damage* to an enemy unit. *start: 50%*
-  - **attack damage** : number : amount of damage dealt to an enemy unit on a landed click. *start: 1*
-  - **crit chance** : % : chance a landed attack is a critical hit (×3 damage). *start: 5%*
+- **map expansion (fog of war)** : edge-of-map fog tiles can be hovered (shows their cost) and **purchased** by the player to create an ever-expanding map. expanding the map costs **gold**, and the cost of a given fog tile scales **linearly with how many tiles it sits from your starting castle** — nearby frontier stays cheap no matter how much you've already revealed, while pushing far out toward a gem vein costs proportionally more (see [Map Generation]).
+- **clicking** : the player can click on **resource tiles** to harvest them. the cursor is a **tool, not a weapon** — clicking an enemy does nothing; enemies are killed by your units (right-click to order an attack). click stats:
   - **harvest chance** : % : chance a click harvests a resource from a resource tile. *start: 60%*
   - **harvest yield** : number : amount gained per successful harvest. *start: 1*
   - **click cooldown** : ms : minimum time between counted clicks (pacing / anti-spam). *start: 120ms*
-- these clicker stats scale through **Upgrade cards** and **meta-progression**, and are shown on the STATS screen. the cursor is a real weapon and tool — early rounds can be won by frantic clicking; later rounds need an army *and* clicks.
+  - *(legacy combat click stats — attack chance / attack damage / crit chance — still exist in player stats and on the relevant upgrade cards, but no longer affect the cursor now that clicking deals no damage.)*
+- these clicker stats scale through **Upgrade cards** and **meta-progression**, and are shown on the STATS screen. the cursor harvests; your **army** does the fighting.
 
 # Resource Types
 Each resource is earned **idly** (from buildings, each build-phase tick) and **actively** (by clicking the matching tile). Stored per-run; carries between rounds.
-- **gold** : earn from hamlets (collect rent) or clicking on **ore veins**. the universal currency — pays for most cards and **all map expansion**.
+- **gold** : earn from hamlets / villages / cities (collect rent — upgrade them for more) or clicking on **ore veins**. the universal currency — pays for most cards and **all map expansion**.
 - **wood** : earn from lumber camps / sawmills or clicking on **forest**. the early-game backbone of buildings and walls.
 - **iron** : earn from mines or clicking on **ore veins**. gates mid/late military buildings and heavy units.
-- **food** : earn from farms or clicking on **berry patches / farms**. also **upkeep** — every active unit eats food each round; run out and units start to desert (see [Units & Combat]).
+- **food** : earn from farms or clicking on **berry patches / farms**. food is what your empire **runs an army on**: it pays **upkeep** (every active unit eats food each round; run out and units start to desert — see [Units & Combat]) *and* it **fuels unit production** — playing a Unit card costs food, and every spawner building (militia camp, barracks, archery range) spends food each time it trains a unit (a starved spawner stalls until you have food again). No food, no army.
 - **(meta) renown** : earned at the *end* of a run, not during it. spent in the menu's Throne Room (see [Meta-Progression]).
 
 # Tile Types
@@ -69,7 +67,7 @@ Each tile has: whether it's **buildable**, whether it's **walkable** (for units/
   - everything is a **pure function of (tile, seed)** and order-independent, so fog expansion reveals tiles seamlessly continuous with initial generation.
 - the **castle** is forced onto the exact center tile at run start, and a small **3×3 clearing** around it is normalized to grasslands so the start is always on fair, buildable/walkable ground (rivers and ranges are left intact just outside it).
 - **expansion (fog of war):** any fog tile **adjacent to a revealed tile** can be hovered (shows its gold cost) and **purchased** to reveal it.
-  - **cost scaling:** expansion cost grows with how many tiles you've revealed **past the opening block** — `5 × (bought + 1)^1.1`, where `bought = revealedTiles − baseRevealed`. The first reveal is cheap (5 gold) regardless of starting map size; each one after is a little pricier (11, 17, 23, …). revealing toward gem veins is a deliberate risk/reward push.
+  - **cost scaling:** a fog tile's gold cost scales **linearly with its distance from the starting castle** (Chebyshev / king-move rings) — `ceil(EXPAND_GOLD_PER_TILE × ringsFromCastle)`. Distance, not how many tiles you've already bought, sets the price, so the frontier nearest home stays cheap (a 5×5 start's first ring sits 3 tiles from center → `2 × 3 = 6` gold) no matter how much you've expanded elsewhere, while reaching toward a distant gem vein costs proportionally more. revealing far out is a deliberate risk/reward push.
   - a newly revealed tile's type is rolled from the biome weighting for its position. revealing **enlarges the perimeter enemies can spawn from**, so expansion is a tradeoff: more economy and room, but a longer wall to defend.
 
 # Cards
@@ -88,7 +86,7 @@ Hand & draft rules (Units / Upgrades / Actions only):
 - **lumber camp** : cost 20 wood. slowly yields wood each tick (+50% if adjacent to forest). **must be built on/next to a forest tile.**
 - **hamlet** : cost 30 wood. slowly yields gold (rent). also raises the run's **unit food cap** slightly.
 - **wheat field** : cost 15 wood, 10 gold. slowly yields food (+50% on grass / berry).
-- **militia camp** : cost 25 wood, 15 gold. slowly creates a free **militia** unit, up to **2 living militia per camp** — each camp keeps its OWN count (build more camps for more militia). its floating **production bar is segmented** (one slot per cap) — filled slots = that camp's living militia, the next slot fills toward the one in training; at cap the bar stops, and it refills the instant one of its militia dies.
+- **militia camp** : cost 25 wood, 15 gold. trains a **militia** unit on a timer (each costs **food** to raise), up to **2 living militia per camp** — each camp keeps its OWN count (build more camps for more militia). its floating **production bar is segmented** (one slot per cap) — filled slots = that camp's living militia, the next slot fills toward the one in training; at cap the bar stops, and it refills the instant one of its militia dies (provided you have food).
 - **watchtower** : cost 30 wood, 10 iron. defensive building — auto-fires at the nearest enemy in short range for low damage. has HP; can be targeted.
 - **palisade** : cost 10 wood. a 1-tile wall segment. blocks / forces re-route for enemies; low HP, no attack.
 
@@ -109,10 +107,12 @@ Hand & draft rules (Units / Upgrades / Actions only):
 
 ### Buildings
 - **sawmill** : rare. cost 40 wood, 20 iron. big wood yield; counts forest adjacency double. **must be built on/next to a forest tile.**
-- **market** : rare. cost 50 gold, 20 wood. strong gold yield; once per build phase you may **trade** one resource for another at a poor rate.
+- **village** : rare. cost 65 wood, 35 gold. strong gold yield (~3× a hamlet). a **hamlet upgrades into it in place** (or build one fresh from the menu). *(BUILT.)*
+- **market** : rare. cost 50 gold, 20 wood. strong gold yield; once per build phase you may **trade** one resource for another at a poor rate. *(deferred — needs a trade UI.)*
 - **mine** : rare. cost 30 wood, 30 iron. yields iron each tick (+100% adjacent to mountain or on an ore vein). **must be built on/next to an ore vein.**
-- **granary** : common. cost 30 wood. boosts nearby farm food and **raises hand cap by 2** (lets you bank cards).
+- **granary** : common. cost 30 wood. boosts nearby farm food and **raises hand cap by 2** (lets you bank cards). *(deferred.)*
 - **barracks** : rare. cost 50 wood, 40 iron. periodically spawns a **spearman**; cheaper unit food cost while it stands.
+- **archery range** : rare. cost 45 wood, 25 iron. periodically trains a free **archer band** (the reliable way to field archers). *(BUILT.)*
 - **stone wall** : rare. cost 20 wood, 30 iron. high-HP wall segment, upgrade over palisade.
 - **ballista tower** : epic. cost 40 wood, 50 iron. long-range tower firing piercing bolts (line AOE), slow fire rate.
 
@@ -135,6 +135,7 @@ Hand & draft rules (Units / Upgrades / Actions only):
 ## Tier 3 — unlocks at tier 3 (~round 8)
 
 ### Buildings
+- **city** : epic. cost 130 wood, 90 gold. the top gold tier (a **village upgrades into it** in place, or build fresh from the menu). *(BUILT.)*
 - **keep** : epic. cost 100 wood, 80 iron. secondary stronghold, high HP + strong auto-attack. *(BUILT — the one-time castle-fall reprieve is still deferred; for now it's a powerful defensive keep.)*
 - **wizard tower** : epic. cost 80 iron, 60 gold. long-range, slow, heavy-hitting arcane tower. *(BUILT — the true AOE "fireball" is approximated by big single-target damage for now.)*
 - **castle wall** : epic. cost 40 wood, 60 iron. the toughest wall. *(BUILT.)*
@@ -217,6 +218,7 @@ State saved to `localStorage` under key **`clicky_empire_save_v1`**.
 - **vibe:** bright, toy-like medieval diorama. saturated grass-green ground, soft shadows, chunky low-poly props. readable silhouettes; the d20-banner unit aesthetic from `unit_style.png`.
 - **palette:** grass-green base, with biome accents (sandy desert, murky marsh, grey-blue mountain, deep blue water). player units in blue/silver; enemies in a contrasting warm/red palette for instant friend-vs-foe reads.
 - **animation:** each unit is a **Total-War-style block** of many small soldiers (militia 6, spearman 9, archer band 12) standing on the tile surface behind a tall banner, and they **hop** when they land an attack; the block **thins** as the unit loses HP — soldiers **topple** out in proportion to remaining health (cosmetic roster size is independent of the unit's HP); buildings rise with a little scale-pop when placed; fog tiles dissolve/lift like clouds when purchased; harvested tiles do a quick squash-and-bounce.
+- **living world:** forest **trees sway** in the wind (each conifer leans on a slow, phase-offset sine, rooted at the trunk) and **water flows** — a shader-displaced water surface undulates as one continuous, drifting sheet so the sun and reflections shimmer across it. Both are render-only ambient motion (no gameplay cost), advanced by a single `render/ambient.js` updater.
 - **card art:** building and unit cards show a **live, slowly-turning 3D model** of the actual low-poly mesh (rendered by a shared offscreen renderer and blitted to each card) rather than a flat icon; upgrade/action cards keep a vector glyph.
 - **producer progress bars:** every building that produces on a timer (economy yields / spawner units) carries a small **billboarded progress bar** above it that fills toward its next payout, so the player can read production at a glance.
 - **camera juice:** small screen-shake on big hits / boss arrival; brief zoom-nudge toward a dragon when it spawns.

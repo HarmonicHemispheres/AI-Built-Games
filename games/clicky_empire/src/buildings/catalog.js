@@ -19,7 +19,10 @@
 //                                  //   tile whose tile.adjacency === hint, or
 //                                  //   built on such a tile (see economy.js)
 //     attack?:   { damage, range, attackSpeed }, // defense: auto-fire stats
-//     spawns?:   { unitId, interval, cap },       // spawner: free-unit timer
+//     spawns?:   { unitId, interval, cap, foodCost }, // spawner: trains a unit on
+//                                  //   a timer up to `cap`; each spawn consumes
+//                                  //   `foodCost` food (production stalls when the
+//                                  //   larder is empty — see economy.tickEconomy)
 //     requiresNear?: hint | hint[], // placement gate: a matching tile (the
 //                                  //   footprint or an 8-neighbour) must exist —
 //                                  //   e.g. lumber/sawmill near 'forest', mine
@@ -68,6 +71,11 @@ export const BUILDINGS = {
     yields: { gold: 0.4 }, // gold (rent) per tick
     tickRate: 1,
     color: 0xcaa06a,
+    // Upgrade path: a hamlet can grow into a Village (Tier 2) for more rent. The
+    // in-place upgrade (buildings/economy.upgradeBuilding) keeps the tile/footprint
+    // and swaps the def; cheaper than razing and rebuilding.
+    upgradesTo: "village",
+    upgradeCost: { wood: 40, gold: 25 },
   },
   wheat_field: {
     id: "wheat_field",
@@ -90,7 +98,9 @@ export const BUILDINGS = {
     name: "Militia Camp",
     kind: "spawner",
     hp: 5,
-    spawns: { unitId: "militia", interval: 8, cap: 2 }, // free militia, up to 2 PER camp
+    // Trains militia on a timer (up to 2 PER camp). Each one costs food to raise,
+    // so a camp needs a food economy behind it (wheat field / berry patches).
+    spawns: { unitId: "militia", interval: 8, cap: 2, foodCost: 4 },
     color: 0x7d8a5a,
   },
 
@@ -141,6 +151,22 @@ export const BUILDINGS = {
   },
 
   // ---------------------------------------------------------------------------
+  // Tier 2 — economy (gold tiers: the hamlet's upgrade target)
+  // ---------------------------------------------------------------------------
+  village: {
+    id: "village",
+    name: "Village",
+    kind: "economy",
+    hp: 9,
+    yields: { gold: 1.1 }, // ~3x a hamlet's rent
+    tickRate: 1,
+    unlockTier: 2, // can be built / upgraded-into once the run reaches Tier 2
+    color: 0xc9a063,
+    upgradesTo: "city",
+    upgradeCost: { wood: 70, iron: 20, gold: 60 },
+  },
+
+  // ---------------------------------------------------------------------------
   // Tier 2 — spawner
   // ---------------------------------------------------------------------------
   barracks: {
@@ -148,8 +174,18 @@ export const BUILDINGS = {
     name: "Barracks",
     kind: "spawner",
     hp: 8,
-    spawns: { unitId: "spearman", interval: 12, cap: 2 }, // periodically spawns a spearman
+    // Periodically musters a spearman; each costs food to field.
+    spawns: { unitId: "spearman", interval: 12, cap: 2, foodCost: 6 },
     color: 0x8a8f96,
+  },
+  archery_range: {
+    id: "archery_range",
+    name: "Archery Range",
+    kind: "spawner",
+    hp: 7,
+    // Trains an archer band; each costs food to provision.
+    spawns: { unitId: "archer_band", interval: 16, cap: 1, foodCost: 6 },
+    color: 0x9a7b4f,
   },
 
   // ---------------------------------------------------------------------------
@@ -175,6 +211,16 @@ export const BUILDINGS = {
   // Tier 3 — the late-game keep / artillery / fortress wall. (Cathedral &
   // foundry are deferred: they need new heal-pulse / global-buff systems.)
   // ---------------------------------------------------------------------------
+  city: {
+    id: "city",
+    name: "City",
+    kind: "economy",
+    hp: 14,
+    yields: { gold: 2.4 }, // the top gold tier (village -> city upgrade)
+    tickRate: 1,
+    unlockTier: 3,
+    color: 0xcab68a,
+  },
   keep: {
     id: "keep",
     name: "Keep",

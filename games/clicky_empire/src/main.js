@@ -11,10 +11,11 @@ import { runUpdaters, runRenderers } from "./loop.js";
 import { loadSave, saveMeta } from "./persistence.js";
 import { on } from "./util/events.js";
 import { returnToMenu, refreshWorldMeshes } from "./app.js";
-import { expandTo, canExpandTo, expansionCost } from "./world/expand.js";
+import { expandTo, canExpandTo, tileExpansionCost } from "./world/expand.js";
 import { showFogHover, hideFogHover } from "./render/fog_cursor.js";
 // Wave 1 render/audio subsystems.
 import { initFx, floatingNumber, shootArrow } from "./render/fx.js";
+import { initAmbient } from "./render/ambient.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
 import { initMusic, setMusicPhase } from "./audio/music.js";
 // Wave 2 subsystems.
@@ -55,6 +56,7 @@ function init() {
 
   // Wave 1 render/audio subsystems.
   initFx();
+  initAmbient();
   initAudio();
   initMusic();
 
@@ -185,7 +187,7 @@ function setupExpansionInput(canvas) {
     const hit = fogPick(e);
     if (!hit || hit.kind !== "fog") return;
     const { col, row } = hit.tile;
-    const cost = expansionCost(state.map.revealed.size, state.map.baseRevealed);
+    const cost = tileExpansionCost(col, row);
     if (canExpandTo(col, row) && expandTo(col, row)) {
       // Revealed: coin chime + the gold spent floats up off the tile.
       playSfx("coin");
