@@ -566,3 +566,106 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
   82% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -16px); }
 }
+
+/* ---- In-run menu button (top-right) + pause modal ---- */
+/* #game-hud is pointer-events:none, so the button must opt back in. */
+.game-menu-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 8;
+  pointer-events: auto;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
+}
+.game-menu-btn:hover { background: #234029; border-color: var(--grass); }
+.game-menu-btn:active { transform: translateY(1px); }
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40; /* above the HUD (5-8) and overlays (6) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(8, 20, 13, 0.62), rgba(4, 10, 7, 0.92));
+  pointer-events: auto;
+}
+
+.modal-card {
+  position: relative;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  padding: 30px 34px;
+  min-width: 360px;
+  max-width: 440px;
+  box-shadow: var(--shadow), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--ink); border-color: var(--grass); }
+
+.modal-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 16px 0 18px;
+}
+.modal-tab {
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 13px;
+  padding: 8px 18px;
+  color: var(--ink-dim);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.modal-tab:hover { color: var(--ink); }
+.modal-tab.active {
+  color: #08160c;
+  background: linear-gradient(180deg, var(--grass), var(--grass-deep));
+  border-color: #76c765;
+}
+
+.modal-tab-panel { text-align: left; }
+.modal-tab-panel .menu-buttons { margin-top: 4px; }
+
+/* Checkbox setting rows reuse .setting-row; size the box + accent it. */
+.setting-row.toggle { cursor: pointer; }
+.setting-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--grass);
+  cursor: pointer;
+}

@@ -96,6 +96,8 @@ export const state = {
       screenShake: true,
       cameraInvert: false,
       colorBlindMode: false,
+      showProgressBars: true, // float production bars over buildings
+      showReturns: false, // float a "+N" over a building each time it pays out
     },
   },
 

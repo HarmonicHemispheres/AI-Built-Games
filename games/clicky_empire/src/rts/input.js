@@ -80,7 +80,11 @@ function feedback(result, hit, target) {
   switch (result.type) {
     case "harvest": {
       const res = result.resource ?? target?.clickYield?.resource;
-      fx.harvestPop({ x: wp.x, y: wp.y, z: wp.z }, res);
+      // A "successful" harvest on a yieldless tile (grass / water / mountain)
+      // gathers nothing — don't flash a "+1" or play the chime for a click that
+      // produced no resource. Only celebrate an actual gain.
+      if (!res || !(result.amount > 0)) break;
+      fx.harvestPop({ x: wp.x, y: wp.y, z: wp.z }, res, result.amount);
       playSfx("harvest");
       break;
     }

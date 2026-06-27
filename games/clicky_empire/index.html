@@ -71,6 +71,9 @@
 
     <!-- In-run HUD -->
     <div id="game-hud" class="hidden">
+      <!-- Menu button (pauses the run + opens the in-run modal) -->
+      <button id="btn-game-menu" class="game-menu-btn" title="Menu (pauses)" aria-label="Menu">&#9776;</button>
+
       <div id="top-bar" class="hud-bar">
         <div class="res-cluster">
           <div class="res-cell" data-res="gold" title="Gold">
@@ -231,6 +234,42 @@
         <div class="menu-buttons row">
           <button id="btn-settings-back" class="btn">BACK</button>
           <button id="btn-wipe-save" class="btn danger">WIPE SAVE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- In-run pause modal (menu + settings). Overlays everything; pauses. -->
+    <div id="pause-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <button id="btn-modal-close" class="modal-close" title="Resume">&times;</button>
+        <h2 class="panel-title">PAUSED</h2>
+        <div class="modal-tabs">
+          <button class="modal-tab active" data-tab="menu">MENU</button>
+          <button class="modal-tab" data-tab="settings">SETTINGS</button>
+        </div>
+
+        <div id="tab-menu" class="modal-tab-panel">
+          <div class="menu-buttons">
+            <button id="btn-resume" class="btn primary">RESUME</button>
+            <button id="btn-quit-menu" class="btn danger">QUIT TO MENU</button>
+          </div>
+        </div>
+
+        <div id="tab-settings" class="modal-tab-panel hidden">
+          <label class="setting-row toggle">
+            <span>Show building progress bars</span>
+            <input id="set-progress-bars" type="checkbox" />
+          </label>
+          <label class="setting-row toggle">
+            <span>Show returns</span>
+            <input id="set-returns" type="checkbox" />
+          </label>
+          <label class="setting-row">SFX volume
+            <input id="pm-set-sfx" type="range" min="0" max="1" step="0.05" />
+          </label>
+          <label class="setting-row">Music volume
+            <input id="pm-set-music" type="range" min="0" max="1" step="0.05" />
+          </label>
         </div>
       </div>
     </div>

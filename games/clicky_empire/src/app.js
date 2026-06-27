@@ -23,6 +23,7 @@ export function startRun({ mapSize = 9, seed = "" } = {}) {
   clearWorldMeshes();
   newRun({ seed: finalSeed, mapSize });
   state.run.startedAt = Date.now();
+  state.speed = 1; // every run starts at 1x (clears any leftover pause/fast speed)
 
   generateMap(finalSeed, mapSize);
   buildWorldMeshes();
@@ -54,6 +55,27 @@ export function returnToMenu() {
 
 export function setSpeed(n) {
   state.speed = n;
+}
+
+// --- Pause (the in-run menu modal) ------------------------------------------
+// Pausing freezes the run by zeroing the time multiplier — the loop scales dt by
+// state.speed, so every gameplay/render-fx tick gets dt=0 while the modal is up.
+// We stash the pre-pause speed so resume restores 1x/2x/3x exactly.
+let _prePauseSpeed = 1;
+
+export function pauseRun() {
+  if (state.speed === 0) return; // already paused
+  _prePauseSpeed = state.speed || 1;
+  state.speed = 0;
+}
+
+export function resumeRun() {
+  if (state.speed !== 0) return; // not paused
+  state.speed = _prePauseSpeed || 1;
+}
+
+export function isPaused() {
+  return state.speed === 0;
 }
 
 // Rebuild tile + fog meshes from current revealed/frontier state. Called after

@@ -111,10 +111,11 @@ function makeTextTexture(text, colorHex) {
   return tex;
 }
 
-// floatingNumber(worldPos, text, colorHex) — a sprite that floats up and fades.
-// worldPos: {x,y,z}; text: string; colorHex: number (e.g. 0xffffff white,
-// 0xffd24a gold-crit). Returns the sprite (mostly for tests).
-export function floatingNumber(worldPos, text, colorHex = 0xffffff) {
+// floatingNumber(worldPos, text, colorHex, opts) — a sprite that floats up and
+// fades. worldPos: {x,y,z}; text: string; colorHex: number (e.g. 0xffffff white,
+// 0xffd24a gold-crit). opts.scale shrinks/grows the label (1 = default size;
+// building "returns" pops use a smaller value). Returns the sprite (for tests).
+export function floatingNumber(worldPos, text, colorHex = 0xffffff, opts = {}) {
   const tex = makeTextTexture(String(text), colorHex);
   const mat = new THREE.SpriteMaterial({
     map: tex,
@@ -124,7 +125,7 @@ export function floatingNumber(worldPos, text, colorHex = 0xffffff) {
   });
   mat.userData = { __shared: false };
   const sprite = new THREE.Sprite(mat);
-  const base = 0.7;
+  const base = 0.7 * (Number.isFinite(opts.scale) ? opts.scale : 1);
   sprite.scale.set(base * 2, base, 1); // 2:1 to match the 256x128 canvas
   sprite.position.set(worldPos.x, (worldPos.y ?? 0) + 0.6, worldPos.z);
   sprite.renderOrder = 999;
@@ -152,18 +153,26 @@ export function floatingNumber(worldPos, text, colorHex = 0xffffff) {
 // chips. resourceType ∈ {gold, wood, iron, food} (anything else => neutral).
 // ---------------------------------------------------------------------------
 
-const RESOURCE_COLOR = {
+export const RESOURCE_COLOR = {
   gold: 0xffcf3a,
   wood: 0x9c6b3a,
   iron: 0xc8d0d8,
   food: 0x8fd14a,
 };
 
-export function harvestPop(worldPos, resourceType) {
+// Format a harvested amount as a "+N" label. Yields can be fractional (idle
+// building ticks like +0.5), so trim to one decimal and drop trailing zeros.
+function plusLabel(amount) {
+  const n = Math.round((Number.isFinite(amount) ? amount : 1) * 10) / 10;
+  return "+" + n;
+}
+
+export function harvestPop(worldPos, resourceType, amount = 1, opts = {}) {
   const color = RESOURCE_COLOR[resourceType] ?? 0xffffff;
+  const scale = Number.isFinite(opts.scale) ? opts.scale : 1;
 
   // The number.
-  floatingNumber(worldPos, "+1", color);
+  floatingNumber(worldPos, plusLabel(amount), color, { scale });
 
   // A short burst of a few low-cost chip sprites, tinted to the resource color.
   const tex = chipTexture();
@@ -179,7 +188,7 @@ export function harvestPop(worldPos, resourceType) {
       depthWrite: false,
     });
     const s = new THREE.Sprite(mat);
-    s.scale.setScalar(0.16);
+    s.scale.setScalar(0.16 * scale);
     s.position.set(worldPos.x, (worldPos.y ?? 0) + 0.3, worldPos.z);
     s.renderOrder = 998;
     layers.fx.add(s);
@@ -389,6 +398,36 @@ export function shootArrow(from, to, colorHex = 0x4b3522) {
     },
   });
   return arrow;
+}
+
+// shootArrowVolley(from, to, count, colorHex) — a fanned salvo of arrows for an
+// archer BAND: each shaft is loosed from a slightly offset point along the
+// firing line (perpendicular to the shot) so a regiment reads as a line of
+// archers raining a volley, not a single dart. Reuses shootArrow per shaft.
+export function shootArrowVolley(from, to, count = 3, colorHex = 0x4b3522) {
+  const n = Math.max(1, Math.min(8, count | 0));
+  const dx = (to.x ?? 0) - (from.x ?? 0);
+  const dz = (to.z ?? 0) - (from.z ?? 0);
+  const len = Math.hypot(dx, dz) || 1;
+  // Ground-plane perpendicular to the shot direction — the firing line's width.
+  const px = -dz / len;
+  const pz = dx / len;
+  for (let i = 0; i < n; i++) {
+    // Spread shafts evenly across the line in [-1, 1].
+    const t = n === 1 ? 0 : (i / (n - 1)) * 2 - 1;
+    const lateral = t * 0.34; // half-width of the firing line, in world units
+    const start = {
+      x: (from.x ?? 0) + px * lateral,
+      y: (from.y ?? 0.75) + (Math.random() * 0.06 - 0.03),
+      z: (from.z ?? 0) + pz * lateral,
+    };
+    const end = {
+      x: (to.x ?? 0) + px * lateral * 0.4 + (Math.random() * 0.14 - 0.07),
+      y: to.y ?? 0.45,
+      z: (to.z ?? 0) + pz * lateral * 0.4 + (Math.random() * 0.14 - 0.07),
+    };
+    shootArrow(start, end, colorHex);
+  }
 }
 
 // ---------------------------------------------------------------------------

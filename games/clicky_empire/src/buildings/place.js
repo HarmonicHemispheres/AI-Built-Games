@@ -319,6 +319,11 @@ function makeProgressBar(info) {
 //     the bar stops animating (logic holds b.cd at 0 while at cap).
 function updateBar(b) {
   const bar = b._bar;
+  // "Show building progress bars" setting — hide the bar entirely when off (it
+  // stays attached so flipping the setting back on resumes updates next frame).
+  const show = state.meta?.settings?.showProgressBars !== false;
+  bar.visible = show;
+  if (!show) return;
   const ud = bar.userData;
   if (ud.kind === "spawner") {
     const living = livingFromSpawner(b.id);

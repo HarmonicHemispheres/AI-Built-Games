@@ -250,7 +250,12 @@ export function tickEconomy(dt) {
         b.cd -= rate;
         const mult = adjacencyMult(def, b.col, b.row);
         for (const res in def.yields) {
-          addResource(res, def.yields[res] * mult);
+          const gained = def.yields[res] * mult;
+          addResource(res, gained);
+          // Announce the payout so the integrator can float a "+N" over the
+          // building (the "show returns" setting) — same path/decoupling as
+          // spawn-unit. Render decides whether to actually show it.
+          if (b.pos) emit("building-yield", { x: b.pos.x, z: b.pos.z, resource: res, amount: gained });
         }
       }
     }

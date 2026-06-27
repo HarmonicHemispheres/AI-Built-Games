@@ -12,6 +12,7 @@ import { initBuildMenu } from "./build_menu.js";
 import { initBuildingPanel } from "./building_panel.js";
 import { initTileTooltip } from "./tile_tooltip.js";
 import { initOverlays } from "./overlays.js";
+import { initPauseMenu } from "./pause_menu.js";
 
 export function initUI() {
   initHud();
@@ -21,4 +22,5 @@ export function initUI() {
   initBuildingPanel();
   initTileTooltip();
   initOverlays();
+  initPauseMenu();
 }

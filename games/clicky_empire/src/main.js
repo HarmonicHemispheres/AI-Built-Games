@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { state, SCENE, addResource } from "./state.js";
-import { initScene, render, cameraApi, pick, layers } from "./render/scene.js";
+import { initScene, render, cameraApi, pick, pickGround, layers } from "./render/scene.js";
 import { updateRun, registerSystems } from "./run.js";
 import { runUpdaters, runRenderers } from "./loop.js";
 import { loadSave, saveMeta } from "./persistence.js";
@@ -13,8 +13,9 @@ import { on } from "./util/events.js";
 import { returnToMenu, refreshWorldMeshes } from "./app.js";
 import { expandTo, canExpandTo, tileExpansionCost } from "./world/expand.js";
 import { showFogHover, hideFogHover } from "./render/fog_cursor.js";
+import { showTileHover, hideTileHover } from "./render/tile_cursor.js";
 // Wave 1 render/audio subsystems.
-import { initFx, floatingNumber, shootArrow } from "./render/fx.js";
+import { initFx, floatingNumber, harvestPop, shootArrow, shootArrowVolley } from "./render/fx.js";
 import { initAmbient } from "./render/ambient.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
 import { initMusic, setMusicPhase } from "./audio/music.js";
@@ -86,7 +87,10 @@ function init() {
   // Reflect scene changes onto the DOM overlays + in-run HUD.
   on("scene-changed", ({ scene }) => {
     applySceneDom(scene);
-    if (scene !== SCENE.RUN) hideFogHover(); // drop any stale cloud highlight
+    if (scene !== SCENE.RUN) {
+      hideFogHover(); // drop any stale cloud highlight
+      hideTileHover();
+    }
   });
   applySceneDom(state.scene);
 
@@ -99,8 +103,20 @@ function init() {
     floatingNumber({ x, y: 0.8, z }, String(Math.round(amount)), crit ? 0xffd24a : 0xffffff),
   );
 
-  // Towers / castle emit projectile-fire; render a flying arrow from shooter to target.
-  on("projectile-fire", ({ from, to }) => shootArrow(from, to));
+  // Towers / castle / archer bands emit projectile-fire; render a flying arrow
+  // from shooter to target. A `volley` > 1 (archer bands) fans out a salvo.
+  on("projectile-fire", ({ from, to, volley }) =>
+    volley > 1 ? shootArrowVolley(from, to, volley) : shootArrow(from, to),
+  );
+
+  // Economy buildings announce each payout; with "show returns" enabled, float a
+  // "+N" over the building using the same pop the player sees when harvesting.
+  on("building-yield", ({ x, z, resource, amount }) => {
+    if (!state.meta?.settings?.showReturns) return;
+    // Smaller than a click-harvest pop — returns fire constantly from every
+    // producer, so keep them subtle rather than full-size "+N" splashes.
+    harvestPop({ x, y: 1.0, z }, resource, amount, { scale: 0.5 });
+  });
 
   // Records + persistence on game over.
   on("game-over", ({ round, kills }) => {
@@ -154,20 +170,33 @@ function setupExpansionInput(canvas) {
   // revealed geometry so occlusion isn't a concern.
   const fogPick = (e) => pick(e, { roots: [layers.fog] });
 
-  // Hover: highlight the cloud under the cursor by affordability.
+  // Hover: a frontier cloud gets the green/red reveal highlight; an already-
+  // revealed board tile gets the light-blue "pointing here" plate. (While placing
+  // a building the ghost owns the pointer, so both highlights stay hidden.)
   canvas.addEventListener("pointermove", (e) => {
     if (placing || state.scene !== SCENE.RUN) {
       hideFogHover();
+      hideTileHover();
       return;
     }
     const hit = fogPick(e);
     if (hit && hit.kind === "fog") {
       showFogHover(hit.tile.col, hit.tile.row, canExpandTo(hit.tile.col, hit.tile.row));
+      hideTileHover();
+      return;
+    }
+    hideFogHover();
+    const ground = pickGround(e);
+    if (ground && state.map?.revealed?.has(`${ground.tile.col},${ground.tile.row}`)) {
+      showTileHover(ground.tile.col, ground.tile.row);
     } else {
-      hideFogHover();
+      hideTileHover();
     }
   });
-  canvas.addEventListener("pointerleave", hideFogHover);
+  canvas.addEventListener("pointerleave", () => {
+    hideFogHover();
+    hideTileHover();
+  });
 
   let downX = 0;
   let downY = 0;

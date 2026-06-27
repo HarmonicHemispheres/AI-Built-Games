@@ -244,9 +244,27 @@ function engage(u, target, dt) {
         crit,
       });
     }
+    // Ranged units (archer band) loose a volley of arrows at the target. We just
+    // describe the shot on the bus; the integrator wires 'projectile-fire' ->
+    // fx.shootArrow(Volley) (same path the towers/castle use), so this stays pure
+    // logic with no three/fx import. `volley` scales with the band's roster.
+    if (isRanged(u) && u.pos && target.pos) {
+      const figures = u.def?.figures ?? 1;
+      emit("projectile-fire", {
+        from: { x: u.pos.x, y: 0.75, z: u.pos.z },
+        to: { x: target.pos.x, y: 0.45, z: target.pos.z },
+        volley: Math.max(2, Math.min(4, Math.round(figures / 4))),
+      });
+    }
     const aps = u.def?.attackSpeed ?? 1;
     u.attackCd = aps > 0 ? 1 / aps : 0;
   }
+}
+
+// A unit fires arrows (vs. swinging in melee) when its def is tagged RANGED.
+function isRanged(u) {
+  const tags = u?.def?.tags;
+  return Array.isArray(tags) && tags.includes("RANGED");
 }
 
 // ---------------------------------------------------------------------------
