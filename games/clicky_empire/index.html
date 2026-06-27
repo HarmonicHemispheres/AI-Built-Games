@@ -53,9 +53,9 @@
         <div class="config-group">
           <span class="config-label">STARTING MAP SIZE</span>
           <div id="config-sizes" class="seg-group">
-            <button class="seg-btn" data-size="3">3 &times; 3</button>
-            <button class="seg-btn active" data-size="4">4 &times; 4</button>
             <button class="seg-btn" data-size="5">5 &times; 5</button>
+            <button class="seg-btn active" data-size="9">9 &times; 9</button>
+            <button class="seg-btn" data-size="12">12 &times; 12</button>
           </div>
         </div>
         <div class="config-group">
@@ -74,22 +74,22 @@
       <div id="top-bar" class="hud-bar">
         <div class="res-cluster">
           <div class="res-cell" data-res="gold" title="Gold">
-            <span class="res-icon i-gold">&#9679;</span>
+            <span class="res-icon i-gold">&#129689;</span>
             <span class="res-amt" id="res-gold">0</span>
             <span class="res-delta" id="delta-gold"></span>
           </div>
           <div class="res-cell" data-res="wood" title="Wood">
-            <span class="res-icon i-wood">&#9650;</span>
+            <span class="res-icon i-wood">&#129717;</span>
             <span class="res-amt" id="res-wood">0</span>
             <span class="res-delta" id="delta-wood"></span>
           </div>
           <div class="res-cell" data-res="iron" title="Iron">
-            <span class="res-icon i-iron">&#9670;</span>
+            <span class="res-icon i-iron">&#9881;&#65039;</span>
             <span class="res-amt" id="res-iron">0</span>
             <span class="res-delta" id="delta-iron"></span>
           </div>
           <div class="res-cell" data-res="food" title="Food">
-            <span class="res-icon i-food">&#9829;</span>
+            <span class="res-icon i-food">&#127830;</span>
             <span class="res-amt" id="res-food">0</span>
             <span class="res-delta" id="delta-food"></span>
           </div>
@@ -109,7 +109,7 @@
         </div>
         <div class="hud-cell phase-cell">
           <span class="label" id="hud-phase">BUILD</span>
-          <span class="value timer" id="hud-timer">60</span>
+          <span class="value timer" id="hud-timer">120</span>
         </div>
       </div>
 
@@ -120,9 +120,21 @@
         <span class="castle-hp-text" id="castle-hp-text">0 / 0</span>
       </div>
 
+      <!-- Build menu: tier-gated buildings, opened by the BUILD button. -->
+      <div id="build-panel" class="build-panel hidden">
+        <div class="build-panel-head">
+          <span class="build-panel-title">BUILD</span>
+          <span class="build-panel-tier">TIER <b id="build-tier">1</b></span>
+          <button id="btn-build-close" class="build-close" title="Close">&times;</button>
+        </div>
+        <div id="build-list" class="build-list"></div>
+        <p class="build-hint">Click a building you can afford, then place it on the map.</p>
+      </div>
+
       <div id="bottom-bar" class="hud-bar">
         <div id="hand" class="hand"></div>
         <div class="bottom-controls">
+          <button id="btn-build" class="btn build">BUILD</button>
           <button id="btn-defend" class="btn primary defend">DEFEND</button>
           <div class="speed-group" id="speed-group">
             <button class="speed-btn active" data-speed="1">1&times;</button>

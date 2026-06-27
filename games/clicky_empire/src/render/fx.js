@@ -277,6 +277,33 @@ export function toppleFigure(group, figureIndex) {
   }
 }
 
+// attackBob(group) — telegraph an attack with a quick little hop of the standing
+// figures. Cheap and self-retiring; skips toppled figures and won't stack on a
+// figure already mid-hop. Animates each figure's LOCAL y (the group's world
+// position is rewritten every frame from logic, so we never touch that).
+export function attackBob(group) {
+  const figures = group?.userData?.figures;
+  if (!figures) return;
+  for (let i = 0; i < figures.length; i++) {
+    const fig = figures[i];
+    if (!fig || fig.userData.toppled || fig.userData.bobbing) continue;
+    fig.userData.bobbing = true;
+    const baseY = fig.userData.homeY ?? fig.position.y;
+    const hop = 0.09 + (i % 3) * 0.015; // slight per-figure stagger in height
+    push({
+      dur: 0.24,
+      update: (_d, k) => {
+        if (fig.userData.toppled) return false; // got killed mid-hop — bail
+        fig.position.y = baseY + Math.sin(k * Math.PI) * hop;
+      },
+      cleanup: () => {
+        if (!fig.userData.toppled) fig.position.y = baseY;
+        fig.userData.bobbing = false;
+      },
+    });
+  }
+}
+
 function dropBanner(group) {
   const banner = group.userData.banner;
   group.userData.bannerFell = true;
@@ -311,6 +338,57 @@ export function placePop(group) {
       group.scale.copy(target); // land exactly on target
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Arrow projectile — a slim dart that flies from a shooter (tower / castle) to
+// its target, then retires. Triggered by 'projectile-fire' (wired in main.js).
+// ---------------------------------------------------------------------------
+
+let _arrowGeo = null;
+function arrowGeo() {
+  if (_arrowGeo) return _arrowGeo;
+  // A slim dart; rotate so the tip points toward +Z and we can aim it by dir.
+  _arrowGeo = new THREE.ConeGeometry(0.05, 0.34, 6);
+  _arrowGeo.rotateX(Math.PI / 2);
+  _arrowGeo.userData.__shared = true;
+  return _arrowGeo;
+}
+
+const _zAxis = new THREE.Vector3(0, 0, 1);
+
+// shootArrow(from, to, colorHex) — from/to are {x,y?,z}. Returns the mesh.
+export function shootArrow(from, to, colorHex = 0x4b3522) {
+  const start = { x: from.x, y: from.y ?? 0.7, z: from.z };
+  const end = { x: to.x, y: to.y ?? 0.45, z: to.z };
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const horiz = Math.hypot(dx, dz);
+
+  const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+  const arrow = new THREE.Mesh(arrowGeo(), mat);
+  const dir = new THREE.Vector3(dx, 0, dz).normalize();
+  arrow.quaternion.setFromUnitVectors(_zAxis, dir.lengthSq() ? dir : _zAxis);
+  arrow.position.set(start.x, start.y, start.z);
+  arrow.renderOrder = 5;
+  layers.fx.add(arrow);
+
+  const dur = Math.min(0.32, 0.07 + horiz * 0.035);
+  push({
+    dur,
+    update: (_d, k) => {
+      arrow.position.set(
+        start.x + dx * k,
+        start.y + (end.y - start.y) * k + Math.sin(k * Math.PI) * 0.18, // slight arc
+        start.z + dz * k,
+      );
+    },
+    cleanup: () => {
+      layers.fx.remove(arrow);
+      mat.dispose(); // geometry is shared — keep it
+    },
+  });
+  return arrow;
 }
 
 // ---------------------------------------------------------------------------

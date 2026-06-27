@@ -17,10 +17,20 @@ import { state, spend, emit } from "../state.js";
 import { getTileType } from "./tiles.js";
 import { rollTileType } from "./generate.js";
 
-// Expansion cost as a function of how many tiles are already revealed.
-// `5 * n^1.15`, ceil'd. Strictly increasing in n.
-export function expansionCost(revealedCount) {
-  return Math.ceil(5 * revealedCount ** 1.15);
+// Expansion cost as a function of how many tiles you've revealed PAST the
+// starting block. The first purchased tile is cheap; each one after is a little
+// pricier. Cost = `ceil(5 * (bought + 1)^1.1)` where bought = revealedCount -
+// baseRevealed (the size of the initial reveal). Strictly increasing in
+// revealedCount. `baseRevealed` defaults to 0 so the bare 1-arg form (and old
+// tests) still get a strictly-increasing curve.
+export function expansionCost(revealedCount, baseRevealed = 0) {
+  const bought = Math.max(0, revealedCount - baseRevealed);
+  return Math.ceil(5 * (bought + 1) ** 1.1);
+}
+
+// The current expansion cost for the live map (reads the run's base reveal).
+function currentCost() {
+  return expansionCost(state.map.revealed.size, state.map.baseRevealed || 0);
 }
 
 // Is a tile currently revealed?
@@ -33,7 +43,7 @@ function isRevealed(col, row) {
 // the frontier this turn (it depends only on revealedCount), but is returned
 // per-tile for the UI's convenience.
 export function frontier() {
-  const cost = expansionCost(state.map.revealed.size);
+  const cost = currentCost();
   const seen = new Set();
   const out = [];
   for (const key of state.map.revealed) {
@@ -64,8 +74,7 @@ export function canExpandTo(col, row) {
     }
   }
   if (!adjacent) return false;
-  const cost = expansionCost(state.map.revealed.size);
-  return (state.resources.gold || 0) >= cost;
+  return (state.resources.gold || 0) >= currentCost();
 }
 
 // Purchase and reveal a frontier tile. Spends gold, rolls/ensures the tile type,
@@ -74,7 +83,7 @@ export function canExpandTo(col, row) {
 export function expandTo(col, row) {
   if (!canExpandTo(col, row)) return false;
 
-  const cost = expansionCost(state.map.revealed.size);
+  const cost = currentCost();
   if (!spend({ gold: cost })) return false; // unaffordable (race-safe no-op)
 
   const key = tileKey(col, row);

@@ -4,7 +4,11 @@
 // v1 set (militia, spearman, archer band). hp = number of figures in the group.
 //
 // Schema:
-//   { id, name, hp, damage, range, attackSpeed, moveSpeed, tags, foodCost, color }
+//   { id, name, hp, figures, damage, range, attackSpeed, moveSpeed, tags, foodCost, color }
+//   hp:          combat health (the unit dies at 0)
+//   figures:     cosmetic roster size — how many little soldiers stand in the
+//                Total-War-style block. Independent of hp; the block thins in
+//                proportion to remaining hp (see units/group.js reconcileHp).
 //   range:       tiles (melee ~0.9, ranged > 1)
 //   attackSpeed: attacks per second
 //   moveSpeed:   tiles per second
@@ -16,7 +20,8 @@ export const UNITS = {
   militia: {
     id: "militia",
     name: "Militia",
-    hp: 4, // 4 standing figures
+    hp: 4,
+    figures: 6, // a small 3x2 block of levied townsfolk
     damage: 1,
     range: 0.9,
     attackSpeed: 1.0,
@@ -28,7 +33,8 @@ export const UNITS = {
   spearman: {
     id: "spearman",
     name: "Spearman",
-    hp: 5, // 5 standing figures — medium HP, holds a line
+    hp: 5, // medium HP, holds a line
+    figures: 9, // a 3x3 spear block
     damage: 2,
     range: 1.1, // slightly longer reach (spears); anti-charge
     attackSpeed: 0.9,
@@ -40,7 +46,8 @@ export const UNITS = {
   archer_band: {
     id: "archer_band",
     name: "Archer Band",
-    hp: 3, // 3 standing figures — fragile if reached
+    hp: 3, // fragile if reached
+    figures: 12, // a wide 4x3 firing line
     damage: 2,
     range: 4.0, // ranged group, fires from a distance
     attackSpeed: 1.1,

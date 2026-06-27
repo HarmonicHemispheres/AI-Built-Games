@@ -49,7 +49,10 @@ export function updateDefense(dt) {
 
   for (const b of state.placed) {
     const def = getBuildingDef(b.defId);
-    if (!def || def.kind !== "defense" || !def.attack) continue;
+    // Any building with an `attack` auto-fires — defense towers AND the castle
+    // (its wall archers). Dead buildings (swept below) don't get a parting shot.
+    if (!def || !def.attack) continue;
+    if (b.hp != null && b.hp <= 0) continue;
 
     // Cooldown counts DOWN; ready to fire at <= 0.
     if (b.cd > 0) b.cd -= d;
@@ -67,7 +70,15 @@ export function updateDefense(dt) {
     const aps = def.attack.attackSpeed || 1;
     b.cd = 1 / aps;
 
-    // Hitscan visual hook (integrator -> fx.floatingNumber). Pure: no three/fx.
+    // Arrow visual: integrator wires 'projectile-fire' -> fx.shootArrow. Pure
+    // (no three/fx here) — the bolt flies from the building to the target.
+    if (b.pos) {
+      emit("projectile-fire", {
+        from: { x: b.pos.x, y: 0.7, z: b.pos.z },
+        to: { x: target.pos.x, y: 0.45, z: target.pos.z },
+      });
+    }
+    // Hitscan damage-number hook (integrator -> fx.floatingNumber).
     emit("combat-hit", {
       x: target.pos.x,
       z: target.pos.z,

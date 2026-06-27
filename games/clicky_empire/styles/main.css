@@ -186,7 +186,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
 
 .res-cluster { display: flex; gap: 10px; }
 .res-cell { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); position: relative; }
-.res-icon { font-size: 14px; line-height: 1; }
+/* Emoji resource icons — rendered as native color glyphs (the i-* color rules
+   below are an inert fallback for any monochrome-emoji platform). */
+.res-icon { font-size: 15px; line-height: 1; display: inline-block; width: 18px; text-align: center; }
 .i-gold { color: var(--gold); }
 .i-wood { color: var(--wood); }
 .i-iron { color: var(--iron); }
@@ -258,6 +260,75 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
 .speed-btn:hover { color: var(--ink); }
 .speed-btn.active { background: var(--friendly); color: #07142b; border-color: #8fb4ff; }
 
+/* ---- Build menu (tier-gated buildings) ---- */
+.btn.build { background: var(--wood, #8a6a3c); color: #1c130a; border-color: #b88a4e; font-weight: 800; }
+.btn.build:hover { filter: brightness(1.12); }
+.btn.build.active { box-shadow: 0 0 0 2px var(--gold, #e7b84b) inset; }
+
+.build-panel {
+  position: absolute;
+  left: 50%;
+  /* Sit clear above the bottom hand bar (card height ~124 + padding + offset). */
+  bottom: 172px;
+  transform: translateX(-50%);
+  width: min(760px, 92vw);
+  background: linear-gradient(180deg, var(--panel-2, #1b2a1f), var(--panel, #142016));
+  border: 1px solid var(--line, #2f4636);
+  border-radius: 14px;
+  padding: 12px 14px 10px;
+  box-shadow: var(--shadow, 0 12px 30px rgba(0, 0, 0, 0.5));
+  pointer-events: auto;
+  /* Above the bottom bar so the hand never occludes the build cards. */
+  z-index: 7;
+}
+.build-panel.hidden { display: none; }
+.build-panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.build-panel-title { font-weight: 800; letter-spacing: 2px; color: var(--gold, #e7b84b); }
+.build-panel-tier { font-size: 11px; letter-spacing: 1px; color: var(--ink-dim, #9fb0a3); }
+.build-close {
+  margin-left: auto;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  background: var(--panel, #142016);
+  color: var(--ink-dim, #9fb0a3);
+  border: 1px solid var(--line, #2f4636);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.build-close:hover { color: var(--ink, #e7efe6); border-color: var(--gold, #e7b84b); }
+.build-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.build-list:empty::after { content: "No buildings available yet."; color: var(--ink-dim, #9fb0a3); font-size: 12px; font-style: italic; padding: 12px; }
+.build-hint { margin: 8px 0 0; text-align: center; font-size: 11px; color: var(--ink-dim, #9fb0a3); }
+
+/* ---- Tile hover tooltip ---- */
+.tile-tooltip {
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--ink, #e7efe6);
+  background: rgba(12, 18, 11, 0.92);
+  border: 1px solid var(--line, #2f4636);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  white-space: pre-line; /* honor \n line breaks (tile / buildings / units) */
+  line-height: 1.5;
+}
+.tile-tooltip.hidden { display: none; }
+
 /* ---- Cards (hand + draft + collection) ---- */
 .card-pool {
   display: flex;
@@ -313,6 +384,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
 .ce-card-tier { font-size: 8px; font-weight: 800; letter-spacing: 1px; color: var(--ink-dim); }
 
 .ce-card-art {
+  position: relative;
   flex: 1;
   border-radius: 8px;
   background: radial-gradient(circle at 50% 38%, #2c4534 0%, #0f1a12 80%);
@@ -322,6 +394,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
   justify-content: center;
   font-size: 36px;
   min-height: 56px;
+  overflow: hidden;
+}
+/* Live 3D model thumbnail (building / unit cards) fills the art slot. */
+.ce-card-art .ce-card-3d {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 .ce-card-name {
   font-weight: 800;

@@ -23,13 +23,14 @@ import {
   emit,
   on,
 } from "../state.js";
-import { getCard, cardsAtOrBelowTier } from "./catalog.js";
+import { getCard, cardsAtOrBelowTier, isDraftable } from "./catalog.js";
 import { makeRng } from "../util/rng.js";
 import { areaDamage, heal } from "../combat/effects.js";
 
-// All Tier-1 card ids (the starting pool).
+// The Tier-1 random pool: tier-1 cards EXCLUDING buildings. Buildings are built
+// from the tier-gated build menu, not drawn/drafted (see catalog.isDraftable).
 function tier1Cards() {
-  return cardsAtOrBelowTier(1).filter((c) => c.tier === 1);
+  return cardsAtOrBelowTier(1).filter((c) => c.tier === 1 && isDraftable(c));
 }
 
 // Ensure the per-run upgrades list exists without adding a top-level state field.

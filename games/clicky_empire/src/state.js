@@ -38,7 +38,10 @@ export const BASE_STATS = Object.freeze({
   clickCooldown: 120, // ms between counted clicks
 });
 
-export const BUILD_PHASE_SECONDS = 60;
+// Build phase length. Generous enough that the opening round is actually
+// winnable — gather resources, stand up an economy + a defense, position units —
+// while the DEFEND button still lets confident players start the wave early.
+export const BUILD_PHASE_SECONDS = 120;
 export const HAND_CAP = 7;
 export const SCHEMA_VERSION = 1;
 
@@ -63,6 +66,7 @@ export const state = {
     seed: "",
     tiles: new Map(), // key -> tile (see world/tiles.js schema)
     revealed: new Set(), // keys currently visible
+    baseRevealed: 0, // size of the opening reveal (expansion-cost baseline)
     castle: null, // {col,row}
     bounds: { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 }, // revealed extent
   },
@@ -131,6 +135,7 @@ export function newRun({ seed, mapSize }) {
     seed,
     tiles: new Map(),
     revealed: new Set(),
+    baseRevealed: 0,
     castle: null,
     bounds: { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 },
   };

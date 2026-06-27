@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { state } from "../state.js";
+import { mountCardPreview } from "./card_preview.js";
 
 const TYPE_ICON = {
   building: "\u{1F3DB}", // classical building
@@ -42,7 +43,13 @@ export function makeCardEl(card, opts = {}) {
 
   const art = document.createElement("div");
   art.className = "ce-card-art";
-  art.textContent = opts.locked ? "❓" : TYPE_ICON[card.type] || "✨";
+  // Building / unit cards show a live, slowly-turning 3D model of the actual
+  // mesh; everything else (and locked silhouettes) uses the vector glyph.
+  if (opts.locked) {
+    art.textContent = "❓";
+  } else if (!mountCardPreview(art, card)) {
+    art.textContent = TYPE_ICON[card.type] || "✨";
+  }
 
   const name = document.createElement("div");
   name.className = "ce-card-name";

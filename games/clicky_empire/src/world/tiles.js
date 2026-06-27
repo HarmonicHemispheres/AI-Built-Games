@@ -23,6 +23,7 @@ export const TILE = Object.freeze({
 export const TILE_TYPES = {
   [TILE.GRASS]: {
     type: TILE.GRASS,
+    name: "Grassland",
     buildable: true,
     walkable: true,
     clickYield: null,
@@ -31,6 +32,7 @@ export const TILE_TYPES = {
   },
   [TILE.FOREST]: {
     type: TILE.FOREST,
+    name: "Forest",
     buildable: true, // clears to grass when built on
     walkable: true,
     clickYield: { resource: "wood", amount: 1 },
@@ -39,6 +41,7 @@ export const TILE_TYPES = {
   },
   [TILE.WATER]: {
     type: TILE.WATER,
+    name: "Water",
     buildable: false,
     walkable: false,
     clickYield: null,
@@ -47,6 +50,7 @@ export const TILE_TYPES = {
   },
   [TILE.MOUNTAIN]: {
     type: TILE.MOUNTAIN,
+    name: "Mountain",
     buildable: false,
     walkable: false,
     clickYield: null,
@@ -55,6 +59,7 @@ export const TILE_TYPES = {
   },
   [TILE.ORE]: {
     type: TILE.ORE,
+    name: "Ore Vein",
     buildable: true,
     walkable: true,
     // click -> gold or iron (50/50). weighted[] form.
@@ -67,6 +72,7 @@ export const TILE_TYPES = {
   },
   [TILE.BERRY]: {
     type: TILE.BERRY,
+    name: "Berry Patch",
     buildable: true,
     walkable: true,
     clickYield: { resource: "food", amount: 1 },
@@ -77,4 +83,9 @@ export const TILE_TYPES = {
 
 export function getTileType(type) {
   return TILE_TYPES[type] ?? TILE_TYPES[TILE.GRASS];
+}
+
+// Human-readable name for a tile type (used by the hover tooltip).
+export function getTileName(type) {
+  return TILE_TYPES[type]?.name ?? "Land";
 }

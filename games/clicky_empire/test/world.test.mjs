@@ -114,8 +114,11 @@ for (let n = 1; n <= 300; n++) {
   assert.ok(Number.isInteger(c), "cost is an integer (ceil)");
   prev = c;
 }
-assert.equal(expansionCost(25), Math.ceil(5 * 25 ** 1.15), "cost formula matches contract");
-ok("expansionCost strictly increasing (integer, 5*n^1.15)");
+// First purchase past the baseline is cheap; cost ramps from there.
+assert.equal(expansionCost(9, 9), 5, "first tile past the baseline costs 5");
+assert.equal(expansionCost(25), Math.ceil(5 * 26 ** 1.1), "cost formula matches contract");
+assert.ok(expansionCost(40, 30) < expansionCost(40, 9), "fewer tiles bought => cheaper");
+ok("expansionCost strictly increasing (integer, 5*(bought+1)^1.1)");
 
 // --- frontier + expand ---
 newRun({ seed: "EXP", mapSize: 3 });
@@ -124,7 +127,11 @@ const fr = frontier();
 // A 3x3 block has 12 orthogonally-adjacent fog tiles (4 sides x 3, corners excluded by N4).
 assert.equal(fr.length, 12, "3x3 frontier has 12 N4-adjacent fog tiles");
 for (const f of fr) {
-  assert.equal(f.cost, expansionCost(9), "frontier cost = expansionCost(revealed)");
+  assert.equal(
+    f.cost,
+    expansionCost(state.map.revealed.size, state.map.baseRevealed),
+    "frontier cost = expansionCost(revealed, base)",
+  );
   assert.ok(!state.map.revealed.has(tileKey(f.col, f.row)), "frontier tiles are fog");
 }
 
@@ -143,7 +150,7 @@ clearAll();
 let emitted = null;
 on("tile-revealed", (p) => (emitted = p));
 addResource("gold", 1000);
-const cost = expansionCost(state.map.revealed.size);
+const cost = expansionCost(state.map.revealed.size, state.map.baseRevealed);
 const beforeCount = state.map.revealed.size;
 const beforeGold = state.resources.gold;
 assert.equal(canExpandTo(target.col, target.row), true, "with gold => can expand");

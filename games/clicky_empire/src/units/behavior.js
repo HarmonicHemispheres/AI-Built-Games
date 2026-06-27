@@ -26,7 +26,7 @@ import { registerSystems } from "../run.js";
 import { getUnitDef } from "./catalog.js";
 import { resolveHit } from "../combat/damage.js";
 import { findPath, isWalkable, nearestWalkableToward } from "../world/pathfind.js";
-import { tileToWorld, worldToTile, distXZ } from "../util/math.js";
+import { tileToWorld, worldToTile, distXZ, N4, tileKey, manhattan } from "../util/math.js";
 
 // Defensive-stance leash: how far (in world units) past its range a unit will
 // chase a target it engaged on its own before giving up and returning to idle.
@@ -38,7 +38,7 @@ const WAYPOINT_EPS = 0.05;
 // ---------------------------------------------------------------------------
 // createUnit — build the logic instance, push to state.units, return it.
 // ---------------------------------------------------------------------------
-export function createUnit(unitId, col, row) {
+export function createUnit(unitId, col, row, sourceId = null) {
   const def = getUnitDef(unitId);
   if (!def) return null;
   const unit = {
@@ -52,6 +52,9 @@ export function createUnit(unitId, col, row) {
     order: null,
     attackCd: 0,
     group: null,
+    // id of the spawner building that produced this unit (null for card/hand
+    // units). Spawner buildings count their own roster by this for a per-camp cap.
+    spawnerId: sourceId,
   };
   state.units.push(unit);
   return unit;
@@ -142,8 +145,23 @@ function stepTowardTile(u, tile, dt) {
     // path[0] is the current tile; advance to the next waypoint (or goal).
     nextTile = path.length > 1 ? path[1] : path[0];
   } else if (isWalkable(from.col, from.row)) {
-    // No full path: greedy single step toward goal.
-    nextTile = nearestWalkableToward(from, tile);
+    // No full path to the goal (a river/mountain blocks it). Head for the
+    // nearest REACHABLE tile toward the goal so the unit navigates around the
+    // barrier instead of freezing. Forests are walkable, so this never routes
+    // around trees — only true obstacles. Cache the subgoal to avoid BFSing
+    // every tick.
+    const goalKey = tileKey(tile.col, tile.row);
+    if (u._navGoalKey !== goalKey || !u._navSub || !isWalkable(u._navSub.col, u._navSub.row)) {
+      u._navGoalKey = goalKey;
+      u._navSub = nearestReachableTile(from, tile);
+    }
+    const sub = u._navSub;
+    if (sub && (sub.col !== from.col || sub.row !== from.row)) {
+      const sp = findPath(from, sub);
+      nextTile = sp && sp.length > 1 ? sp[1] : nearestWalkableToward(from, tile);
+    } else {
+      nextTile = nearestWalkableToward(from, tile);
+    }
   } else {
     // Standing on a non-revealed/non-walkable tile (e.g. spawned pre-map): aim
     // straight at the goal so movement still works in tests/edge cases.
@@ -151,6 +169,37 @@ function stepTowardTile(u, tile, dt) {
   }
 
   return stepToward(u, tileToWorld(nextTile.col, nextTile.row), dt, goalWorld);
+}
+
+// Bounded BFS over revealed, walkable tiles from `from`; returns the reachable
+// tile with the smallest Manhattan distance to `goal`. Lets a unit blocked by a
+// river/mountain still navigate to the closest point it CAN reach.
+const NAV_BFS_CAP = 1500;
+function nearestReachableTile(from, goal) {
+  if (!isWalkable(from.col, from.row)) return null;
+  const visited = new Set([tileKey(from.col, from.row)]);
+  const queue = [from];
+  let head = 0;
+  let best = from;
+  let bestD = manhattan(from, goal);
+  while (head < queue.length && head < NAV_BFS_CAP) {
+    const cur = queue[head++];
+    for (const { dc, dr } of N4) {
+      const nc = cur.col + dc;
+      const nr = cur.row + dr;
+      const k = tileKey(nc, nr);
+      if (visited.has(k) || !isWalkable(nc, nr)) continue;
+      visited.add(k);
+      const node = { col: nc, row: nr };
+      const d = manhattan(node, goal);
+      if (d < bestD) {
+        bestD = d;
+        best = node;
+      }
+      queue.push(node);
+    }
+  }
+  return best;
 }
 
 // Step `u.pos` toward `waypoint` by def.moveSpeed*dt. If we reach the waypoint
@@ -254,8 +303,8 @@ export function initUnitsLogic() {
   registerSystems({ updateUnits });
   // Economy (militia_camp/barracks) and the unit card path emit `spawn-unit`
   // instead of importing this module (CONTRACTS §14). We own creation.
-  on("spawn-unit", ({ unitId, col, row } = {}) => {
+  on("spawn-unit", ({ unitId, col, row, sourceId = null } = {}) => {
     if (unitId == null) return;
-    createUnit(unitId, col, row);
+    createUnit(unitId, col, row, sourceId);
   });
 }

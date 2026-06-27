@@ -5,15 +5,16 @@
 // ============================================================================
 
 import { state, SCENE, addResource } from "./state.js";
-import { initScene, render, cameraApi, pick } from "./render/scene.js";
+import { initScene, render, cameraApi, pick, layers } from "./render/scene.js";
 import { updateRun, registerSystems } from "./run.js";
 import { runUpdaters, runRenderers } from "./loop.js";
 import { loadSave, saveMeta } from "./persistence.js";
 import { on } from "./util/events.js";
 import { returnToMenu, refreshWorldMeshes } from "./app.js";
-import { expandTo, canExpandTo } from "./world/expand.js";
+import { expandTo, canExpandTo, expansionCost } from "./world/expand.js";
+import { showFogHover, hideFogHover } from "./render/fog_cursor.js";
 // Wave 1 render/audio subsystems.
-import { initFx, floatingNumber } from "./render/fx.js";
+import { initFx, floatingNumber, shootArrow } from "./render/fx.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
 import { initMusic, setMusicPhase } from "./audio/music.js";
 // Wave 2 subsystems.
@@ -81,7 +82,10 @@ function init() {
   on("tile-revealed", () => refreshWorldMeshes());
 
   // Reflect scene changes onto the DOM overlays + in-run HUD.
-  on("scene-changed", ({ scene }) => applySceneDom(scene));
+  on("scene-changed", ({ scene }) => {
+    applySceneDom(scene);
+    if (scene !== SCENE.RUN) hideFogHover(); // drop any stale cloud highlight
+  });
   applySceneDom(state.scene);
 
   // Audio reactions to the phase machine.
@@ -92,6 +96,9 @@ function init() {
   on("combat-hit", ({ x, z, amount, crit }) =>
     floatingNumber({ x, y: 0.8, z }, String(Math.round(amount)), crit ? 0xffd24a : 0xffffff),
   );
+
+  // Towers / castle emit projectile-fire; render a flying arrow from shooter to target.
+  on("projectile-fire", ({ from, to }) => shootArrow(from, to));
 
   // Records + persistence on game over.
   on("game-over", ({ round, kills }) => {
@@ -132,13 +139,33 @@ function applySceneDom(scene) {
 }
 
 // --- Fog-of-war expansion clicks (integrator-owned) -------------------------
-// RTS input ignores 'fog' picks; the integrator handles them. A clean left
-// click (no drag) on a frontier fog tile spends gold to reveal it. Suppressed
-// during building placement so the ghost owns the pointer.
+// RTS input ignores 'fog' picks; the integrator handles them. Hovering a
+// frontier cloud highlights it (green if affordable, red if not); a clean left
+// click (no drag) on it spends gold to reveal the tile. Suppressed during
+// building placement so the ghost owns the pointer.
 function setupExpansionInput(canvas) {
   let placing = false;
   on("placement-begin", () => (placing = true));
   on("placement-end", () => (placing = false));
+
+  // Raycast only the cloud layer — cheap per-move, and clouds never overlap
+  // revealed geometry so occlusion isn't a concern.
+  const fogPick = (e) => pick(e, { roots: [layers.fog] });
+
+  // Hover: highlight the cloud under the cursor by affordability.
+  canvas.addEventListener("pointermove", (e) => {
+    if (placing || state.scene !== SCENE.RUN) {
+      hideFogHover();
+      return;
+    }
+    const hit = fogPick(e);
+    if (hit && hit.kind === "fog") {
+      showFogHover(hit.tile.col, hit.tile.row, canExpandTo(hit.tile.col, hit.tile.row));
+    } else {
+      hideFogHover();
+    }
+  });
+  canvas.addEventListener("pointerleave", hideFogHover);
 
   let downX = 0;
   let downY = 0;
@@ -155,11 +182,18 @@ function setupExpansionInput(canvas) {
     isLeftDown = false;
     if (placing || state.scene !== SCENE.RUN) return;
     if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // a drag, not a click
-    const hit = pick(e);
+    const hit = fogPick(e);
     if (!hit || hit.kind !== "fog") return;
     const { col, row } = hit.tile;
+    const cost = expansionCost(state.map.revealed.size, state.map.baseRevealed);
     if (canExpandTo(col, row) && expandTo(col, row)) {
+      // Revealed: coin chime + the gold spent floats up off the tile.
       playSfx("coin");
+      floatingNumber(hit.point, `-${cost}g`, 0xffcf3a);
+      hideFogHover();
+    } else {
+      // The only reason a frontier cloud can't be revealed is too little gold.
+      floatingNumber(hit.point, `${cost}g`, 0xff6a6a);
     }
   });
 }

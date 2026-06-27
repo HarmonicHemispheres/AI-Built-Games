@@ -92,7 +92,15 @@ function seedUnits() {
   boxSelect({ minX: 100, maxX: 101, minZ: 100, maxZ: 101 });
   assert.deepEqual(state.selection, [], "boxSelect over empty area selects nothing");
 
-  ok("boxSelect picks inside / excludes outside / inclusive bounds");
+  // Additive (shift-drag) merges box hits into the current selection.
+  select(["u3"]);
+  boxSelect({ minX: -1, maxX: 3, minZ: -1, maxZ: 2 }, { additive: true });
+  assert.deepEqual(state.selection, ["u1", "u2", "u3"], "additive boxSelect merges with current selection");
+  // A non-additive box replaces it.
+  boxSelect({ minX: -1, maxX: 3, minZ: -1, maxZ: 2 });
+  assert.deepEqual(state.selection, ["u1", "u2"], "non-additive boxSelect replaces selection");
+
+  ok("boxSelect picks inside / excludes outside / inclusive bounds / additive merges");
 }
 
 // --- move/attack/attackMove/stop set the correct order ----------------------

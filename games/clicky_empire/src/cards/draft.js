@@ -12,7 +12,7 @@
 // ============================================================================
 
 import { state, HAND_CAP } from "../state.js";
-import { getCard, cardsAtOrBelowTier, CARDS } from "./catalog.js";
+import { getCard, cardsAtOrBelowTier, CARDS, isDraftable } from "./catalog.js";
 import { makeRng } from "../util/rng.js";
 import { registerSystems, advanceToNextRound } from "../run.js";
 
@@ -31,11 +31,12 @@ function draftPool() {
     if (CARDS[id]) ids.add(id);
   }
 
-  // Filter by current tier and resolve to card objects.
+  // Filter by current tier and resolve to card objects. Buildings are excluded
+  // from the draft — they are built from the tier-gated build menu instead.
   const pool = [];
   for (const id of ids) {
     const card = getCard(id);
-    if (card && card.tier <= tier) pool.push(card);
+    if (card && card.tier <= tier && isDraftable(card)) pool.push(card);
   }
   return pool;
 }

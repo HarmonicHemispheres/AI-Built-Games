@@ -21,11 +21,12 @@ function $(id) {
   return document.getElementById(id);
 }
 
-// Config form local selection (defaults: 4x4, random seed).
-let selectedSize = 4;
+// Config form local selection (defaults: 9x9, random seed).
+let selectedSize = 9;
 
 function isUnlocked(card) {
   if (!card) return false;
+  if (card.type === "building") return true; // buildings are gated by tier in-run, always in the catalog
   if (card.tier === 1) return true; // tier-1 pool is always available
   return (state.meta?.unlockedCards || []).includes(card.id);
 }
@@ -60,7 +61,7 @@ function wireConfig() {
     sizes.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
       if (!btn) return;
-      selectedSize = Number(btn.dataset.size) || 4;
+      selectedSize = Number(btn.dataset.size) || 9;
       for (const b of sizes.querySelectorAll(".seg-btn")) {
         b.classList.toggle("active", b === btn);
       }

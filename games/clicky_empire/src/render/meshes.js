@@ -72,7 +72,7 @@ function mix(hexA, hexB, t) {
 
 const SILVER = 0xc9d4e0; // helms / blades — the "silver" half of blue/silver
 const POLE = 0x6b4a2a; // banner pole (wood)
-const FLAG_GREEN = 0x2f8f4e; // d20-banner green from unit_style.png
+const FLAG_BLUE = 0x4169e1; // royal blue — the PLAYER banner
 const FLAG_RED = 0xb83a2a; // enemy banner accent
 
 // ---------------------------------------------------------------------------
@@ -264,12 +264,25 @@ export function buildFogMesh(col, row) {
 // Map known building defIds to a small builder. Unknown ids fall back to a
 // generic hut so the game still renders something clickable.
 //
+// Tile slab tops stand ~0.22 world units tall (see tileHeight). Buildings are
+// positioned at world y=0 by callers, so without this lift a building's base
+// sinks INTO the slab and the bottom of the structure is hidden. We raise all
+// builder geometry by this much so buildings sit ON the tile surface (matching
+// how unit figures stand at STAND_Y).
+const GROUND_Y = 0.22;
+
 // buildBuildingMesh(defId, opts?) -> Object3D (userData = { kind:'building', id })
 //   opts: { col?, row?, id?, color? }  (id => userData.id; col/row => position)
 export function buildBuildingMesh(defId, opts = {}) {
   const group = new THREE.Group();
+  // Inner content group lifted onto the tile top — callers set the OUTER group's
+  // position to (worldX, 0, worldZ); the lift lives here so it can't be clobbered.
+  const content = new THREE.Group();
+  content.position.y = GROUND_Y;
+  group.add(content);
+
   const builder = BUILDING_BUILDERS[defId] ?? buildGenericHut;
-  builder(group, opts.color);
+  builder(content, opts.color);
 
   if (opts.col != null && opts.row != null) {
     const w = tileToWorld(opts.col, opts.row, 0);
@@ -381,6 +394,17 @@ function buildStoneWall(group, color = 0x9b9ea3) {
   }
 }
 
+// --- Castle wall (Tier 3): a taller, thicker stone wall with more merlons -----
+function buildCastleWall(group, color = 0xb4b7bc) {
+  addBox(group, color, 0, 0, 0, 0.94, 0.72, 0.34, 1.0);
+  // a banded course line for heft
+  addBox(group, shade(color, 0.88), 0, 0.34, 0, 0.96, 0.06, 0.36, 1.0);
+  // five chunky merlons
+  for (let i = -2; i <= 2; i++) {
+    addBox(group, shade(color, 0.96), i * 0.2, 0.72, 0, 0.14, 0.2, 0.34, 1.0);
+  }
+}
+
 // --- Economy buildings ------------------------------------------------------
 function buildLumberCamp(group, color = 0x8a6a3c) {
   addBox(group, color, 0, 0, 0, 0.55, 0.34, 0.55);
@@ -485,6 +509,20 @@ function buildKeep(group, color = 0xa9aeb6) {
   group.scale.setScalar(0.85);
 }
 
+// --- Wizard tower (Tier 3): a tall slim tower topped by a glowing arcane orb --
+function buildWizardTower(group, color = 0x6b54a8) {
+  // tapered stone shaft
+  addBox(group, color, 0, 0, 0, 0.34, 0.5, 0.34, 1.0);
+  addBox(group, shade(color, 1.1), 0, 0.5, 0, 0.28, 0.5, 0.28, 1.0);
+  // pointed conical cap
+  addRoof(group, shade(color, 0.7), 1.0, 0.5, 0.5, 0.42, 6);
+  // floating arcane orb (emissive-ish bright icosahedron)
+  const orb = meshOf(G.ico(), sharedMat(0x9fd4ff, 0.25, "orb"));
+  orb.scale.setScalar(0.16);
+  orb.position.y = 1.16;
+  group.add(orb);
+}
+
 const BUILDING_BUILDERS = {
   castle: buildCastle,
   watchtower: buildWatchtower,
@@ -502,33 +540,37 @@ const BUILDING_BUILDERS = {
   granary: buildGranary,
   barracks: buildBarracks,
   keep: buildKeep,
+  wizard_tower: buildWizardTower,
+  castle_wall: buildCastleWall,
 };
 
 // ===========================================================================
 // UNIT / ENEMY FIGURE CLUSTERS
 // ===========================================================================
 
-// A single low-poly soldier figure: chunky body + helm, tinted by team color.
-// Returns a Group so fx can topple/sink the whole figure as one unit.
+// A single low-poly soldier figure: small body + helm, tinted by team color.
+// Returns a Group so fx can topple/sink the whole figure as one unit. Figures
+// are deliberately SMALL (Total-War scale) — a unit reads as a tight block of
+// many soldiers + a tall banner, not a few big ones.
 function buildFigure(bodyColor, accentColor) {
   const fig = new THREE.Group();
 
-  // Body: a tapered box (slightly narrower at the shoulders via scale).
+  // Body: a small tapered box.
   const body = meshOf(G.unitBox(), sharedMat(bodyColor, 0.85));
-  body.scale.set(0.16, 0.26, 0.13);
-  body.position.y = 0.13;
+  body.scale.set(0.1, 0.22, 0.09);
+  body.position.y = 0.11;
   fig.add(body);
 
   // Head/helm: silver-ish, a small icosahedron.
   const head = meshOf(G.ico(), sharedMat(accentColor, 0.6));
-  head.scale.setScalar(0.1);
-  head.position.y = 0.31;
+  head.scale.setScalar(0.075);
+  head.position.y = 0.26;
   fig.add(head);
 
   // A stubby weapon/shield hint: a thin silver box at the side.
   const arm = meshOf(G.unitBox(), sharedMat(accentColor, 0.5));
-  arm.scale.set(0.04, 0.2, 0.04);
-  arm.position.set(0.1, 0.18, 0.02);
+  arm.scale.set(0.03, 0.17, 0.03);
+  arm.position.set(0.07, 0.14, 0.01);
   fig.add(arm);
 
   // NOTE: no userData.kind here on purpose. pick() (scene.js) walks UP to the
@@ -538,32 +580,20 @@ function buildFigure(bodyColor, accentColor) {
   return fig;
 }
 
-// Lay figures out in a tidy spiral/ring cluster around the center pole. Deter-
-// ministic given count so re-builds look stable.
-function clusterOffsets(count) {
+// Lay figures out in a tidy rectangular block — a Total-War-style regiment that
+// all faces the same way, front rows filled first. Deterministic given count so
+// re-builds look stable. cols/rows are chosen ~square by the caller.
+function gridOffsets(count, cols, rows, spacing) {
   const out = [];
   if (count <= 0) return out;
-  // ring radii grow as the count grows.
+  const x0 = -((cols - 1) * spacing) / 2;
+  const z0 = -((rows - 1) * spacing) / 2;
   let placed = 0;
-  let ring = 0;
-  while (placed < count) {
-    if (ring === 0) {
-      // skip the very center (pole lives there); start at ring 1
-      ring = 1;
-      continue;
-    }
-    const radius = 0.16 + ring * 0.17;
-    const perRing = Math.max(4, ring * 6);
-    for (let i = 0; i < perRing && placed < count; i++) {
-      const a = (i / perRing) * Math.PI * 2 + ring * 0.6;
-      out.push({
-        x: Math.cos(a) * radius,
-        z: Math.sin(a) * radius,
-        yaw: a + Math.PI, // face roughly outward
-      });
+  for (let r = 0; r < rows && placed < count; r++) {
+    for (let c = 0; c < cols && placed < count; c++) {
+      out.push({ x: x0 + c * spacing, z: z0 + r * spacing, yaw: 0 });
       placed++;
     }
-    ring++;
   }
   return out;
 }
@@ -576,13 +606,16 @@ function buildBannerPole(flagColor) {
   pole.position.y = 0.45;
   banner.add(pole);
 
-  // Tall hanging banner (like the d20 flag in unit_style.png).
+  // Tall hanging banner (like the d20 flag in unit_style.png). It flies toward
+  // the BACK of the formation (+z) — the cloth extends along the depth axis from
+  // the pole, not across the front (which read as a sideways flag). Rotated so
+  // the plane's width maps to world +z; offset by half its width so the near
+  // edge sits at the pole and the cloth trails backward.
   const flag = meshOf(G.plane(), sharedMat(flagColor, 0.85, "flag"));
   flag.material.side = THREE.DoubleSide;
   flag.scale.set(0.34, 0.5, 1);
-  flag.position.set(0.0, 0.6, 0.0);
-  // hang it off one side of the pole
-  flag.position.x = 0.17;
+  flag.rotation.y = -Math.PI / 2;
+  flag.position.set(0.0, 0.6, 0.17);
   banner.add(flag);
 
   // No userData.kind (see buildFigure): clicks on the banner should resolve to
@@ -591,30 +624,48 @@ function buildBannerPole(flagColor) {
   return banner;
 }
 
-// Core builder shared by units and enemies.
+// Ground clearance: tile slab tops sit at ~0.22 world units (grasslands) up to
+// 0.28 (forest). Figures + banner are lifted by this so soldiers stand ON the
+// ground rather than being half-buried in the slab (which made them nearly
+// invisible on forest tiles). fx topple/bob animate relative to this homeY.
+const STAND_Y = 0.24;
+// Spacing between soldiers in the regiment block.
+const FORM_SPACING = 0.16;
+
+// Core builder shared by units and enemies. The number of soldiers in the block
+// is the def's `figures` (cosmetic roster size) when present, else floor(hp) for
+// enemies — see units/group.js for how the block thins with hp.
 function buildCluster(kind, def, hp) {
   const group = new THREE.Group();
-  const count = Math.max(0, Math.floor(hp ?? def?.hp ?? 1));
+  const count = Math.max(0, Math.floor(def?.figures ?? hp ?? def?.hp ?? 1));
+  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const rows = Math.max(1, Math.ceil(count / cols));
 
   const teamColor = def?.color ?? (kind === "unit" ? 0x5b8def : 0xd6533c);
   // Units lean blue/silver; enemies lean warm/red. Accent = helms/blades.
   const accent = kind === "unit" ? SILVER : mix(teamColor, 0xffd9a0, 0.4);
-  const flagColor = kind === "unit" ? FLAG_GREEN : FLAG_RED;
+  // Player banner is royal blue; enemy banner is red.
+  const flagColor = kind === "unit" ? FLAG_BLUE : FLAG_RED;
 
-  // Center banner.
+  // Standard-bearer: planted at the BACK-LEFT corner of the block (never in
+  // front of / overlapping the soldiers), lifted to the ground surface. The flag
+  // hangs rightward along the back edge so it reads as aligned with the regiment.
+  const halfW = ((cols - 1) / 2) * FORM_SPACING;
+  const halfD = ((rows - 1) / 2) * FORM_SPACING;
   const banner = buildBannerPole(flagColor);
+  banner.position.set(-halfW - 0.05, STAND_Y, halfD + 0.12);
   group.add(banner);
   group.userData = {}; // set below
 
   // Figures.
   const figures = [];
-  const offsets = clusterOffsets(count);
+  const offsets = gridOffsets(count, cols, rows, FORM_SPACING);
   for (let i = 0; i < count; i++) {
     const off = offsets[i] ?? { x: 0, z: 0, yaw: 0 };
     const fig = buildFigure(teamColor, accent);
-    fig.position.set(off.x, 0, off.z);
+    fig.position.set(off.x, STAND_Y, off.z);
     fig.rotation.y = off.yaw;
-    fig.userData.homeY = 0;
+    fig.userData.homeY = STAND_Y;
     fig.userData.standing = true;
     group.add(fig);
     figures.push(fig);

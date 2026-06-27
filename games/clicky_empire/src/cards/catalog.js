@@ -257,6 +257,38 @@ export const CARDS = {
     // deal medium damage to all enemies in a chosen tile radius
     effect: { action: "areaDamage", amount: 4, radius: 2, target: "point" },
   },
+
+  // ---------------------------------------------------------------------------
+  // Tier 3 — buildings (unlocks at tier 3 / ~round 8). These are constructed
+  // from the BUILD menu (not drafted). Cathedral/foundry are still deferred.
+  // ---------------------------------------------------------------------------
+  keep: {
+    id: "keep",
+    name: "Keep",
+    type: "building",
+    tier: 3,
+    rarity: "epic",
+    cost: { wood: 100, iron: 80 },
+    effect: { defId: "keep" }, // secondary stronghold: high HP + strong auto-attack
+  },
+  wizard_tower: {
+    id: "wizard_tower",
+    name: "Wizard Tower",
+    type: "building",
+    tier: 3,
+    rarity: "epic",
+    cost: { iron: 80, gold: 60 },
+    effect: { defId: "wizard_tower" }, // long-range, heavy-hitting arcane tower
+  },
+  castle_wall: {
+    id: "castle_wall",
+    name: "Castle Wall",
+    type: "building",
+    tier: 3,
+    rarity: "epic",
+    cost: { wood: 40, iron: 60 },
+    effect: { defId: "castle_wall" }, // the toughest wall segment
+  },
 };
 
 export function getCard(id) {
@@ -265,4 +297,19 @@ export function getCard(id) {
 
 export function cardsAtOrBelowTier(tier) {
   return Object.values(CARDS).filter((c) => c.tier <= tier);
+}
+
+// Random draws/drafts exclude buildings: buildings are no longer drafted, they
+// are constructed from the tier-gated build menu (see ui/build_menu.js). Units,
+// upgrades, and actions remain the random-card pool. Keeping the filter in one
+// place so hand.js and draft.js stay in sync.
+export function isDraftable(card) {
+  return !!card && card.type !== "building";
+}
+
+// All building cards available to construct at or below `tier`. The build menu
+// reads this; buildings are gated purely by the run's current tier (not by the
+// meta unlock system, which only governs the draftable pool).
+export function buildingCardsForTier(tier) {
+  return Object.values(CARDS).filter((c) => c.type === "building" && c.tier <= tier);
 }

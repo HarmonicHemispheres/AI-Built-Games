@@ -17,12 +17,12 @@ In Clicky Empire you play as a brave lord who decides to settle a new land and g
 # Gameloop
 - user starts on the **main menu**: PLAY, CARDS, STATS, SETTINGS.
 - user clicks PLAY and gets a **pregame config form**:
-  - starting map size (3x3, 4x4, 5x5 tiles)
+  - starting map size (5x5, 9x9, 12x12 tiles)
   - (optional) a seed field — blank rolls a random seed; the seed is always shown on the HUD so runs are shareable / repeatable.
 - the **run starts**: the player sees the tiles of their starting map; everything beyond is covered in clouds (a fog-of-war effect).
-- player starts with **no resources** and randomly draws **5 tier-1 cards**. cards can be played whenever the player can afford them. the player **ALWAYS** starts with a **castle card already placed at the map center** — if this castle is ever destroyed, they lose the game.
+- player starts with **no resources** and randomly draws **5 tier-1 cards** (units / upgrades / actions only — **buildings are never drawn or drafted**; they're constructed from the tier-gated **build menu**). cards can be played whenever the player can afford them. the player **ALWAYS** starts with the **castle already placed at the map center** — if this castle is ever destroyed, they lose the game.
 - the loop alternates between two phases, separated by a timer:
-  - **BUILD PHASE** (round timer counts down, default ~60s): gather resources (click tiles + idle buildings), play cards to build economy/defense, position units, and spend gold to expand the map into the fog. a **"DEFEND" button** lets the player end the build phase early when ready.
+  - **BUILD PHASE** (round timer counts down, default ~120s — long enough that the opening round is winnable): gather resources (click tiles + idle buildings), open the **build menu** to construct any unlocked building you can afford, play cards (units / upgrades / actions) to round out economy/defense, position units, and spend gold to expand the map into the fog. a **"DEFEND" button** lets the player end the build phase early when ready.
   - **ATTACK PHASE**: when the round timer runs out (or DEFEND is pressed), a semi-random number of enemy units spawn at random edges of the *visible* map and make their way toward the center (the castle), stopping to attack buildings and units along the way until destroyed. the player keeps clicking and microing units throughout.
 - after the attack round ends, the **timer resets** and the player gains: leftover resources persist, a **resource payout**, **XP** (helps to unlock the next tier of cards), and a **draft of 3 new cards** out of all unlocked cards.
 - the player's goal is to **survive as many attack rounds as possible**. each round the wave gets larger / meaner (see [Rounds & Progression]).
@@ -61,26 +61,34 @@ Each tile has: whether it's **buildable**, whether it's **walkable** (for units/
 
 # Map Generation & Fog of War
 - **grid-based**, generated from the run **seed**. the starting NxN block (player's pick) is revealed; an "infinite" expanse of fog tiles surrounds it.
-- **biome weighting:** tiles are assigned by weighted noise so types cluster naturally (forests in patches, water in lakes/rivers, mountains in ridges). ore/gem/berry are rarer scatter. weights shift slightly outward so the frontier feels a bit richer and a bit more dangerous.
-- the **castle** is forced onto the exact center tile at run start (terrain there is normalized to grasslands).
+- **realistic layout:** the world is built to read like a real landscape rather than scattered blobs:
+  - **rivers** are the gradient-normalized **contour of a domain-warped noise field** — a handful of long, winding water channels with natural **bends/meanders** (a roughly constant ~1-tile width, so they don't balloon into lakes on flat ground). a river will even cut a gorge/pass straight through a mountain range, making a natural chokepoint.
+  - **mountain ranges** form along the high cores of an elevation field (linked into ridge-like ranges, not random peaks); **lakes** are rare standing water where it's very wet and very low.
+  - **forests** grow as connected stands where moisture is moderately high; **fields** are the open grass plains that fill the rest.
+  - **farmland** (berry patches) clusters on the fertile **riverbanks** (floodplains) and in lush lowland; **ore veins** scatter in the rocky foothills near the ranges. these resource tiles are rarer scatter, weighted a touch richer toward the frontier so expanding is risk/reward.
+  - everything is a **pure function of (tile, seed)** and order-independent, so fog expansion reveals tiles seamlessly continuous with initial generation.
+- the **castle** is forced onto the exact center tile at run start, and a small **3×3 clearing** around it is normalized to grasslands so the start is always on fair, buildable/walkable ground (rivers and ranges are left intact just outside it).
 - **expansion (fog of war):** any fog tile **adjacent to a revealed tile** can be hovered (shows its gold cost) and **purchased** to reveal it.
-  - **cost scaling:** expansion cost = `base × revealedTiles^growth` (e.g., `5 × count^1.15`), so each tile is a little pricier than the last. revealing toward gem veins is a deliberate risk/reward push.
+  - **cost scaling:** expansion cost grows with how many tiles you've revealed **past the opening block** — `5 × (bought + 1)^1.1`, where `bought = revealedTiles − baseRevealed`. The first reveal is cheap (5 gold) regardless of starting map size; each one after is a little pricier (11, 17, 23, …). revealing toward gem veins is a deliberate risk/reward push.
   - a newly revealed tile's type is rolled from the biome weighting for its position. revealing **enlarges the perimeter enemies can spawn from**, so expansion is a tradeoff: more economy and room, but a longer wall to defend.
 
 # Cards
-Every card has: **name**, **type** (Building / Unit / Upgrade / Action), **tier** (1–3), **rarity** (common / rare / epic / legendary), **cost** (a mix of gold/wood/iron/food), and an **effect**. Buildings and Units are *placed*; Upgrades are *permanent for the run*; Actions are *one-shot* and discarded. Drafting a card you've **never seen before permanently unlocks it** for future runs (see [Meta-Progression]).
+Every card has: **name**, **type** (Building / Unit / Upgrade / Action), **tier** (1–3), **rarity** (common / rare / epic / legendary), **cost** (a mix of gold/wood/iron/food), and an **effect**. Units are *placed*; Upgrades are *permanent for the run*; Actions are *one-shot* and discarded. Drafting a Unit / Upgrade / Action you've **never seen before permanently unlocks it** for future runs (see [Meta-Progression]).
 
-Hand & draft rules:
-- start of run: draw **5 tier-1 cards**. hand cap **7**.
-- end of each round: draft **3 cards** from the pool of *unlocked* cards at or below your current tier (XP-gated).
+**Buildings are NOT part of the random card system.** Instead they're constructed from a dedicated **build menu** (a BUILD button on the bottom bar): it lists every building **unlocked by your current tier**, and you can build any of them the moment you can afford the resources — no draw / draft / luck involved. Picking a building starts the same ghost-placement flow (pick a buildable tile, pay the cost, place). This keeps the random draws focused on the consumable / persistent effects (units, upgrades, actions) while your economy and defenses are a deliberate, always-available choice gated only by tier and resources.
+
+Hand & draft rules (Units / Upgrades / Actions only):
+- start of run: draw **5 tier-1 cards** (no buildings). hand cap **7**.
+- end of each round: draft **3 cards** from the pool of *unlocked* non-building cards at or below your current tier (XP-gated).
+- buildings are gated purely by tier: reaching a new tier adds that tier's buildings to the build menu.
 
 ## Tier 1 - starting
 
 ### Buildings
-- **lumber camp** : cost 20 wood. slowly yields wood each tick (+50% if adjacent to forest).
+- **lumber camp** : cost 20 wood. slowly yields wood each tick (+50% if adjacent to forest). **must be built on/next to a forest tile.**
 - **hamlet** : cost 30 wood. slowly yields gold (rent). also raises the run's **unit food cap** slightly.
 - **wheat field** : cost 15 wood, 10 gold. slowly yields food (+50% on grass / berry).
-- **militia camp** : cost 25 wood, 15 gold. slowly creates a free **militia** unit, up to 3 living militia per camp.
+- **militia camp** : cost 25 wood, 15 gold. slowly creates a free **militia** unit, up to **2 living militia per camp** — each camp keeps its OWN count (build more camps for more militia). its floating **production bar is segmented** (one slot per cap) — filled slots = that camp's living militia, the next slot fills toward the one in training; at cap the bar stops, and it refills the instant one of its militia dies.
 - **watchtower** : cost 30 wood, 10 iron. defensive building — auto-fires at the nearest enemy in short range for low damage. has HP; can be targeted.
 - **palisade** : cost 10 wood. a 1-tile wall segment. blocks / forces re-route for enemies; low HP, no attack.
 
@@ -100,9 +108,9 @@ Hand & draft rules:
 ## Tier 2 — unlocks at tier 2 (~round 4)
 
 ### Buildings
-- **sawmill** : rare. cost 40 wood, 20 iron. big wood yield; counts forest adjacency double.
+- **sawmill** : rare. cost 40 wood, 20 iron. big wood yield; counts forest adjacency double. **must be built on/next to a forest tile.**
 - **market** : rare. cost 50 gold, 20 wood. strong gold yield; once per build phase you may **trade** one resource for another at a poor rate.
-- **mine** : rare. cost 30 wood, 30 iron. yields iron each tick (+100% adjacent to mountain or on an ore vein).
+- **mine** : rare. cost 30 wood, 30 iron. yields iron each tick (+100% adjacent to mountain or on an ore vein). **must be built on/next to an ore vein.**
 - **granary** : common. cost 30 wood. boosts nearby farm food and **raises hand cap by 2** (lets you bank cards).
 - **barracks** : rare. cost 50 wood, 40 iron. periodically spawns a **spearman**; cheaper unit food cost while it stands.
 - **stone wall** : rare. cost 20 wood, 30 iron. high-HP wall segment, upgrade over palisade.
@@ -127,11 +135,11 @@ Hand & draft rules:
 ## Tier 3 — unlocks at tier 3 (~round 8)
 
 ### Buildings
-- **keep** : epic. cost 100 wood, 80 iron. secondary stronghold, high HP + strong auto-attack. if the **castle** falls but a keep stands, you survive at reduced score (one-time reprieve).
-- **cathedral** : epic. cost 120 gold, 60 iron. pulses healing to nearby units and grants a small attack-chance buff to clicks in its radius.
-- **wizard tower** : epic. cost 80 iron, 60 gold. periodic AOE "fireball" on the densest enemy cluster.
-- **foundry** : rare. cost 60 iron, 40 wood. consumes iron to grant a run-wide **+damage to all units** while it stands.
-- **castle wall** : epic. cost 40 wood, 60 iron. the toughest wall; tall enough that ranged units behind it still fire over.
+- **keep** : epic. cost 100 wood, 80 iron. secondary stronghold, high HP + strong auto-attack. *(BUILT — the one-time castle-fall reprieve is still deferred; for now it's a powerful defensive keep.)*
+- **wizard tower** : epic. cost 80 iron, 60 gold. long-range, slow, heavy-hitting arcane tower. *(BUILT — the true AOE "fireball" is approximated by big single-target damage for now.)*
+- **castle wall** : epic. cost 40 wood, 60 iron. the toughest wall. *(BUILT.)*
+- **cathedral** : epic. cost 120 gold, 60 iron. pulses healing to nearby units and grants a small attack-chance buff to clicks in its radius. *(deferred — needs a heal-pulse system.)*
+- **foundry** : rare. cost 60 iron, 40 wood. consumes iron to grant a run-wide **+damage to all units** while it stands. *(deferred — needs a global-buff system.)*
 
 ### Upgrades
 - **royal decree** : epic. +50% to ALL resource yields (idle and click).
@@ -153,7 +161,7 @@ Hand & draft rules:
 - **unit = a group, not an individual.** each unit is a cluster of minimal low-poly troops gathered around a single pole-and-flag in the center (see `unit_style.png`). the **number of standing figures = the unit's current HP**. on a hit, one figure topples; when all are down the unit is destroyed and the flag falls. HP is readable at a glance with zero UI.
 - **stats per unit / tower:** HP (figure count), damage, range, attack speed, move speed, and tags (MELEE / RANGED / SIEGE / CHARGE / SUPPORT). cards and enemies reference these tags.
 - **food upkeep:** at each round's payout, total living units consume **food** equal to their upkeep. if food can't cover it, units **desert** (lowest-tier first) until the books balance — economy and army are coupled, so over-recruiting has a cost.
-- **defensive buildings** (watchtower, ballista, wizard tower, cathedral, keep) auto-engage without micro; **units** are RTS-controlled but also auto-engage anything in range when idle (defensive stance default).
+- **defensive buildings** (watchtower, ballista, wizard tower, cathedral, keep) auto-engage without micro; the **castle** itself has wall archers that auto-fire at the nearest enemy in range (starting at damage 1, scalable). **units** are RTS-controlled but also auto-engage anything in range when idle (defensive stance default); a selected unit shows a ring on the ground beneath it.
 
 # Enemies
 Enemies spawn at **random visible-map edges** each attack phase and path toward the **castle** at center, stopping to attack any building / unit / wall in the way. each enemy is also a low-poly group (figure count = HP). stats: HP, damage, speed, traits (MELEE / RANGED / FAST / ARMORED / SAPPER / SUPPORT / ELITE / BOSS).
@@ -186,11 +194,12 @@ The roguelite spine — progress that outlives a single run.
 - **STATS / CARDS menu screens:** STATS shows lifetime records (best round, total kills, runs, renown). CARDS is a collection viewer — unlocked cards shown in full, locked ones as silhouettes.
 
 # HUD / UI
-- **top bar:** the four resources (gold / wood / iron / food) with per-round delta, current **round #**, **XP/tier** meter, **seed**, and the **round timer** (build-phase countdown).
+- **top bar:** the four resources (gold / wood / iron / food), each with an **icon** and a per-round delta, current **round #**, **XP/tier** meter, **seed**, and the **round timer** (build-phase countdown). resource amounts are shown as **whole numbers** (floored) even though they accrue fractionally.
 - **castle health:** prominent banner near the castle and mirrored in the top bar; pulses red when low.
-- **bottom bar:** **hand of cards** (drag to play), the **DEFEND** (end-build-early) button, and **speed** buttons (1×/2×/3×).
+- **bottom bar:** **hand of cards** (units / upgrades / actions — drag/click to play), the **BUILD** button (opens the tier-gated build menu of available buildings), the **DEFEND** (end-build-early) button, and **speed** buttons (1×/2×/3×).
 - **right side:** collapsible **minimap** (revealed tiles, units, incoming enemies, spawn edges) + a **selected-unit panel** (figure-count HP bar, damage, range, stance toggle).
-- **floating / juice:** "+N" resource pops on harvest, white damage numbers (gold on crit) on enemies, a "WAVE INCOMING" banner on the build→attack transition, a kill/streak counter, and toppling figures as the readable HP system.
+- **floating / juice:** "+N" resource pops on harvest, white damage numbers (gold on crit) on enemies, flying arrow projectiles from towers/castle to their targets, a "WAVE INCOMING" banner on the build→attack transition, a kill/streak counter, and toppling figures as the readable HP system.
+- **selection + hover:** a selected unit shows a ring beneath it; **shift-click** (or shift-drag) adds units to the current selection. Idling the pointer over a tile shows a small tooltip naming it (and what it does), plus any **buildings and units** standing on that tile.
 
 # Persistence / Local Storage
 State saved to `localStorage` under key **`clicky_empire_save_v1`**.
@@ -207,7 +216,9 @@ State saved to `localStorage` under key **`clicky_empire_save_v1`**.
 # Visual & Audio Direction
 - **vibe:** bright, toy-like medieval diorama. saturated grass-green ground, soft shadows, chunky low-poly props. readable silhouettes; the d20-banner unit aesthetic from `unit_style.png`.
 - **palette:** grass-green base, with biome accents (sandy desert, murky marsh, grey-blue mountain, deep blue water). player units in blue/silver; enemies in a contrasting warm/red palette for instant friend-vs-foe reads.
-- **animation:** units idle-bob and turn to face targets; figures **topple** on damage (the HP system); buildings rise with a little scale-pop when placed; fog tiles dissolve/lift like clouds when purchased; harvested tiles do a quick squash-and-bounce.
+- **animation:** each unit is a **Total-War-style block** of many small soldiers (militia 6, spearman 9, archer band 12) standing on the tile surface behind a tall banner, and they **hop** when they land an attack; the block **thins** as the unit loses HP — soldiers **topple** out in proportion to remaining health (cosmetic roster size is independent of the unit's HP); buildings rise with a little scale-pop when placed; fog tiles dissolve/lift like clouds when purchased; harvested tiles do a quick squash-and-bounce.
+- **card art:** building and unit cards show a **live, slowly-turning 3D model** of the actual low-poly mesh (rendered by a shared offscreen renderer and blitted to each card) rather than a flat icon; upgrade/action cards keep a vector glyph.
+- **producer progress bars:** every building that produces on a timer (economy yields / spawner units) carries a small **billboarded progress bar** above it that fills toward its next payout, so the player can read production at a glance.
 - **camera juice:** small screen-shake on big hits / boss arrival; brief zoom-nudge toward a dragon when it spawns.
 - **lighting:** single warm directional sun + soft ambient; optional subtle day→dusk shift as rounds climb to raise tension.
 - **audio:** distinct click sounds for harvest vs attack vs crit; per-unit-type attack/death sfx; coin/wood/iron/food pickup chimes; a "DEFEND" klaxon on phase change; calm build-phase music that swells into a combat layer during the attack phase, with a boss layer for dragons. master/sfx/music sliders, persisted.
@@ -287,23 +298,24 @@ Guidelines:
 Ship a focused, fun core first. Everything outside this list is v2+ in the doc above.
 
 **v1 includes:**
-- main menu → pregame config (map size + seed) → run → game over → back to menu.
-- procedural seeded map with the core tile types: grasslands, forest, water, mountain, ore vein, berry patches.
+- main menu → pregame config (map size 5x5 / 9x9 / 12x12 + seed) → run → game over → back to menu.
+- procedural seeded map with realistic layout (winding rivers + bends, mountain ranges, forest stands, riverbank farmland, open fields) over the core tile types: grasslands, forest, water, mountain, ore vein, berry patches.
 - fog-of-war reveal + gold-cost expansion with scaling.
 - the two-phase loop: BUILD (timer + DEFEND button) ↔ ATTACK, with round payout + 3-card draft + XP→tier unlock (T1→T2).
 - the four resources, earned idly and by clicking; the clicker stats (attack/harvest chance, attack damage, harvest yield, crit).
-- cards: **all of Tier 1** + a handful of Tier 2 (sawmill, mine, barracks, stone wall, ballista, spearman, archer band, plus masonry & fletching upgrades and rally/volley actions).
-- the figure-cluster unit system (HP = standing figures, topple on hit) for militia, spearman, archer band; basic RTS (select, box-select, right-click move/attack, A/S).
+- **build menu**: tier-gated buildings constructed directly for resources (not drafted) — all of Tier 1, a handful of Tier 2 (sawmill, mine, barracks, stone wall, ballista), and the buildable Tier 3 set (keep, wizard tower, castle wall). some buildings are terrain-gated (lumber camp / sawmill near forest, mine near an ore vein).
+- random cards: Tier 1 + Tier 2 units / upgrades / actions (spearman, archer band, plus masonry & fletching upgrades and rally/volley actions).
+- the figure-cluster unit system (a soldier block that thins in proportion to HP, toppling on hit) for militia, spearman, archer band; basic RTS (select, box-select, right-click move/attack, A/S).
 - enemies: raider, wolf, skirmisher, sapper, plus a round-5 **warlord** mini-boss.
-- defensive buildings: watchtower, palisade, ballista, stone wall.
+- defensive buildings: watchtower, palisade, ballista, stone wall, plus the Tier 3 keep, wizard tower, and castle wall.
 - castle as the lose condition; food upkeep + desertion.
-- HUD (top resources/round/timer/seed, castle HP, bottom hand + DEFEND + speed, minimap, selected-unit panel) and core juice (floating numbers, topple, wave banner).
+- HUD (top resources/round/timer/seed, castle HP, bottom hand + BUILD menu + DEFEND + speed, minimap, selected-unit panel) and core juice (floating numbers, topple, wave banner).
 - persistence: settings + unlocked_cards + renown + best_round (no resumable run yet).
 - Three.js iso scene: low-poly ground/tiles/buildings/units, sun + ambient light, orbit camera (pan/zoom/snap-rotate), raycast picking.
 - audio: harvest/attack/crit clicks, per-unit sfx, build vs combat music layer.
 
 **v1 explicitly defers:**
-- Tier 3 entirely (keep, cathedral, wizard tower, foundry, castle wall, cavalry, catapult, paladin, all T3 upgrades/actions).
+- most of Tier 3: cathedral & foundry buildings (need new heal-pulse / global-buff systems), cavalry, catapult, paladin, and all T3 upgrades/actions. *(The keep, wizard tower, and castle wall buildings ARE now buildable; keep's castle-fall reprieve and the wizard tower's true AOE remain deferred.)*
 - dragon boss, brute, shaman, gem veins, desert/marsh terrain penalties, day→dusk shift.
 - market trading, granary hand-banking, control groups (ctrl+1..9), stance toggles beyond default.
 - Throne Room meta-spending, run history screen, resumable mid-run saves, color-blind mode, adaptive 3-layer/boss music.

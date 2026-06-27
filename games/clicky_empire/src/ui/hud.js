@@ -130,8 +130,8 @@ function refreshSelection(ids) {
     return;
   }
   const def = unit.def || getUnitDef(unit.unitId) || {};
-  const hp = Math.max(0, unit.hp ?? 0);
-  const maxHp = unit.maxHp ?? def.hp ?? hp;
+  const hp = Math.max(0, Math.round(unit.hp ?? 0));
+  const maxHp = Math.round(unit.maxHp ?? def.hp ?? hp);
   if (nodes.selName) nodes.selName.textContent = def.name || unit.unitId || "Unit";
   if (nodes.selHp) nodes.selHp.textContent = `${hp} / ${maxHp}`;
   if (nodes.selDmg) nodes.selDmg.textContent = def.damage ?? "-";
@@ -159,15 +159,17 @@ function refresh() {
   const r = state.run;
   const res = state.resources;
 
-  // Resources + per-round delta.
-  setText(nodes.resGold, "gold", String(res.gold));
-  setText(nodes.resWood, "wood", String(res.wood));
-  setText(nodes.resIron, "iron", String(res.iron));
-  setText(nodes.resFood, "food", String(res.food));
-  setDelta(nodes.deltaGold, "dgold", res.gold - roundBaseline.gold);
-  setDelta(nodes.deltaWood, "dwood", res.wood - roundBaseline.wood);
-  setDelta(nodes.deltaIron, "diron", res.iron - roundBaseline.iron);
-  setDelta(nodes.deltaFood, "dfood", res.food - roundBaseline.food);
+  // Resources + per-round delta. Resources accrue fractionally (yields *
+  // adjacency), but the HUD only ever shows whole numbers — floor the amount
+  // (never overstate what you can spend) and round the delta read-out.
+  setText(nodes.resGold, "gold", String(Math.floor(res.gold)));
+  setText(nodes.resWood, "wood", String(Math.floor(res.wood)));
+  setText(nodes.resIron, "iron", String(Math.floor(res.iron)));
+  setText(nodes.resFood, "food", String(Math.floor(res.food)));
+  setDelta(nodes.deltaGold, "dgold", Math.round(res.gold - roundBaseline.gold));
+  setDelta(nodes.deltaWood, "dwood", Math.round(res.wood - roundBaseline.wood));
+  setDelta(nodes.deltaIron, "diron", Math.round(res.iron - roundBaseline.iron));
+  setDelta(nodes.deltaFood, "dfood", Math.round(res.food - roundBaseline.food));
 
   // Round / tier / seed.
   setText(nodes.round, "round", String(r.round));

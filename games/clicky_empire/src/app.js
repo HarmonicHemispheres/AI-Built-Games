@@ -16,7 +16,7 @@ import { startBuildPhase } from "./run.js";
 import { makeRng, randSeedString } from "./util/rng.js";
 
 // Start a fresh run from a config form. `seed` blank → random.
-export function startRun({ mapSize = 5, seed = "" } = {}) {
+export function startRun({ mapSize = 9, seed = "" } = {}) {
   const finalSeed = (seed && String(seed).trim()) || randSeedString(makeRng(String(performance.now())));
 
   clearWorldMeshes();

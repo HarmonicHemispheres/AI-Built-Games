@@ -21,7 +21,7 @@
 import { state, addResource, nextId } from "../state.js";
 import { emit } from "../util/events.js";
 import { registerSystems } from "../run.js";
-import { N4, N8, tileToWorld } from "../util/math.js";
+import { N4, N8, tileToWorld, worldToTile, tileKey } from "../util/math.js";
 import { tileAt } from "../world/generate.js";
 import { TILE, getTileType } from "../world/tiles.js";
 import { getBuildingDef } from "./catalog.js";
@@ -48,6 +48,9 @@ export function placeBuilding(defId, col, row) {
   const tile = tileAt(col, row);
   if (!tile || !tile.buildable) return null;
   if (isOccupied(col, row)) return null;
+  // Terrain gate (checked BEFORE the forest->grass normalize below, so a lumber
+  // camp may sit ON a lone forest tile): lumber/sawmill need forest, mine ore.
+  if (!placementRequirementMet(def, col, row)) return null;
 
   // Forest clears to grass when built on. Mutate the live tile instance in place
   // (it spreads the type def, so refresh those fields too).
@@ -111,27 +114,76 @@ function tileHasHint(tile, hint) {
 }
 
 // ---------------------------------------------------------------------------
+// Placement terrain requirement
+// ---------------------------------------------------------------------------
+
+// Some buildings can only be built on/next to a particular terrain: lumber camp
+// & sawmill need a 'forest' tile, the mine needs an 'ore' vein, within their
+// footprint+8-neighbourhood. `def.requiresNear` is a hint string or array of
+// hints (matched exactly like adjacency hints). No requirement => always met.
+export function placementRequirementMet(def, col, row) {
+  if (!def || def.requiresNear == null) return true;
+  const hints = Array.isArray(def.requiresNear) ? def.requiresNear : [def.requiresNear];
+  return hints.some((h) => hintMatchesAround(h, col, row));
+}
+
+// ---------------------------------------------------------------------------
 // Spawner cap counting
 // ---------------------------------------------------------------------------
 
-// Count living units of `unitId` (for spawner cap). A unit is "living" if hp>0.
-function livingUnitCount(unitId) {
+// Count this spawner's OWN living units (PER-camp cap). Units carry the id of the
+// building that spawned them (`spawnerId`, stamped by units/behavior.createUnit),
+// so two militia camps each track their own roster independently. A unit is
+// "living" if hp>0.
+function livingFromSpawner(buildingId) {
   let n = 0;
   for (const u of state.units) {
-    if (u.unitId === unitId && (u.hp == null || u.hp > 0)) n++;
+    if (u && u.spawnerId === buildingId && (u.hp == null || u.hp > 0)) n++;
   }
   return n;
 }
 
-// Pick a free-ish adjacent tile to spawn a unit on; falls back to the building's
-// own tile. Keeps spawns "near the building" (CONTRACTS §14).
+// Is a living unit currently standing on tile (col,row)? Used to spread spawns
+// out so several free units don't stack invisibly on one tile.
+function unitOnTile(col, row) {
+  for (const u of state.units) {
+    if (!u || !u.pos) continue;
+    if (u.hp != null && u.hp <= 0) continue;
+    const t = worldToTile(u.pos.x, u.pos.z);
+    if (t.col === col && t.row === row) return true;
+  }
+  return false;
+}
+
+// A tile is a valid spawn target if it's revealed (so the unit lands on visible
+// ground, never under a fog cloud), walkable, and has no building on it.
+function isSpawnable(col, row) {
+  if (!state.map.revealed?.has(tileKey(col, row))) return false;
+  const t = tileAt(col, row);
+  return !!(t && t.walkable) && !isOccupied(col, row);
+}
+
+// Pick a free tile near the building to spawn a unit on. Searches outward in
+// Chebyshev rings (radius 1..3) and prefers a tile with NO unit already on it,
+// so spawned units never vanish under the building (when its own neighbours are
+// all built up) and don't pile invisibly on a single tile. Falls back to any
+// spawnable tile (possibly already holding a unit), and only as a last resort to
+// the building's own tile. Keeps spawns "near the building" (CONTRACTS §14).
 function spawnTileNear(col, row) {
-  for (const { dc, dr } of N4) {
-    const t = tileAt(col + dc, row + dr);
-    if (t && t.walkable && !isOccupied(col + dc, row + dr)) {
-      return { col: col + dc, row: row + dr };
+  let firstSpawnable = null;
+  for (let r = 1; r <= 3; r++) {
+    for (let dc = -r; dc <= r; dc++) {
+      for (let dr = -r; dr <= r; dr++) {
+        if (Math.max(Math.abs(dc), Math.abs(dr)) !== r) continue; // ring shell only
+        const c = col + dc;
+        const rr = row + dr;
+        if (!isSpawnable(c, rr)) continue;
+        if (!firstSpawnable) firstSpawnable = { col: c, row: rr };
+        if (!unitOnTile(c, rr)) return { col: c, row: rr }; // empty + visible
+      }
     }
   }
+  if (firstSpawnable) return firstSpawnable;
   return { col, row };
 }
 
@@ -166,17 +218,31 @@ export function tickEconomy(dt) {
     // --- Spawner buildings --------------------------------------------------
     else if (def.spawns) {
       const { unitId, interval, cap } = def.spawns;
-      b.cd += dt;
       const every = interval || 1;
+
+      // At cap: STOP loading. Hold the timer at 0 so the production bar freezes
+      // (full: this camp's living == cap). The instant one of THIS camp's units
+      // dies, its count drops below cap and the freed slot refills over a full
+      // interval. The cap is per-building (each camp counts only units it spawned).
+      if (livingFromSpawner(b.id) >= cap) {
+        b.cd = 0;
+        continue;
+      }
+
+      b.cd += dt;
       while (b.cd >= every) {
         b.cd -= every;
-        if (livingUnitCount(unitId) < cap) {
+        if (livingFromSpawner(b.id) < cap) {
           const { col, row } = spawnTileNear(b.col, b.row);
-          // units/behavior.js listens and calls createUnit (no import).
-          emit("spawn-unit", { unitId, col, row });
+          // units/behavior.js listens and calls createUnit (no import). It stamps
+          // the spawned unit with sourceId so this camp can count its own roster.
+          emit("spawn-unit", { unitId, col, row, sourceId: b.id });
+        } else {
+          // Hit the cap mid-tick: stop draining the timer and don't bank a
+          // backlog of free units to dump the instant one dies.
+          b.cd = 0;
+          break;
         }
-        // If at cap we still consumed the timer (don't bank up a backlog of
-        // free units to dump the instant one dies).
       }
     }
   }

@@ -142,12 +142,22 @@ function handleLeftClick(event) {
   }
 
   if (hit.kind === "unit") {
-    selection.select([hit.id]);
+    // Shift-click toggles the unit in/out of the current selection (multi-select);
+    // a plain click selects just that unit.
+    if (event.shiftKey) {
+      const set = new Set(state.selection);
+      if (set.has(hit.id)) set.delete(hit.id);
+      else set.add(hit.id);
+      selection.select([...set]);
+    } else {
+      selection.select([hit.id]);
+    }
     return;
   }
 
-  // Other kinds (building/fog/ground): treat as deselect (no RTS action).
-  selection.clearSelection();
+  // Other kinds (building/fog/ground): a plain click deselects; a shift-click
+  // keeps the current selection (so a stray shift-click doesn't clear it).
+  if (!event.shiftKey) selection.clearSelection();
 }
 
 // --- Box-select on left-drag release ----------------------------------------
@@ -163,7 +173,8 @@ function handleBoxSelect(downEvent, upEvent) {
     minZ: Math.min(a.point.z, b.point.z),
     maxZ: Math.max(a.point.z, b.point.z),
   };
-  selection.boxSelect(rect);
+  // Shift-drag adds the boxed units to the current selection.
+  selection.boxSelect(rect, { additive: !!upEvent.shiftKey });
 }
 
 // --- Right click: issue an order to the current selection -------------------

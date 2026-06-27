@@ -26,13 +26,15 @@ const EXPECTED_CARDS = [
   "spearman", "archer_band",
   "masonry", "fletching",
   "rally", "volley",
+  // Tier 3 buildings (constructed from the BUILD menu, not drafted)
+  "keep", "wizard_tower", "castle_wall",
 ];
 const EXPECTED_UNITS = ["militia", "spearman", "archer_band"];
 const EXPECTED_ENEMIES = ["raider", "wolf", "skirmisher", "sapper", "warlord"];
 
 // --- counts ---
 assert.equal(Object.keys(CARDS).length, EXPECTED_CARDS.length, "card count matches expected set");
-assert.equal(Object.keys(CARDS).length, 24, "card count is exactly 24");
+assert.equal(Object.keys(CARDS).length, 27, "card count is exactly 27 (24 v1 + 3 T3 buildings)");
 assert.equal(Object.keys(UNITS).length, 3, "unit count = 3");
 assert.equal(Object.keys(ENEMIES).length, 5, "enemy count = 5");
 ok(`counts: cards=${Object.keys(CARDS).length}, units=3, enemies=5`);
@@ -120,12 +122,22 @@ assert.deepEqual(getCard("stone_wall").cost, { wood: 20, iron: 30 });
 assert.deepEqual(getCard("ballista_tower").cost, { wood: 40, iron: 50 });
 assert.deepEqual(getCard("spearman").cost, { food: 15 });
 assert.deepEqual(getCard("archer_band").cost, { food: 15, wood: 10 });
-ok("card costs match prompt.md");
+// Tier 3 buildings.
+assert.deepEqual(getCard("keep").cost, { wood: 100, iron: 80 });
+assert.deepEqual(getCard("wizard_tower").cost, { iron: 80, gold: 60 });
+assert.deepEqual(getCard("castle_wall").cost, { wood: 40, iron: 60 });
+for (const id of ["keep", "wizard_tower", "castle_wall"]) {
+  assert.equal(getCard(id).tier, 3, `${id} is tier 3`);
+  assert.equal(getCard(id).type, "building", `${id} is a building`);
+}
+ok("card costs match prompt.md (incl. tier-3 buildings)");
 
-// --- out-of-scope ids absent (T3 + deferred T2) ---
+// --- out-of-scope ids absent (deferred T2 + the T3 cards NOT yet built) ---
+// keep / wizard_tower / castle_wall are now in scope (the buildable T3 set);
+// cathedral & foundry remain deferred (need new heal-pulse / global-buff systems).
 const FORBIDDEN_CARDS = [
   "market", "granary", "knight", "forced_march", "bountiful_harvest", "gold_rush",
-  "keep", "cathedral", "wizard_tower", "foundry", "castle_wall",
+  "cathedral", "foundry",
   "royal_decree", "enchanted_arms", "fortification", "master_tactician",
   "meteor", "reinforcements", "divine_intervention",
   "cavalry", "catapult", "paladin",
@@ -141,22 +153,28 @@ ok("no out-of-scope ids present (no market/knight/dragon/etc.)");
 const t1 = cardsAtOrBelowTier(1);
 assert.equal(t1.length, 13, "exactly 13 tier-1 cards");
 assert.ok(t1.every((c) => c.tier === 1), "cardsAtOrBelowTier(1) is all tier 1");
-assert.equal(cardsAtOrBelowTier(2).length, 24, "tier<=2 is the whole v1 set");
-ok("cardsAtOrBelowTier(1) returns only tier-1 cards (13)");
+assert.equal(cardsAtOrBelowTier(2).length, 24, "tier<=2 is the original v1 set");
+assert.equal(cardsAtOrBelowTier(3).length, 27, "tier<=3 adds the 3 T3 buildings");
+ok("cardsAtOrBelowTier gates by tier (13 @ T1, 24 @ T2, 27 @ T3)");
 
-// --- unit schema (hp = figure count; tags; foodCost; color) ---
+// --- unit schema (hp = combat health; figures = cosmetic roster; tags; ...) ---
 const UTAGS = new Set(["MELEE", "RANGED", "SIEGE", "CHARGE", "SUPPORT"]);
 for (const u of Object.values(UNITS)) {
-  for (const f of ["hp", "damage", "range", "attackSpeed", "moveSpeed", "foodCost"]) {
+  for (const f of ["hp", "figures", "damage", "range", "attackSpeed", "moveSpeed", "foodCost"]) {
     assert.ok(typeof u[f] === "number" && u[f] > 0, `${u.id}.${f} positive number`);
   }
+  assert.ok(Number.isInteger(u.figures), `${u.id}.figures is an integer`);
   assert.ok(Array.isArray(u.tags) && u.tags.length, `${u.id} has tags`);
   for (const t of u.tags) assert.ok(UTAGS.has(t), `${u.id} valid tag ${t}`);
   assert.ok(typeof u.color === "number", `${u.id} has numeric color`);
 }
-assert.equal(getUnitDef("militia").hp, 4, "militia ~4 figures");
-assert.equal(getUnitDef("spearman").hp, 5, "spearman ~5 figures");
-assert.equal(getUnitDef("archer_band").hp, 3, "archer_band ~3 figures");
+assert.equal(getUnitDef("militia").hp, 4, "militia hp");
+assert.equal(getUnitDef("spearman").hp, 5, "spearman hp");
+assert.equal(getUnitDef("archer_band").hp, 3, "archer_band hp");
+// Roster sizes drive the Total-War-style block layout (independent of hp).
+assert.equal(getUnitDef("militia").figures, 6, "militia fields a 6-soldier block");
+assert.equal(getUnitDef("spearman").figures, 9, "spearman fields a 9-soldier block");
+assert.equal(getUnitDef("archer_band").figures, 12, "archer band fields a 12-soldier block");
 assert.ok(getUnitDef("archer_band").range > getUnitDef("militia").range, "archers out-range melee");
 assert.ok(getUnitDef("spearman").tags.includes("CHARGE"), "spearman is anti-charge");
 assert.ok(getUnitDef("archer_band").tags.includes("RANGED"), "archer_band is RANGED");

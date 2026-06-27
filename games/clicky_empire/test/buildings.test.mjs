@@ -92,11 +92,26 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
   assert.equal(BUILDINGS.watchtower.kind, "defense");
   assert.ok(BUILDINGS.militia_camp.spawns && BUILDINGS.barracks.spawns, "spawners have spawns");
   assert.equal(BUILDINGS.militia_camp.spawns.unitId, "militia");
-  assert.equal(BUILDINGS.militia_camp.spawns.cap, 3);
+  assert.equal(BUILDINGS.militia_camp.spawns.cap, 2); // per-camp cap
   assert.ok(BUILDINGS.lumber_camp.yields.wood > 0, "lumber_camp yields wood");
   assert.ok(!BUILDINGS.palisade.attack && !BUILDINGS.palisade.yields, "palisade is an inert wall");
   assert.ok(BUILDINGS.stone_wall.hp > BUILDINGS.palisade.hp, "stone_wall tougher than palisade");
-  ok("catalog integrity: card defIds resolve, castle + all v1 defs present");
+
+  // Terrain-gated economy buildings carry a requiresNear hint.
+  assert.equal(BUILDINGS.lumber_camp.requiresNear, "forest", "lumber_camp gated to forest");
+  assert.equal(BUILDINGS.sawmill.requiresNear, "forest", "sawmill gated to forest");
+  assert.equal(BUILDINGS.mine.requiresNear, "ore", "mine gated to ore");
+
+  // Tier-3 buildings are present and shaped right.
+  for (const id of ["keep", "wizard_tower", "castle_wall"]) {
+    assert.ok(BUILDINGS[id], `BUILDINGS includes T3 "${id}"`);
+  }
+  assert.notEqual(BUILDINGS.keep.kind, "castle", "keep is NOT kind:castle (its death must not end the run)");
+  assert.ok(BUILDINGS.keep.attack && BUILDINGS.keep.hp >= 20, "keep is a high-HP auto-attacker");
+  assert.ok(BUILDINGS.wizard_tower.attack && BUILDINGS.wizard_tower.attack.range >= 6, "wizard tower is long-range");
+  assert.equal(BUILDINGS.castle_wall.kind, "wall", "castle_wall is a wall");
+  assert.ok(BUILDINGS.castle_wall.hp > BUILDINGS.stone_wall.hp, "castle_wall tougher than stone_wall");
+  ok("catalog integrity: card defIds resolve, castle + all v1 + T3 defs present");
 }
 
 // ===========================================================================
@@ -152,27 +167,59 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
   ok("placeBuilding normalizes forest -> grasslands under the footprint");
 }
 
+// --- terrain placement requirements (lumber/sawmill near forest; mine near ore) ---
+{
+  freshRun();
+  // A lone grass tile with no special terrain nearby.
+  setTile(0, 0, TILE.GRASS);
+  assert.equal(placeBuilding("lumber_camp", 0, 0), null, "lumber camp blocked with no forest near");
+  assert.equal(placeBuilding("sawmill", 0, 0), null, "sawmill blocked with no forest near");
+  assert.equal(placeBuilding("mine", 0, 0), null, "mine blocked with no ore vein near");
+
+  // Add an adjacent forest -> lumber camp (and sawmill) become placeable.
+  setTile(1, 0, TILE.FOREST);
+  const lc = placeBuilding("lumber_camp", 0, 0);
+  assert.ok(lc, "lumber camp allowed once a forest is adjacent");
+  assert.equal(state.placed.length, 1);
+
+  // Mine still needs ORE, not forest.
+  freshRun();
+  setTile(3, 3, TILE.GRASS);
+  setTile(3, 4, TILE.FOREST);
+  assert.equal(placeBuilding("mine", 3, 3), null, "mine still blocked next to forest (needs ore)");
+  setTile(2, 3, TILE.ORE);
+  assert.ok(placeBuilding("mine", 3, 3), "mine allowed once an ore vein is adjacent");
+
+  // A building placed directly ON its required terrain also qualifies.
+  freshRun();
+  setTile(7, 7, TILE.ORE);
+  assert.ok(placeBuilding("mine", 7, 7), "mine allowed when built ON an ore vein");
+  ok("placement requirements: lumber/sawmill need forest, mine needs an ore vein");
+}
+
 // ===========================================================================
 // 3. tickEconomy — yields + adjacency bonus
 // ===========================================================================
 {
   freshRun();
-  // Plain grass: lumber_camp yields base wood (0.5/tick, tickRate 1).
+  // Plain grass: hamlet yields base gold (rent) at 0.4/tick, tickRate 1. We use
+  // hamlet (not lumber_camp) for the BASE-rate check now that lumber_camp must be
+  // built near a forest — which would also grant an adjacency bonus and muddy it.
   setTile(0, 0, TILE.GRASS);
-  const plain = placeBuilding("lumber_camp", 0, 0);
+  const plain = placeBuilding("hamlet", 0, 0);
   assert.ok(plain);
 
   tickEconomy(1); // exactly one tick
-  const def = getBuildingDef("lumber_camp");
-  assert.ok(approx(state.resources.wood, def.yields.wood), "base wood accrued one tick");
+  const def = getBuildingDef("hamlet");
+  assert.ok(approx(state.resources.gold, def.yields.gold), "base gold accrued one tick");
 
   // dt smaller than tickRate accrues nothing yet, then completes on the rest.
-  const woodAfter1 = state.resources.wood;
+  const goldAfter1 = state.resources.gold;
   tickEconomy(0.4);
-  assert.ok(approx(state.resources.wood, woodAfter1), "partial dt does not accrue mid-tick");
+  assert.ok(approx(state.resources.gold, goldAfter1), "partial dt does not accrue mid-tick");
   tickEconomy(0.6);
   assert.ok(
-    approx(state.resources.wood, woodAfter1 + def.yields.wood),
+    approx(state.resources.gold, goldAfter1 + def.yields.gold),
     "accrual completes once tickRate is reached",
   );
   ok("tickEconomy accrues base yields per tickRate (frame-rate independent)");
@@ -215,10 +262,10 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 
   // Drive enough time for many intervals to elapse. Each emitted spawn-unit
   // would (in the real game) create a unit; here we simulate units/behavior by
-  // pushing a unit instance into state.units when the event fires, so the cap
-  // actually clamps the count.
-  on("spawn-unit", ({ unitId, col, row }) => {
-    state.units.push({ id: nextId("u"), unitId, hp: 4, maxHp: 4, pos: { x: col, y: 0, z: row } });
+  // pushing a unit instance into state.units when the event fires, stamping the
+  // spawner's id (sourceId) so the PER-camp cap actually clamps the count.
+  on("spawn-unit", ({ unitId, col, row, sourceId }) => {
+    state.units.push({ id: nextId("u"), unitId, spawnerId: sourceId, hp: 4, maxHp: 4, pos: { x: col, y: 0, z: row } });
   });
 
   tickEconomy(interval * 10); // way more than enough to hit the cap
@@ -230,12 +277,88 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
     assert.ok(near, "spawn position is adjacent/on the building");
   }
   assert.equal(state.units.length, cap, "living units clamped to cap");
+  assert.equal(camp.cd, 0, "production timer frozen at 0 while at cap (bar stops loading)");
 
   // Killing a unit lets the camp top back up to cap on the next interval.
   state.units.pop(); // one militia dies
   tickEconomy(interval); // one more interval
   assert.equal(state.units.length, cap, "camp refills to cap after a death");
-  ok("spawner emits spawn-unit up to cap, respects living count, refills after death");
+  ok("spawner emits spawn-unit up to cap, freezes timer at cap, refills after death");
+}
+
+// ===========================================================================
+// 4b. spawner places units on a visible, building-free tile (never under the
+//     building, even when every direct neighbour is built up)
+// ===========================================================================
+{
+  freshRun();
+  // A revealed 5x5 grass block around the camp.
+  for (let r = -2; r <= 2; r++) {
+    for (let c = -2; c <= 2; c++) {
+      setTile(c, r, TILE.GRASS);
+      state.map.revealed.add(tileKey(c, r));
+    }
+  }
+  const camp = placeBuilding("militia_camp", 0, 0);
+  assert.ok(camp);
+  // Wall off all four orthogonal neighbours so the old "first free N4" logic
+  // would have fallen back to the camp's own (hidden) tile.
+  for (const [c, r] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    assert.ok(placeBuilding("palisade", c, r), `palisade placed at ${c},${r}`);
+  }
+
+  const spawns = [];
+  on("spawn-unit", (p) => {
+    spawns.push(p);
+    state.units.push({ id: nextId("u"), unitId: p.unitId, spawnerId: p.sourceId, hp: 4, maxHp: 4, pos: { x: p.col, y: 0, z: p.row } });
+  });
+
+  const { interval } = getBuildingDef("militia_camp").spawns;
+  tickEconomy(interval * 3); // spawn a few
+
+  assert.ok(spawns.length > 0, "the camp spawned at least one militia");
+  for (const s of spawns) {
+    assert.ok(!(s.col === 0 && s.row === 0), "never spawns on the camp's own tile");
+    assert.ok(!state.placed.some((b) => b.col === s.col && b.row === s.row), "never spawns on a building");
+    assert.ok(state.map.revealed.has(tileKey(s.col, s.row)), "spawns on a revealed (visible) tile");
+    const t = state.map.tiles.get(tileKey(s.col, s.row));
+    assert.ok(t && t.walkable, "spawns on a walkable tile");
+  }
+  ok("spawner finds a visible, walkable, building-free tile when neighbours are built up");
+}
+
+// ===========================================================================
+// 4c. EACH spawner has its OWN per-building cap (not a shared global one)
+// ===========================================================================
+{
+  freshRun();
+  // Two militia camps far apart, each with revealed grass room around it.
+  for (const cx of [0, 8]) {
+    for (let r = -1; r <= 1; r++) {
+      for (let c = -1; c <= 1; c++) {
+        setTile(cx + c, r, TILE.GRASS);
+        state.map.revealed.add(tileKey(cx + c, r));
+      }
+    }
+  }
+  const campA = placeBuilding("militia_camp", 0, 0);
+  const campB = placeBuilding("militia_camp", 8, 0);
+  assert.ok(campA && campB);
+
+  // Mirror units/behavior: stamp each spawned unit with its source camp's id.
+  on("spawn-unit", ({ unitId, col, row, sourceId }) => {
+    state.units.push({ id: nextId("u"), unitId, spawnerId: sourceId, hp: 4, maxHp: 4, pos: { x: col, y: 0, z: row } });
+  });
+
+  const { cap, interval } = getBuildingDef("militia_camp").spawns;
+  tickEconomy(interval * 10); // plenty of time for BOTH camps to fill
+
+  const fromA = state.units.filter((u) => u.spawnerId === campA.id).length;
+  const fromB = state.units.filter((u) => u.spawnerId === campB.id).length;
+  assert.equal(fromA, cap, `camp A fielded its own cap (${cap})`);
+  assert.equal(fromB, cap, `camp B fielded its own cap (${cap})`);
+  assert.equal(state.units.length, cap * 2, "two camps => 2x cap total (independent counters)");
+  ok("each spawner enforces its OWN per-building cap (two camps => cap each)");
 }
 
 // ===========================================================================
@@ -318,6 +441,32 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
   assert.ok(!state.placed.includes(realCastle), "destroyed castle removed");
   assert.equal(state.run.castleDown, true, "castle death sets state.run.castleDown");
   ok("building death removes from state.placed; castle death sets run.castleDown");
+}
+
+// ===========================================================================
+// 7. Castle auto-fires (damage 1) like a defensive tower
+// ===========================================================================
+{
+  freshRun();
+  setTile(0, 0, TILE.GRASS);
+  const castle = placeBuilding("castle", 0, 0);
+  assert.ok(castle, "castle placed");
+  const cdef = getBuildingDef("castle");
+  assert.ok(cdef.attack && cdef.attack.damage === 1, "castle has an attack starting at damage 1");
+
+  const enemy = { id: nextId("E"), enemyId: "raider", hp: 5, maxHp: 5, pos: { x: 2, y: 0, z: 0 } };
+  state.enemies.push(enemy);
+
+  let arrows = 0;
+  let hits = 0;
+  on("projectile-fire", () => arrows++);
+  on("combat-hit", () => hits++);
+
+  updateDefense(0.016); // cd starts at 0 → fires immediately
+  assert.equal(enemy.hp, 5 - cdef.attack.damage, "castle shot the enemy for 1");
+  assert.equal(arrows, 1, "castle emitted a projectile-fire (arrow)");
+  assert.equal(hits, 1, "castle emitted a combat-hit");
+  ok("castle auto-fires arrows at the nearest enemy (damage 1)");
 }
 
 clearAll();

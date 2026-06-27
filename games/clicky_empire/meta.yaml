@@ -38,12 +38,15 @@ features:
   - True 3D low-poly world rendered with Three.js (no build step)
   - Seeded, shareable procedural maps with fog-of-war expansion
   - Card drafting across tiers with permanent between-run unlocks
-  - Figure-cluster units whose standing soldiers ARE their health
+  - Total-War-style regiments of soldiers whose block thins as the unit takes damage
+  - Tier-gated build menu through Tier 3 (keep, wizard tower, castle wall), with terrain-gated placement (lumber/sawmill near forest, mines on ore veins)
+  - Spawner buildings with a segmented production bar capped to their living-unit count
   - Two-phase loop: build your economy, then DEFEND against the wave
 controls:
   - Left-click — harvest a tile / attack an enemy / select a unit
+  - Shift-click or shift-drag — add units to the current selection
   - Left-drag — box-select units
   - Right-click — move or attack-move selected units
-  - Drag a card from your hand to play it; click fog tiles to expand
-  - WASD / edge-scroll / middle-drag — pan · wheel — zoom · Q / E — rotate
+  - Click a card to play it; BUILD opens the build menu; click fog tiles to expand
+  - Hover a tile to see its name; WASD / edge-scroll / middle-drag — pan · wheel — zoom · Q / E — rotate
   - DEFEND — end the build phase early and start the wave

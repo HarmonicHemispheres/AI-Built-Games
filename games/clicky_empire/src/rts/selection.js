@@ -60,8 +60,10 @@ export function clearSelection() {
 // Select every unit whose world position falls inside the given world-space
 // rect. worldRect = { minX, maxX, minZ, maxZ } (order-insensitive — we
 // normalize min/max defensively in case a caller passes raw drag corners).
-export function boxSelect(worldRect) {
-  if (!worldRect) return clearSelection();
+// opts.additive (shift-drag) merges the box hits into the current selection
+// instead of replacing it.
+export function boxSelect(worldRect, opts = {}) {
+  if (!worldRect) return opts.additive ? state.selection : clearSelection();
   const minX = Math.min(worldRect.minX, worldRect.maxX);
   const maxX = Math.max(worldRect.minX, worldRect.maxX);
   const minZ = Math.min(worldRect.minZ, worldRect.maxZ);
@@ -75,5 +77,5 @@ export function boxSelect(worldRect) {
       hit.push(u.id);
     }
   }
-  return commit(hit);
+  return commit(opts.additive ? validIds([...state.selection, ...hit]) : hit);
 }

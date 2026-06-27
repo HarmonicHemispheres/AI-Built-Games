@@ -17,7 +17,7 @@ import {
   addResource,
   setScene,
 } from "../src/state.js";
-import { getCard } from "../src/cards/catalog.js";
+import { getCard, buildingCardsForTier } from "../src/cards/catalog.js";
 import {
   drawStarting,
   draw,
@@ -197,21 +197,21 @@ assert.deepEqual(draftR4a, draftR4b, "rollDraft stable for a given round");
 ok("rollDraft: stable per (seed, round)");
 
 // Tier gating: a tier-2 unlocked card must NOT appear while tier is 1, but CAN
-// appear once tier rises to 2.
+// appear once tier rises to 2. (Uses a tier-2 UNIT — buildings are never drafted.)
 freshRun("POOLSEED");
 state.run.tier = 1;
-state.meta.unlockedCards = ["sawmill"]; // tier 2 building, unlocked
+state.meta.unlockedCards = ["spearman"]; // tier 2 unit, unlocked
 let appearsAtT1 = false;
 for (let r = 0; r < 12; r++) {
   state.run.round = r;
-  if (rollDraft().some((c) => c.id === "sawmill")) appearsAtT1 = true;
+  if (rollDraft().some((c) => c.id === "spearman")) appearsAtT1 = true;
 }
 assert.equal(appearsAtT1, false, "tier-2 unlock never drafts while tier 1");
 state.run.tier = 2;
 let appearsAtT2 = false;
 for (let r = 0; r < 30; r++) {
   state.run.round = r;
-  if (rollDraft().some((c) => c.id === "sawmill")) appearsAtT2 = true;
+  if (rollDraft().some((c) => c.id === "spearman")) appearsAtT2 = true;
 }
 assert.equal(appearsAtT2, true, "tier-2 unlock can draft once tier 2");
 ok("rollDraft: only unlocked UNION tier-1, gated by current tier");
@@ -270,6 +270,38 @@ chooseDraft("forage_run");
 assert.equal(state.hand.length, HAND_CAP, "chooseDraft does not overflow hand cap");
 assert.ok(state.meta.unlockedCards.includes("forage_run"), "still unlocked at cap");
 ok("chooseDraft: respects HAND_CAP, still unlocks");
+
+// ---------------------------------------------------------------------------
+// Buildings are NOT part of the random pool: they're constructed from the
+// tier-gated build menu, never drawn or drafted. Only units / upgrades /
+// actions are random cards.
+// ---------------------------------------------------------------------------
+freshRun("NOBUILD");
+drawStarting();
+assert.ok(state.hand.length === 5, "starting hand still draws 5");
+assert.ok(
+  state.hand.every((c) => c.type !== "building"),
+  "starting hand contains no building cards"
+);
+ok("drawStarting: excludes buildings (units/upgrades/actions only)");
+
+freshRun("NOBUILD2");
+state.run.tier = 2;
+state.meta.unlockedCards = ["sawmill", "stone_wall", "ballista_tower"]; // unlocked T2 buildings
+let buildingDrafted = false;
+for (let r = 0; r < 40; r++) {
+  state.run.round = r;
+  if (rollDraft().some((c) => c.type === "building")) buildingDrafted = true;
+}
+assert.equal(buildingDrafted, false, "buildings never appear in the draft, even when unlocked");
+ok("rollDraft: excludes buildings even when unlocked at the current tier");
+
+// buildingCardsForTier feeds the build menu and is gated purely by tier.
+assert.equal(buildingCardsForTier(1).length, 6, "6 tier-1 buildings available");
+assert.ok(buildingCardsForTier(1).every((c) => c.type === "building" && c.tier <= 1));
+assert.equal(buildingCardsForTier(2).length, 11, "11 buildings available by tier 2");
+assert.ok(buildingCardsForTier(2).every((c) => c.type === "building" && c.tier <= 2));
+ok("buildingCardsForTier: tier-gated building list for the build menu");
 
 clearAll();
 console.log(`\nCards: ${passed} checks passed.`);
