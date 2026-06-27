@@ -406,25 +406,21 @@ export function screenShake(amount = 0.4) {
 function updateShake(dt) {
   if (shake.amount <= 0.0001 && shake.offX === 0 && shake.offZ === 0) return;
 
-  // Undo last frame's offset, apply a fresh jittered one. setTarget rebuilds
-  // the camera position from the pivot, so we nudge the pivot symmetrically.
-  const st = cameraApi.state;
-  const baseX = st.pivot.x - shake.offX;
-  const baseZ = st.pivot.z - shake.offZ;
-
   shake.amount = Math.max(0, shake.amount - shake.decay * dt * shake.amount);
   if (shake.amount < 0.01) {
     shake.amount = 0;
     shake.offX = 0;
     shake.offZ = 0;
-    cameraApi.setTarget(baseX, baseZ); // restore exact base
+    cameraApi.setShakeOffset(0, 0); // clear the transient offset
     return;
   }
 
+  // Feed a fresh jittered offset to the camera rig. scene.js applies it on top of
+  // the eased look-pivot, so shake never fights the camera smoothing or drifts.
   const mag = shake.amount * 0.25;
   shake.offX = (Math.random() * 2 - 1) * mag;
   shake.offZ = (Math.random() * 2 - 1) * mag;
-  cameraApi.setTarget(baseX + shake.offX, baseZ + shake.offZ);
+  cameraApi.setShakeOffset(shake.offX, shake.offZ);
 }
 
 // ---------------------------------------------------------------------------

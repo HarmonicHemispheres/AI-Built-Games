@@ -16,7 +16,7 @@ status: prototype
 
 # Provenance
 created: 2026-06-25
-updated: 2026-06-26
+updated: 2026-06-27
 built_with:
   provider: anthropic
   model: Claude Opus 4.8
@@ -36,6 +36,8 @@ description: >
 features:
   - Three genres in one — clicker, city-builder, and roguelite
   - True 3D low-poly world rendered with Three.js (no build step)
+  - Golden-hour diorama rendering — ACES tone mapping, image-based lighting, gradient sky and fog, ambient occlusion, and soft bloom via an addon post-processing stack
+  - Eased orbit camera (pan / zoom / 90° yaw turns glide instead of snapping)
   - Seeded, shareable procedural maps with fog-of-war expansion
   - Card drafting across tiers with permanent between-run unlocks
   - Total-War-style regiments of soldiers whose block thins as the unit takes damage
