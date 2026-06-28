@@ -16,6 +16,7 @@ import { showFogHover, hideFogHover } from "./render/fog_cursor.js";
 import { showTileHover, hideTileHover } from "./render/tile_cursor.js";
 // Wave 1 render/audio subsystems.
 import { initFx, floatingNumber, harvestPop, shootArrow, shootArrowVolley } from "./render/fx.js";
+import { initStackBadges } from "./render/stack_badges.js";
 import { initAmbient } from "./render/ambient.js";
 import { initAudio, playSfx } from "./audio/sfx.js";
 import { initMusic, setMusicPhase } from "./audio/music.js";
@@ -57,6 +58,7 @@ function init() {
 
   // Wave 1 render/audio subsystems.
   initFx();
+  initStackBadges();
   initAmbient();
   initAudio();
   initMusic();

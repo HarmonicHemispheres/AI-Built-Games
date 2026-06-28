@@ -321,10 +321,18 @@ export function initInput(canvas) {
     handleRightClick(e);
   });
 
-  // Keys: A arms attack-move; S stops the selection. We do NOT preventDefault
-  // (main.js's WASD pan reads the same keys for the camera — both coexist).
+  // Keys: A arms attack-move; S stops the selection; Esc clears it. We do NOT
+  // preventDefault (main.js's WASD pan reads the same keys for the camera — both
+  // coexist). Esc is safe here: place.js owns Esc while a ghost is active (we
+  // bail on placementActive) and the pause menu only opens via its button, so
+  // Esc never fights either.
   window.addEventListener("keydown", (e) => {
     if (placementActive) return;
+    if (e.key === "Escape" || e.key === "Esc") {
+      attackMoveArmed = false;
+      if (state.selection && state.selection.length > 0) selection.clearSelection();
+      return;
+    }
     const k = e.key.toLowerCase();
     if (k === "a") {
       attackMoveArmed = true;

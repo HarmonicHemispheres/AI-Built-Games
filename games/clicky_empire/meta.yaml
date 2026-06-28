@@ -23,7 +23,7 @@ built_with:
 
 # Assets (paths are relative to this game's folder)
 entry: index.html
-banner: unit_style.png
+banner: clicky_empire_banner.jpg
 
 # Detail page content
 description: >
@@ -51,6 +51,7 @@ controls:
   - Left-click — harvest a tile / select a unit (your army fights enemies, not your cursor)
   - Left-drag — box-select units (a selection rectangle follows the cursor)
   - Shift-click or shift-drag — add units to the current selection
+  - Esc — deselect (clear the current selection)
   - Right-click — move or attack-move selected units
   - Click a card to play it; BUILD opens the build menu; click fog tiles to expand
   - Hover a tile to see its name; WASD / edge-scroll / middle-drag — pan · wheel — zoom · Q / E — rotate

@@ -14,7 +14,7 @@
 
 import { state, SCENE, on, canAfford } from "../state.js";
 import { getBuildingDef } from "../buildings/catalog.js";
-import { upgradeOption, upgradeBuilding } from "../buildings/economy.js";
+import { upgradeOption, upgradeBuilding, adjacencyMultFor } from "../buildings/economy.js";
 import { getUnitDef } from "../units/catalog.js";
 import { playSfx } from "../audio/sfx.js";
 
@@ -40,12 +40,18 @@ function buildingById(id) {
   return state.placed.find((b) => b.id === id) || null;
 }
 
-// A short "what it does" line for the panel header.
-function productionLine(def) {
+// A short "what it does" line for the panel header. Takes the live `building`
+// so an economy producer can show its EFFECTIVE yield (base × terrain bonus),
+// e.g. a lumber camp's wood/tick after the forests around it.
+function productionLine(building, def) {
   if (def.yields) {
     const res = Object.keys(def.yields)[0];
-    const amt = def.yields[res];
-    return `${cap(res)} +${amt} / tick`;
+    const base = def.yields[res];
+    const mult = adjacencyMultFor(building);
+    const amt = Math.round(base * mult * 100) / 100;
+    let line = `${cap(res)} +${amt} / tick`;
+    if (mult > 1.0001) line += ` (+${Math.round((mult - 1) * 100)}% terrain)`;
+    return line;
   }
   if (def.spawns) {
     const u = getUnitDef(def.spawns.unitId);
@@ -77,7 +83,7 @@ function render(building) {
   if (!def) return hide();
 
   nodes.name.textContent = def.name;
-  nodes.info.textContent = productionLine(def);
+  nodes.info.textContent = productionLine(building, def);
 
   const opt = upgradeOption(building);
   const btn = nodes.upgrade;

@@ -18,6 +18,10 @@
 //     adjacency?:{ hint: bonusMult},// economy: +bonusMult yield when next to a
 //                                  //   tile whose tile.adjacency === hint, or
 //                                  //   built on such a tile (see economy.js)
+//     adjacencyPer?:{hint:perTile},// economy: +perTile yield for EACH matching
+//                                  //   tile in the footprint+8-neighbourhood
+//                                  //   (scales with count — e.g. a lumber camp
+//                                  //   yields more wood the more forests ring it)
 //     attack?:   { damage, range, attackSpeed }, // defense: auto-fire stats
 //     spawns?:   { unitId, interval, cap, foodCost }, // spawner: trains a unit on
 //                                  //   a timer up to `cap`; each spawn consumes
@@ -59,7 +63,9 @@ export const BUILDINGS = {
     hp: 4,
     yields: { wood: 0.5 }, // wood per tick
     tickRate: 1, // seconds per tick
-    adjacency: { forest: 0.5 }, // +50% next to a forest tile
+    // +25% wood for EACH surrounding forest tile (footprint + 8 neighbours), so a
+    // camp dropped in dense woods out-produces one with a single tree nearby.
+    adjacencyPer: { forest: 0.25 },
     requiresNear: "forest", // can only be built on/next to forest
     color: 0x8a6a3c,
   },
@@ -133,7 +139,9 @@ export const BUILDINGS = {
     hp: 6,
     yields: { wood: 1.2 }, // big wood yield
     tickRate: 1,
-    adjacency: { forest: 1.0 }, // counts forest adjacency double (+100%)
+    // +35% wood per surrounding forest tile — a sawmill milks a thick wood
+    // adjacency even harder than a lumber camp (see economy.adjacencyMult).
+    adjacencyPer: { forest: 0.35 },
     requiresNear: "forest", // a sawmill still needs timber: build near forest
     color: 0x8a6a3c,
   },

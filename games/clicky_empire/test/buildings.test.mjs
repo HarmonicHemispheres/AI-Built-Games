@@ -225,23 +225,43 @@ const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
   ok("tickEconomy accrues base yields per tickRate (frame-rate independent)");
 }
 
-// --- adjacency bonus ---
+// --- adjacency bonus: count-scaled (adjacencyPer) ---
 {
   freshRun();
-  // lumber_camp on grass NEXT TO a forest tile gets +50%.
+  // lumber_camp on grass with ONE forest neighbour gets one per-forest bonus.
   setTile(0, 0, TILE.GRASS);
-  setTile(1, 0, TILE.FOREST); // 4-neighbour forest provides the adjacency hint
+  setTile(1, 0, TILE.FOREST); // a single 4-neighbour forest
   const b = placeBuilding("lumber_camp", 0, 0);
   assert.ok(b);
 
   tickEconomy(1);
   const def = getBuildingDef("lumber_camp");
-  const expected = def.yields.wood * (1 + def.adjacency.forest); // 0.5 * 1.5
+  const expected1 = def.yields.wood * (1 + def.adjacencyPer.forest * 1);
   assert.ok(
-    approx(state.resources.wood, expected),
-    `adjacency bonus applied (got ${state.resources.wood}, want ${expected})`,
+    approx(state.resources.wood, expected1),
+    `one-forest bonus applied (got ${state.resources.wood}, want ${expected1})`,
   );
-  ok("tickEconomy applies adjacency multiplier (+50% next to forest)");
+  ok("tickEconomy applies the per-forest adjacency bonus (one forest)");
+}
+{
+  freshRun();
+  // Three surrounding forests (incl. a diagonal) stack to 3× the per-forest
+  // bonus — wood scales with how many forests ring the camp.
+  setTile(0, 0, TILE.GRASS);
+  setTile(1, 0, TILE.FOREST);
+  setTile(0, 1, TILE.FOREST);
+  setTile(1, 1, TILE.FOREST); // diagonal — still in the 8-neighbourhood
+  const b = placeBuilding("lumber_camp", 0, 0);
+  assert.ok(b);
+
+  tickEconomy(1);
+  const def = getBuildingDef("lumber_camp");
+  const expected3 = def.yields.wood * (1 + def.adjacencyPer.forest * 3);
+  assert.ok(
+    approx(state.resources.wood, expected3),
+    `three-forest bonus scales (got ${state.resources.wood}, want ${expected3})`,
+  );
+  ok("tickEconomy scales lumber-camp wood with the number of surrounding forests");
 }
 
 // ===========================================================================

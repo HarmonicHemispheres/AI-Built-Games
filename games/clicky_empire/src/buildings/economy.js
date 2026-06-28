@@ -124,16 +124,40 @@ export function upgradeBuilding(building) {
 // /ore/berry) OR — special case — the building's OWN tile (mines "on an ore
 // vein", farms "on grass/berry"). We count BOTH the footprint tile and the 8
 // neighbours so "on" and "next to" both satisfy a hint.
+//
+// `adjacencyPer` is the count-scaled variant: each matching tile in that same
+// footprint+8-neighbourhood adds its per-tile bonus, so a lumber camp ringed by
+// six forests earns six times the per-forest bonus (vs. `adjacency`, which pays
+// a flat bonus for ANY single match). The two stack if a def declares both.
 function adjacencyMult(def, col, row) {
-  const adj = def.adjacency;
-  if (!adj) return 1;
-
   let mult = 1;
-  for (const hint in adj) {
-    const bonus = adj[hint];
-    if (hintMatchesAround(hint, col, row)) mult += bonus;
+
+  const adj = def.adjacency;
+  if (adj) {
+    for (const hint in adj) {
+      if (hintMatchesAround(hint, col, row)) mult += adj[hint];
+    }
   }
+
+  const adjPer = def.adjacencyPer;
+  if (adjPer) {
+    for (const hint in adjPer) {
+      mult += adjPer[hint] * countHintAround(hint, col, row);
+    }
+  }
+
   return mult;
+}
+
+// adjacencyMultFor(building) — the live adjacency multiplier for a placed
+// building instance, exposed so the building panel can show its effective yield
+// (e.g. a lumber camp's wood/tick after its forest bonus). Returns 1 when the
+// instance or its def is missing.
+export function adjacencyMultFor(building) {
+  if (!building) return 1;
+  const def = getBuildingDef(building.defId);
+  if (!def) return 1;
+  return adjacencyMult(def, building.col, building.row);
 }
 
 // Does any tile in the footprint+neighbourhood satisfy `hint`? `grass` is a
@@ -151,6 +175,18 @@ function tileHasHint(tile, hint) {
   if (!tile) return false;
   if (hint === "grass") return tile.type === TILE.GRASS;
   return tile.adjacency === hint;
+}
+
+// How many tiles in the footprint+8-neighbourhood satisfy `hint` (0..9). Drives
+// `adjacencyPer` so a bonus scales with the COUNT of matching tiles, not just
+// their presence.
+function countHintAround(hint, col, row) {
+  let n = 0;
+  if (tileHasHint(tileAt(col, row), hint)) n++;
+  for (const { dc, dr } of N8) {
+    if (tileHasHint(tileAt(col + dc, row + dr), hint)) n++;
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------------------
