@@ -22,24 +22,43 @@ import { waterMaterial } from "./meshes.js";
 // Collected sway entries: { obj, phase, amp }. Rebuilt whenever the world meshes
 // are rebuilt (fog expansion / new run), so we never hold refs to disposed trees.
 const sways = [];
+// Collected cloud caps (fog meshes) + their individual puffs, animated so the
+// fog of war reads as living, drifting cloud cover rather than a static cap.
+const clouds = []; // { obj, phase, baseX, baseY, baseZ }
+const puffs = []; // { obj, phase, baseY }
 let time = 0;
 let initialized = false;
 
-// Gather every swaying object under `root` (the tile layer). Called after the
-// tile meshes are (re)built so newly revealed forests start swaying too.
+// Gather every animated object under `root` — swaying trees (tile layer) and
+// drifting cloud caps (fog layer). Called after those meshes are (re)built so
+// newly revealed forests/frontier clouds start moving too.
 export function collectAmbient(root) {
   if (!root) return;
   root.traverse((node) => {
     const s = node.userData?.sway;
     if (s) sways.push({ obj: node, phase: s.phase || 0, amp: s.amp || 0.05 });
+    const c = node.userData?.cloud;
+    if (c) {
+      clouds.push({
+        obj: node,
+        phase: c.phase || 0,
+        baseX: node.position.x,
+        baseY: node.position.y,
+        baseZ: node.position.z,
+      });
+    }
+    const p = node.userData?.puff;
+    if (p) puffs.push({ obj: node, phase: p.phase || 0, baseY: p.baseY ?? node.position.y });
   });
 }
 
-// Drop all collected sway refs (the meshes are about to be disposed). The water
+// Drop all collected refs (the meshes are about to be disposed). The water
 // material is shared/persistent, so it is never collected here — only its uTime
 // is advanced, which is harmless when no water is on screen.
 export function clearAmbient() {
   sways.length = 0;
+  clouds.length = 0;
+  puffs.length = 0;
 }
 
 // initAmbient() — register the single per-frame ambient updater. Idempotent.
@@ -63,6 +82,22 @@ export function initAmbient() {
       const s = sways[i];
       s.obj.rotation.z = Math.sin(time * 1.5 + s.phase) * s.amp;
       s.obj.rotation.x = Math.cos(time * 1.2 + s.phase * 1.3) * s.amp * 0.55;
+    }
+
+    // Cloud caps: the whole cap bobs, sways, and slowly churns (yaw) around its
+    // tile, while each puff billows on its own phase — so the fog reads as living
+    // cloud cover. Amplitudes stay small so a cap never drifts off its tile.
+    for (let i = 0; i < clouds.length; i++) {
+      const c = clouds[i];
+      c.obj.position.x = c.baseX + Math.sin(time * 0.35 + c.phase * 1.7) * 0.05;
+      c.obj.position.y = c.baseY + Math.sin(time * 0.6 + c.phase) * 0.06;
+      c.obj.position.z = c.baseZ + Math.cos(time * 0.3 + c.phase * 1.3) * 0.05;
+      c.obj.rotation.y = Math.sin(time * 0.18 + c.phase) * 0.22;
+    }
+    // Per-puff billow: a small independent vertical bob layered on the cap motion.
+    for (let i = 0; i < puffs.length; i++) {
+      const p = puffs[i];
+      p.obj.position.y = p.baseY + Math.sin(time * 0.9 + p.phase) * 0.04;
     }
   });
 }

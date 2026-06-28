@@ -61,6 +61,7 @@ function productionLine(building, def) {
     return `DMG ${def.attack.damage} · RNG ${def.attack.range}`;
   }
   if (def.kind === "wall") return "Blocks enemies";
+  if (def.kind === "bridge") return "Lets units cross water";
   return "";
 }
 

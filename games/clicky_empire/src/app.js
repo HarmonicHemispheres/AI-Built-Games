@@ -96,9 +96,11 @@ function buildWorldMeshes() {
   for (const f of frontier()) {
     layers.fog.add(buildFogMesh(f.col, f.row));
   }
-  // Register any swaying trees on the freshly built tiles with the ambient
-  // animator (water flows off the shared material, so it needs no collection).
+  // Register swaying trees (tile layer) and drifting cloud caps (fog layer) with
+  // the ambient animator. Water flows off the shared material, so it needs no
+  // collection.
   collectAmbient(layers.tiles);
+  collectAmbient(layers.fog);
 }
 
 function clearWorldMeshes() {

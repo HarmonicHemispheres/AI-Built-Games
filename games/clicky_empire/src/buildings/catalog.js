@@ -128,6 +128,18 @@ export const BUILDINGS = {
     hp: 6, // low HP wall segment
     color: 0x7a5630,
   },
+  bridge: {
+    id: "bridge",
+    name: "Bridge",
+    kind: "bridge",
+    hp: 8,
+    // A bridge spans a WATER tile, turning it walkable so your units — and the
+    // enemy's — can cross the river. Enemies never target a bridge (behavior.js
+    // skips kind:'bridge'), so it is effectively impassable-terrain-you-build
+    // rather than a wall to be torn down. Auto-connects to neighbouring bridges
+    // like a wall (place.js), so a span of them reads as one continuous crossing.
+    color: 0x9c6b3a,
+  },
 
   // ---------------------------------------------------------------------------
   // Tier 2 — economy

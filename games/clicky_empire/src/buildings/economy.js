@@ -35,6 +35,17 @@ function isOccupied(col, row) {
   return state.placed.some((b) => b.col === col && b.row === row);
 }
 
+// Can `def` be placed on `tile` (terrain-type gate, ignoring occupancy)? Normal
+// buildings need a `buildable` tile. A BRIDGE is the exception: it spans water,
+// so it requires (and only fits on) a WATER tile — placing one turns that tile
+// walkable (see placeBuilding) so units and enemies can cross. Shared by the
+// logic placement here and the ghost validity check in place.js.
+export function tilePlaceableFor(def, tile) {
+  if (!def || !tile) return false;
+  if (def.kind === "bridge") return tile.type === TILE.WATER;
+  return !!tile.buildable;
+}
+
 // placeBuilding(defId, col, row) -> building | null
 //   - Rejects unknown defs, non-buildable tiles, and occupied tiles.
 //   - On a forest tile, normalizes the tile type to grasslands (it "clears to
@@ -46,7 +57,7 @@ export function placeBuilding(defId, col, row) {
   if (!def) return null;
 
   const tile = tileAt(col, row);
-  if (!tile || !tile.buildable) return null;
+  if (!tile || !tilePlaceableFor(def, tile)) return null;
   if (isOccupied(col, row)) return null;
   // Terrain gate (checked BEFORE the forest->grass normalize below, so a lumber
   // camp may sit ON a lone forest tile): lumber/sawmill need forest, mine ore.
@@ -70,6 +81,11 @@ export function placeBuilding(defId, col, row) {
     group: null, // render reconciler (place.js) builds the mesh
     cd: 0, // accrual / spawn timer (seconds)
   };
+  // A bridge makes its WATER tile walkable so units and enemies can cross it.
+  // (Runs are ephemeral — not persisted mid-run — so mutating the live tile is
+  // safe; pathfind.isWalkable reads tile.walkable.)
+  if (def.kind === "bridge") tile.walkable = true;
+
   state.placed.push(building);
   return building;
 }

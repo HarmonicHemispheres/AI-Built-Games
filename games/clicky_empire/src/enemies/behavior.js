@@ -23,6 +23,7 @@
 import { state, nextId, addResource } from "../state.js";
 import { emit } from "../util/events.js";
 import { getEnemyDef } from "./catalog.js";
+import { getBuildingDef } from "../buildings/catalog.js";
 import { applyDamage } from "../combat/damage.js";
 import { findPath, isWalkable, nearestWalkableToward } from "../world/pathfind.js";
 import { tileToWorld, worldToTile, distXZ } from "../util/math.js";
@@ -112,9 +113,17 @@ function isCastle(inst) {
 //   - everyone else: nearest of {buildings, units} combined.
 // The castle is just another building in state.placed, so it is included naturally
 // (and remains the fallback goal of pathing when nothing else is in the way).
+// A bridge is terrain you build, not a structure to be torn down: enemies walk
+// across it (its tile is walkable) and never target it. Filter it out of the
+// hostile-buildings pool so neither sappers nor brawlers stop to attack it.
+function isBridge(inst) {
+  return getBuildingDef(inst?.defId)?.kind === "bridge";
+}
+
 function pickTarget(enemy) {
   const sapper = enemy.def.traits?.includes("SAPPER");
-  const buildings = Array.isArray(state.placed) ? state.placed : [];
+  const placed = Array.isArray(state.placed) ? state.placed : [];
+  const buildings = placed.filter((b) => !isBridge(b));
   const units = Array.isArray(state.units) ? state.units : [];
 
   if (sapper) {

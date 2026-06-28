@@ -30,9 +30,8 @@ import { playSfx } from "../audio/sfx.js";
 import { tileToWorld, clamp01 } from "../util/math.js";
 import { getCard } from "../cards/catalog.js";
 import { getBuildingDef } from "./catalog.js";
-import { getTileType } from "../world/tiles.js";
 import { tileAt } from "../world/generate.js";
-import { placeBuilding, placementRequirementMet } from "./economy.js";
+import { placeBuilding, placementRequirementMet, tilePlaceableFor } from "./economy.js";
 
 // Validity tint colors for the ghost.
 const VALID_TINT = 0x69d36e; // green-ish
@@ -48,15 +47,17 @@ const ghost = {
   mesh: null, // THREE.Object3D following the pointer
   tile: null, // { col, row } currently hovered (or null)
   valid: false,
+  sig: null, // connection signature of the current ghost mesh (walls/bridges)
 };
 
 // ---------------------------------------------------------------------------
 // Ghost mesh helpers
 // ---------------------------------------------------------------------------
 
-// Build the translucent preview mesh for `defId`.
-function makeGhostMesh(defId) {
-  const mesh = buildBuildingMesh(defId);
+// Build the translucent preview mesh for `defId`. `connections` (optional) lets
+// wall/bridge ghosts preview their auto-tiled shape for the hovered tile.
+function makeGhostMesh(defId, connections = null) {
+  const mesh = buildBuildingMesh(defId, { connections });
   // Make every material translucent so it reads as a preview.
   mesh.traverse((node) => {
     if (node.isMesh && node.material) {
@@ -93,8 +94,9 @@ function tintGhost(mesh, valid) {
 function tileValid(col, row) {
   const tile = tileAt(col, row);
   if (!tile) return false;
-  const def = getTileType(tile.type);
-  if (!def.buildable) return false;
+  // Terrain-type gate (shared with economy.placeBuilding): normal buildings need
+  // a buildable tile; a bridge instead requires a water tile to span.
+  if (!tilePlaceableFor(getBuildingDef(ghost.defId), tile)) return false;
   // Unoccupied check (mirror of economy.isOccupied; kept local to avoid leaking
   // internals across the import boundary).
   if (state.placed.some((b) => b.col === col && b.row === row)) return false;
@@ -118,9 +120,20 @@ function beginGhost(cardId) {
   ghost.defId = card.effect.defId;
   ghost.tile = null;
   ghost.valid = false;
+  ghost.sig = null; // forces the first hover to re-tile wall/bridge ghosts
   ghost.mesh = makeGhostMesh(ghost.defId);
   ghost.mesh.visible = false; // hidden until first hover positions it
   layers.buildings.add(ghost.mesh);
+}
+
+// Connection set for a hypothetical building of `defId` at (col,row) — the same
+// auto-tiling the reconciler computes for a placed segment, so the ghost preview
+// matches the real result. Null for non-connecting buildings.
+function ghostConnections(defId, col, row) {
+  if (!connectGroup(defId)) return null;
+  const byPos = new Map();
+  for (const b of state.placed) byPos.set(`${b.col},${b.row}`, b);
+  return segmentConnections({ defId, col, row }, byPos);
 }
 
 // Tear down the ghost mesh + state. When `emitEnd` is true, also broadcast
@@ -138,6 +151,7 @@ function cancelGhost(emitEnd = true) {
   ghost.mesh = null;
   ghost.tile = null;
   ghost.valid = false;
+  ghost.sig = null;
   if (emitEnd && was) emit("placement-end");
 }
 
@@ -151,6 +165,22 @@ function onPointerMove(event) {
     return;
   }
   const { col, row } = hit.tile;
+
+  // Re-tile wall/bridge ghosts to the hovered cell so the preview matches what
+  // will be built (a bridge orients toward its banks / neighbouring spans). Only
+  // rebuilds when the connection signature actually changes.
+  if (connectGroup(ghost.defId)) {
+    const conn = ghostConnections(ghost.defId, col, row);
+    const sig = conn ? conn.join("") : "";
+    if (sig !== ghost.sig) {
+      layers.buildings.remove(ghost.mesh);
+      disposeMesh(ghost.mesh);
+      ghost.mesh = makeGhostMesh(ghost.defId, conn);
+      ghost.sig = sig;
+      layers.buildings.add(ghost.mesh);
+    }
+  }
+
   const w = tileToWorld(col, row, 0);
   ghost.mesh.position.set(w.x, 0, w.z);
   ghost.mesh.visible = true;
@@ -350,22 +380,44 @@ function updateBar(b) {
 // Track meshes we've built keyed by building id so we can dispose on removal.
 const meshById = new Map(); // id -> THREE.Object3D
 
-// Walls auto-connect: a wall's mesh depends on which orthogonal neighbours are
-// ALSO walls. We recompute that set each frame and rebuild a wall whenever it
-// changes, so placing or losing a wall reshapes its neighbours' arms too.
-function isWallDef(defId) {
+// Walls AND bridges auto-connect: their mesh depends on which orthogonal
+// neighbours belong to the SAME connection group (walls join walls, bridges join
+// bridges — never each other). We recompute that set each frame and rebuild the
+// segment whenever it changes, so placing or losing one reshapes its neighbours'
+// arms too. `connectGroup` returns the group key (or null for non-connecting
+// buildings) so the neighbour test only links like-with-like.
+function connectGroup(defId) {
   const d = getBuildingDef(defId);
-  return !!(d && d.kind === "wall");
+  if (!d) return null;
+  if (d.kind === "wall") return "wall";
+  if (d.kind === "bridge") return "bridge";
+  return null;
 }
 
-// Directions (in fixed N,S,E,W order for a stable signature) whose neighbour is
-// a wall, given a position->building lookup for the current frame.
-function wallConnections(b, byPos) {
-  const dirs = [];
-  const at = (col, row) => {
+// Directions (in fixed N,S,E,W order for a stable signature) a segment reaches
+// an arm toward, given a position->building lookup for the current frame. Returns
+// null when `b` isn't a connecting building.
+//
+//   - WALLS connect only to neighbouring walls (so a wall row meets at its ends).
+//   - BRIDGES connect to neighbouring bridges AND to the land BANK on each side,
+//     so a lone span orients its deck across the water toward the shores it joins
+//     (a bridge between two land tiles spans toward them, not its E–W default).
+function segmentConnections(b, byPos) {
+  const group = connectGroup(b.defId);
+  if (!group) return null;
+  const sameGroup = (col, row) => {
     const nb = byPos.get(`${col},${row}`);
-    return nb && isWallDef(nb.defId);
+    return !!(nb && connectGroup(nb.defId) === group);
   };
+  // A "bank" is an adjacent walkable land tile (anything you can step onto that
+  // isn't water) — the shore a bridge meets. Only bridges read banks.
+  const isBank = (col, row) => {
+    if (group !== "bridge") return false;
+    const t = tileAt(col, row);
+    return !!(t && t.walkable && t.type !== "water");
+  };
+  const at = (col, row) => sameGroup(col, row) || isBank(col, row);
+  const dirs = [];
   if (at(b.col, b.row - 1)) dirs.push("N");
   if (at(b.col, b.row + 1)) dirs.push("S");
   if (at(b.col + 1, b.row)) dirs.push("E");
@@ -384,8 +436,9 @@ function reconcile() {
   for (const b of state.placed) {
     live.add(b.id);
 
-    // Compute this wall's current connection set + signature (null for non-walls).
-    const wallConn = isWallDef(b.defId) ? wallConnections(b, byPos) : null;
+    // Compute this segment's current connection set + signature (null for
+    // non-connecting buildings — i.e. anything that isn't a wall or bridge).
+    const wallConn = segmentConnections(b, byPos);
     const wallSig = wallConn ? wallConn.join("") : null;
 
     // In-place upgrade: the building's defId changed under an existing mesh

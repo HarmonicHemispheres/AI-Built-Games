@@ -84,10 +84,11 @@ export function waterMaterial() {
       "#include <begin_vertex>",
       `#include <begin_vertex>
         vec3 _wp = (modelMatrix * vec4(transformed, 1.0)).xyz;
-        float _wave = sin(_wp.x * 1.7 + uTime * 1.3) * 0.5
-                    + sin(_wp.z * 2.2 - uTime * 1.05) * 0.32
-                    + sin((_wp.x + _wp.z) * 1.1 + uTime * 0.7) * 0.2;
-        transformed.y += _wave * 0.05;`,
+        float _wave = sin(_wp.x * 1.7 + uTime * 1.6) * 0.5
+                    + sin(_wp.z * 2.2 - uTime * 1.25) * 0.32
+                    + sin((_wp.x + _wp.z) * 1.1 + uTime * 0.85) * 0.2
+                    + sin((_wp.x * 2.6 - _wp.z * 1.9) + uTime * 2.1) * 0.12;
+        transformed.y += _wave * 0.09;`,
     );
     // Stash the live shader so the animator can bump uTime each frame.
     m.userData.shader = shader;
@@ -135,7 +136,7 @@ const G = {
   // water material has enough vertices to ripple. Rotated into XZ at build time
   // so the shader can displace local +Y straight up in world space.
   waterTop: () =>
-    sharedGeo("watertop", () => new THREE.PlaneGeometry(0.96, 0.96, 6, 6).rotateX(-Math.PI / 2)),
+    sharedGeo("watertop", () => new THREE.PlaneGeometry(0.96, 0.96, 10, 10).rotateX(-Math.PI / 2)),
 };
 
 // Make a mesh from a shared geometry + a (shared) material, then scale/position.
@@ -279,7 +280,8 @@ export function buildTileMesh(tile) {
       slabMat.transparent = true;
       slabMat.opacity = 0.92;
       const surface = new THREE.Mesh(G.waterTop(), waterMaterial());
-      surface.position.y = h + 0.015; // just above the slab top to avoid z-fight
+      surface.position.y = h + 0.04; // ride a touch above the slab; wave troughs
+      // dip into the translucent body below, reading as moving depth.
       surface.castShadow = false;
       surface.receiveShadow = false;
       group.add(surface);
@@ -312,15 +314,21 @@ export function buildFogMesh(col, row) {
     { x: 0.28, z: -0.1, s: 0.44, y: 0.46 },
     { x: 0.05, z: -0.26, s: 0.36, y: 0.4 },
   ];
+  let pi = 0;
   for (const p of puffs) {
     const puff = meshOf(G.ico(), cloudMat);
     puff.scale.setScalar(p.s);
     puff.position.set(p.x, p.y, p.z);
     puff.castShadow = false; // clouds shouldn't cast hard shadows
+    // Per-puff drift phase so each lump of the cloud billows independently
+    // (render/ambient.js reads this to bob the puffs). Deterministic per tile.
+    puff.userData.puff = { phase: col * 1.3 + row * 0.7 + pi * 1.9, baseY: p.y };
     group.add(puff);
+    pi++;
   }
 
-  group.userData = { kind: "fog", id: tileKey(col, row) };
+  // The whole cap also bobs + slowly churns as one (ambient.js reads cloud).
+  group.userData = { kind: "fog", id: tileKey(col, row), cloud: { phase: col * 0.9 + row * 1.4 } };
   return group;
 }
 
@@ -532,6 +540,51 @@ function buildCastleWall(group, color = 0xb4b7bc, opts = {}) {
   });
 }
 
+// --- Bridge (Tier 1): a connection-aware wooden crossing over water -----------
+// Built like the walls: a central deck hub plus a plank ARM reaching to each
+// edge that has a neighbouring bridge, so a row of bridges meets at the tile
+// boundaries and reads as one continuous span (opts.connections, computed by the
+// placement reconciler exactly as for walls). A lone bridge falls back to an E–W
+// deck so it always reads as a crossing rather than a stub. Local axes match the
+// world grid (+x = East, +z = South — see WALL_VEC above).
+function buildBridge(group, color = 0x9c6b3a, opts = {}) {
+  const plank = color;
+  const rail = shade(color, 1.18); // lighter top rail
+  const post = shade(color, 0.62); // darker support posts
+  const DECK_H = 0.07; // plank deck thickness
+  const RAIL_Y = 0.16; // height of the side rail above the deck
+  const HALF = 0.2; // half the deck width (rails sit at ±HALF)
+
+  // Central deck hub — also the deck for a bridge with no connections.
+  addBox(group, plank, 0, 0, 0, 0.42, DECK_H, 0.42, 0.95);
+
+  for (const dir of wallDirsToDraw(opts.connections)) {
+    const [ux, uz] = WALL_VEC[dir];
+    const horiz = ux !== 0; // arm runs along x (E/W) vs z (N/S)
+    const cx = ux * 0.25;
+    const cz = uz * 0.25;
+    const along = 0.5; // arm length out to the tile edge
+    const sx = horiz ? along : 0.42;
+    const sz = horiz ? 0.42 : along;
+    // Plank deck arm from the hub out to the tile boundary.
+    addBox(group, plank, cx, 0, cz, sx, DECK_H, sz, 0.95);
+
+    // Two side rails flanking the walkway (parallel to travel) plus end posts so
+    // the crossing reads as a railed bridge, not a bare slab.
+    for (const side of [-1, 1]) {
+      const ox = horiz ? 0 : side * HALF; // rails offset perpendicular to travel
+      const oz = horiz ? side * HALF : 0;
+      const rsx = horiz ? along : 0.05;
+      const rsz = horiz ? 0.05 : along;
+      addBox(group, rail, cx + ox, DECK_H + RAIL_Y, cz + oz, rsx, 0.04, rsz, 0.9);
+      // A support post at the outer end of each rail.
+      const px = cx + ox + ux * (along / 2 - 0.04);
+      const pz = cz + oz + uz * (along / 2 - 0.04);
+      addBox(group, post, px, DECK_H, pz, 0.06, RAIL_Y, 0.06, 0.95);
+    }
+  }
+}
+
 // --- Economy buildings ------------------------------------------------------
 function buildLumberCamp(group, color = 0x8a6a3c) {
   addBox(group, color, 0, 0, 0, 0.55, 0.34, 0.55);
@@ -725,6 +778,7 @@ const BUILDING_BUILDERS = {
   ballista_tower: buildBallista,
   ballista: buildBallista,
   palisade: buildPalisade,
+  bridge: buildBridge,
   stone_wall: buildStoneWall,
   lumber_camp: buildLumberCamp,
   hamlet: buildHamlet,

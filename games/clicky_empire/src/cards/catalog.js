@@ -75,6 +75,15 @@ export const CARDS = {
     cost: { wood: 10 },
     effect: { defId: "palisade" }, // 1-tile wall segment, low HP, no attack
   },
+  bridge: {
+    id: "bridge",
+    name: "Bridge",
+    type: "building",
+    tier: 1,
+    rarity: "common",
+    cost: { wood: 20 },
+    effect: { defId: "bridge" }, // spans a water tile: makes it walkable to cross
+  },
 
   // --- Upgrades ---
   sharpened_tools: {
