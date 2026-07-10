@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Frontier &amp; Fire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --parch:#ecdcb4; --parch-d:#d6c193; --parch-deep:#b89c64;
+    --ink:#2c1c10; --ink-soft:#4d3420;
+    --wood:#7a4a26; --wood-d:#5a3318;
+    --leaf:#4a6b34; --leaf-d:#365024;
+    --water:#3f7fa6; --gold:#c9962a; --gold-br:#f2c14e;
+    --blood:#7a1f17; --good:#4f7a2f; --bad:#9a3320;
+    --panel:#f3e6c4; --shadow:rgba(30,18,8,.45);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1b2516;
+    font-family:'Cormorant Garamond',serif;color:var(--ink);user-select:none;-webkit-user-select:none;}
+  #app{position:relative;width:100%;height:100%;}
+  canvas{display:block;position:absolute;inset:0;}
+  h1,h2,h3{font-family:'IM Fell English SC',serif;font-weight:normal;letter-spacing:.5px;}
+  button{font-family:'IM Fell English SC',serif;cursor:pointer;border:none;background:none;color:inherit;}
+
+  /* ---------- generic panels ---------- */
+  .panel{background:linear-gradient(160deg,var(--panel),var(--parch-d));
+    border:2px solid var(--wood-d);border-radius:10px;
+    box-shadow:0 6px 22px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.25);}
+  .btn{background:linear-gradient(160deg,var(--wood),var(--wood-d));color:#f4e3c2;
+    border:2px solid #3a2110;border-radius:8px;padding:10px 18px;font-size:1.15rem;
+    transition:transform .08s ease, filter .12s ease;letter-spacing:1px;}
+  .btn:hover{filter:brightness(1.15);transform:translateY(-2px);}
+  .btn:active{transform:translateY(0);}
+  .btn.sm{padding:6px 12px;font-size:.95rem;}
+  .btn.gold{background:linear-gradient(160deg,var(--gold-br),var(--gold));color:#3a2406;border-color:#7a5410;}
+
+  /* ---------- overlay screens ---------- */
+  .screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    z-index:30;flex-direction:column;gap:18px;
+    background:radial-gradient(ellipse at center, rgba(20,30,16,.35), rgba(12,18,10,.78));}
+  .hidden{display:none!important;}
+  .card{width:min(560px,92vw);padding:26px 30px;}
+  .title-wrap{text-align:center;}
+  .title-wrap h1{font-size:4.4rem;color:#f4e7c3;text-shadow:0 3px 0 #3a2110, 0 6px 18px rgba(0,0,0,.6);}
+  .title-wrap .sub{font-size:1.3rem;color:#e7d4a4;font-style:italic;opacity:.92;margin-top:-6px;}
+  .menu-col{display:flex;flex-direction:column;gap:12px;width:280px;}
+  .menu-col .btn{width:100%;}
+
+  .faction-row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;}
+  .faction{width:300px;padding:18px;cursor:pointer;transition:transform .12s, box-shadow .12s;}
+  .faction:hover{transform:translateY(-4px);box-shadow:0 12px 30px var(--shadow);}
+  .faction.sel{outline:3px solid var(--gold-br);}
+  .faction h2{font-size:1.7rem;margin-bottom:6px;}
+  .faction .tag{font-style:italic;color:var(--ink-soft);margin-bottom:10px;font-size:1.05rem;}
+  .faction ul{list-style:none;font-size:1rem;line-height:1.5;}
+  .faction li:before{content:"✦ ";color:var(--gold);}
+
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .field{display:flex;flex-direction:column;gap:4px;font-size:1rem;}
+  .field label{font-family:'IM Fell English SC',serif;font-size:.95rem;}
+  select,input[type=range]{font-family:inherit;}
+  select{padding:5px 8px;border-radius:6px;border:1.5px solid var(--wood-d);background:var(--parch);color:var(--ink);}
+  .seg{display:flex;border:1.5px solid var(--wood-d);border-radius:7px;overflow:hidden;}
+  .seg button{padding:6px 14px;font-size:.95rem;background:var(--parch);}
+  .seg button.on{background:var(--wood);color:#f4e3c2;}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;inset:0;pointer-events:none;z-index:20;}
+  #topbar{position:absolute;top:0;left:0;right:0;height:54px;display:flex;align-items:center;gap:14px;
+    padding:0 14px;pointer-events:auto;
+    background:linear-gradient(180deg,rgba(44,28,16,.92),rgba(44,28,16,.72));
+    border-bottom:2px solid #1c1009;color:#f1e1bd;}
+  .res{display:flex;align-items:center;gap:5px;font-size:1.15rem;white-space:nowrap;}
+  .res .ic{font-size:1.25rem;}
+  .res .v{font-variant-numeric:tabular-nums;min-width:1ch;}
+  .res .delta{font-size:.85rem;opacity:.85;}
+  .pos{color:#bfe6a0;} .neg{color:#f0a48c;}
+  #spacer{flex:1;}
+  .alertchip{font-family:'IM Fell English SC',serif;font-size:1rem;color:#fff;white-space:nowrap;
+    background:linear-gradient(160deg,#b85a3e,#7a2a16);border:1.5px solid #ffcaa8;border-radius:14px;
+    padding:4px 12px;margin-right:8px;animation:pulse 1.1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,120,80,.6);}50%{box-shadow:0 0 0 6px rgba(255,120,80,0);}}
+  #datebox{font-family:'IM Fell English SC',serif;font-size:1.1rem;text-align:right;line-height:1.05;}
+  .speedseg{display:flex;border:1.5px solid #1c1009;border-radius:7px;overflow:hidden;}
+  .speedseg button{padding:5px 10px;color:#f1e1bd;background:rgba(0,0,0,.15);font-size:1rem;}
+  .speedseg button.on{background:var(--gold);color:#2a1804;}
+
+  /* build dock */
+  #builddock{position:absolute;left:12px;top:70px;bottom:14px;width:208px;pointer-events:auto;
+    display:flex;flex-direction:column;gap:8px;padding:12px;overflow-y:auto;}
+  #builddock h3{font-size:1.25rem;text-align:center;border-bottom:1.5px solid var(--wood-d);padding-bottom:6px;}
+  .cat-label{font-family:'IM Fell English SC',serif;font-size:.95rem;color:var(--ink-soft);
+    margin-top:6px;letter-spacing:1px;text-transform:uppercase;opacity:.8;}
+  .bbtn{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1.5px solid var(--wood-d);
+    border-radius:7px;background:var(--parch);font-family:'Cormorant Garamond',serif;font-size:1.02rem;
+    text-align:left;width:100%;transition:background .1s, transform .08s;}
+  .bbtn:hover{background:var(--parch-d);transform:translateX(2px);}
+  .bbtn.active{background:var(--wood);color:#f4e3c2;outline:2px solid var(--gold-br);}
+  .bbtn .bic{font-size:1.3rem;width:1.4em;text-align:center;}
+  .bbtn .bnm{flex:1;line-height:1.05;}
+  .bbtn .bcost{font-size:.82rem;color:var(--gold);white-space:nowrap;}
+  .bbtn.active .bcost{color:#ffe9b0;}
+  .bbtn.locked{opacity:.45;}
+
+  #builddock::-webkit-scrollbar,.ctx::-webkit-scrollbar{width:8px;}
+  #builddock::-webkit-scrollbar-thumb,.ctx::-webkit-scrollbar-thumb{background:var(--wood-d);border-radius:4px;}
+
+  /* context panel */
+  #ctxpanel{position:absolute;right:12px;top:70px;width:248px;pointer-events:auto;padding:14px;max-height:calc(100% - 90px);overflow-y:auto;}
+  #ctxpanel h3{font-size:1.35rem;}
+  .ctx .line{display:flex;justify-content:space-between;font-size:1.02rem;margin:2px 0;}
+  .ctx .muted{color:var(--ink-soft);font-style:italic;font-size:.98rem;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.85rem;
+    background:var(--wood);color:#f4e3c2;margin:2px 3px 2px 0;}
+  .barwrap{height:9px;background:rgba(0,0,0,.18);border-radius:5px;overflow:hidden;margin:3px 0 7px;}
+  .barfill{height:100%;border-radius:5px;transition:width .3s;}
+
+  /* bottom hint + buttons */
+  #botbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);pointer-events:auto;
+    display:flex;gap:8px;align-items:center;}
+  #hint{font-style:italic;color:#f3e6c4;text-shadow:0 1px 3px #000;font-size:1.05rem;
+    background:rgba(30,18,8,.5);padding:5px 14px;border-radius:14px;}
+
+  /* toasts */
+  #toasts{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:8px;
+    pointer-events:none;z-index:25;align-items:flex-end;}
+  .toast{padding:9px 14px;font-size:1.05rem;color:#2a1804;border-radius:9px;max-width:320px;
+    background:linear-gradient(160deg,var(--gold-br),var(--gold));border:2px solid #7a5410;
+    box-shadow:0 4px 14px var(--shadow);animation:tin .3s ease both;}
+  .toast.warn{background:linear-gradient(160deg,#e0a48c,#b85a3e);color:#fff;border-color:#7a2a16;}
+  @keyframes tin{from{opacity:0;transform:translateX(30px);}to{opacity:1;transform:none;}}
+
+  /* decision card / modal */
+  #modal{z-index:40;}
+  #modal .card{max-width:480px;}
+  #modal p{font-size:1.12rem;line-height:1.5;margin:8px 0 14px;}
+  .choices{display:flex;flex-direction:column;gap:8px;}
+
+  /* almanac */
+  .alm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:48vh;overflow-y:auto;padding-right:6px;}
+  .alm-card{padding:8px 10px;border:1.5px solid var(--wood-d);border-radius:7px;background:var(--parch);font-size:.98rem;}
+  .alm-card b{font-family:'IM Fell English SC',serif;}
+  .alm-tabs{display:flex;gap:6px;justify-content:center;margin-bottom:8px;}
+
+  .close-x{position:absolute;top:10px;right:14px;font-size:1.6rem;color:var(--ink);pointer-events:auto;}
+  .scrollbox{max-height:55vh;overflow-y:auto;width:100%;}
+  .small{font-size:.95rem;color:var(--ink-soft);}
+  .center{text-align:center;}
+  a{color:var(--blood);}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Three canvas injected here -->
+
+  <!-- ============ MAIN MENU ============ -->
+  <div id="menu" class="screen">
+    <div class="title-wrap">
+      <h1>Frontier &amp; Fire</h1>
+      <div class="sub">A settlement on the eve of revolution</div>
+    </div>
+    <div class="menu-col">
+      <button class="btn gold" id="m-play">Play</button>
+      <button class="btn" id="m-continue">Continue</button>
+      <button class="btn" id="m-stats">Stats</button>
+      <button class="btn" id="m-settings">Settings</button>
+      <button class="btn" id="m-almanac">Almanac</button>
+    </div>
+    <div class="small center" style="color:#d8c8a0;max-width:460px;">
+      Carve a thriving holding from the wilderness. Gather, refine, and trade —
+      without going bankrupt or letting your people starve.
+    </div>
+  </div>
+
+  <!-- ============ FACTION + SETUP ============ -->
+  <div id="setup" class="screen hidden">
+    <div class="title-wrap"><h1 style="font-size:2.6rem;">Choose Your Path</h1></div>
+    <div class="faction-row">
+      <div class="faction panel" data-faction="frontier">
+        <h2>The Enterprise</h2>
+        <div class="tag">Colonial Frontiersman</div>
+        <ul>
+          <li>Build wealth in £ sterling</li>
+          <li>Refine raw goods, export at a margin</li>
+          <li>Capital-heavy, land-light</li>
+          <li>Lose by <b>bankruptcy</b></li>
+        </ul>
+      </div>
+      <div class="faction panel" data-faction="people">
+        <h2>The People</h2>
+        <div class="tag">Native Confederacy</div>
+        <ul>
+          <li>Grow population &amp; standing</li>
+          <li>Sustainable gathering &amp; barter</li>
+          <li>Land-rich, capital-light</li>
+          <li>Lose by <b>collapse</b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel card" style="padding:18px 22px;">
+      <div class="row" style="justify-content:space-between;">
+        <div class="field"><label>Map Size</label>
+          <div class="seg" id="opt-size">
+            <button data-v="20">Small</button><button class="on" data-v="26">Medium</button><button data-v="32">Large</button>
+          </div></div>
+        <div class="field"><label>Wilderness</label>
+          <div class="seg" id="opt-wild">
+            <button data-v="0.7">Sparse</button><button class="on" data-v="1">Normal</button><button data-v="1.3">Dense</button>
+          </div></div>
+        <div class="field"><label>Difficulty</label>
+          <div class="seg" id="opt-diff">
+            <button data-v="0.8">Easy</button><button class="on" data-v="1">Normal</button><button data-v="1.25">Hard</button>
+          </div></div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div class="field"><label>Seed</label><input id="opt-seed" type="text" style="padding:5px 8px;border-radius:6px;border:1.5px solid var(--wood-d);width:130px;"/></div>
+        <div style="flex:1;"></div>
+        <button class="btn sm" id="setup-back">Back</button>
+        <button class="btn gold" id="setup-start">Found Settlement</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STATS ============ -->
+  <div id="stats" class="screen hidden">
+    <div class="panel card">
+      <span class="close-x" data-close="stats">✕</span>
+      <h1 style="font-size:2.2rem;text-align:center;">Lifetime Records</h1>
+      <div id="stats-body" class="scrollbox"></div>
+      <div class="center" style="margin-top:14px;">
+        <button class="btn sm" id="stats-reset">Reset Records</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div id="settings" class="screen hidden">
+    <div class="panel card">
+      <span class="close-x" data-close="settings">✕</span>
+      <h1 style="font-size:2.2rem;text-align:center;">Settings</h1>
+      <div id="settings-body"></div>
+    </div>
+  </div>
+
+  <!-- ============ ALMANAC ============ -->
+  <div id="almanac" class="screen hidden">
+    <div class="panel card" style="width:min(680px,94vw);">
+      <span class="close-x" data-close="almanac">✕</span>
+      <h1 style="font-size:2.2rem;text-align:center;">The Almanac</h1>
+      <div class="alm-tabs" id="alm-tabs"></div>
+      <div id="alm-body"></div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL (events / end) ============ -->
+  <div id="modal" class="screen hidden">
+    <div class="panel card">
+      <h2 id="modal-title" style="text-align:center;font-size:1.9rem;"></h2>
+      <p id="modal-text"></p>
+      <div class="choices" id="modal-choices"></div>
+    </div>
+  </div>
+
+  <!-- ============ IN-GAME HUD ============ -->
+  <div id="hud" class="hidden">
+    <div id="topbar"></div>
+    <div id="builddock" class="panel"></div>
+    <div id="ctxpanel" class="panel hidden"></div>
+    <div id="botbar">
+      <span id="hint"></span>
+      <button class="btn sm" id="b-almanac">Almanac</button>
+      <button class="btn sm" id="b-menu">Menu</button>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* =====================================================================
+   Frontier & Fire — single-file isometric settlement builder (MVP slice)
+   Region View vertical slice per the GDD: build → economy → seasons →
+   save/load, two playable factions sharing one tile-space grid.
+   ===================================================================== */
+
+const SAVE_KEY = 'frontier_fire_save_v1';
+const STATS_KEY = 'frontier_fire_stats_v1';
+const SET_KEY   = 'frontier_fire_settings_v1';
+
+/* ---------- seeded RNG (mulberry32) ---------- */
+function makeRNG(seed){
+  let s = seed >>> 0;
+  return function(){ s|=0; s=s+0x6D2B79F5|0; let t=Math.imul(s^s>>>15,1|s);
+    t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+}
+function hashSeed(str){ let h=2166136261>>>0; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+
+/* ---------- settings ---------- */
+const defaultSettings = { master:0.8, sfx:0.9, anim:'high', camspeed:1, autosave:60, colorblind:false };
+let settings = Object.assign({}, defaultSettings, loadJSON(SET_KEY,{}));
+function saveSettings(){ localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
+
+function loadJSON(k,def){ try{ const v=JSON.parse(localStorage.getItem(k)); return v??def; }catch(e){ return def; } }
+
+/* =====================================================================
+   DATA: resources, terrain, buildings
+   ===================================================================== */
+const RES = {
+  // raw
+  timber:{ic:'🪵',name:'Timber',kind:'raw'},
+  pelts:{ic:'🦫',name:'Pelts',kind:'raw'},
+  grain:{ic:'🌾',name:'Grain',kind:'raw'},
+  ore:{ic:'⛏️',name:'Ore',kind:'raw'},
+  herbs:{ic:'🌿',name:'Herbs',kind:'raw'},
+  fish:{ic:'🐟',name:'Fish',kind:'raw'},
+  // refined / tradable
+  lumber:{ic:'🧱',name:'Lumber',kind:'ref'},
+  leather:{ic:'👞',name:'Leather',kind:'ref'},
+  rum:{ic:'🍯',name:'Rum',kind:'ref'},
+  tools:{ic:'🔨',name:'Tools',kind:'ref'},
+  smoked:{ic:'🍖',name:'Smoked Goods',kind:'ref'},
+  beads:{ic:'📿',name:'Trade Beads',kind:'ref'},
+  // needs
+  food:{ic:'🍞',name:'Food',kind:'need'},
+};
+// base market value per unit (what a Trading Post / Trade Circle pays)
+const VALUE = { lumber:5, leather:9, rum:14, tools:11, smoked:8, beads:7, pelts:4, herbs:3, fish:2, timber:2, grain:2, ore:4 };
+
+/* Terrain tile types */
+const T = { GRASS:0, FOREST:1, WATER:2, ROCK:3, FERTILE:4, ROAD:5 };
+const TERRAIN_COLORS = {
+  [T.GRASS]:0x6e9a4a, [T.FOREST]:0x4f7a36, [T.WATER]:0x3f7fa6,
+  [T.ROCK]:0x8a8378, [T.FERTILE]:0x9a8a3c, [T.ROAD]:0xb59a63
+};
+
+/* Building definitions. Shared math; faction filters which appear.
+   prod: per work-day. inputs consumed, outputs produced (if inputs avail).
+   needsAdj: terrain type that must be adjacent. */
+const BUILDINGS = {
+  // ---- infrastructure ----
+  road:{name:'Road',ic:'🛤️',cat:'Infrastructure',w:1,h:1,cost:2,upkeep:0,workers:0,faction:'both',road:true,
+    desc:'A 1×1 path. Most buildings must touch a road to function.'},
+
+  // ---- FRONTIER ----
+  cabin:{name:'Cabin',ic:'🏚️',cat:'Housing',w:2,h:2,cost:30,upkeep:1,workers:0,houses:4,faction:'frontier',
+    desc:'Shelters 4 settlers. The seed of every enterprise.'},
+  farmhouse:{name:'Farmhouse',ic:'🏡',cat:'Housing',w:2,h:3,cost:70,upkeep:2,workers:0,houses:8,faction:'frontier',tier:2,
+    desc:'Roomier housing for 8. Unlocks at Village tier.'},
+  farm:{name:'Farm',ic:'🌾',ic2:'',cat:'Food',w:3,h:3,cost:40,upkeep:1,workers:2,faction:'frontier',
+    out:{grain:3}, food:{grain:4}, desc:'Grows grain on open land. Feeds your people.'},
+  logging:{name:'Logging Camp',ic:'🪓',cat:'Extraction',w:2,h:2,cost:35,upkeep:1,workers:2,faction:'frontier',
+    needsAdj:T.FOREST, out:{timber:4}, desc:'Fells timber. Must border forest.'},
+  trapper:{name:"Trapper's Cabin",ic:'🦫',cat:'Extraction',w:2,h:2,cost:45,upkeep:1,workers:2,faction:'frontier',
+    needsAdj:T.FOREST, out:{pelts:2}, desc:'Traps game for pelts. Must border forest.'},
+  mine:{name:'Mine',ic:'⛏️',cat:'Extraction',w:2,h:2,cost:60,upkeep:2,workers:3,faction:'frontier',
+    needsAdj:T.ROCK, out:{ore:2}, desc:'Digs ore from rock. Must border stone.'},
+  sawmill:{name:'Sawmill',ic:'🪚',cat:'Refinement',w:3,h:3,cost:80,upkeep:2,workers:3,faction:'frontier',
+    in:{timber:3}, out:{lumber:3}, desc:'Cuts timber into valuable lumber.'},
+  tannery:{name:'Tannery',ic:'🧴',cat:'Refinement',w:3,h:3,cost:90,upkeep:2,workers:3,faction:'frontier',
+    in:{pelts:2}, out:{leather:2}, desc:'Turns pelts into fine leather.'},
+  smithy:{name:'Smithy',ic:'🔨',cat:'Refinement',w:3,h:3,cost:110,upkeep:3,workers:3,faction:'frontier',tier:2,
+    in:{ore:2}, out:{tools:2}, desc:'Forges ore into tools. Village tier.'},
+  distillery:{name:'Distillery',ic:'🍯',cat:'Refinement',w:3,h:3,cost:120,upkeep:3,workers:3,faction:'frontier',tier:2,
+    in:{grain:3}, out:{rum:2}, desc:'Distills grain into high-value rum. Village tier.'},
+  trading:{name:'Trading Post',ic:'⚖️',cat:'Trade',w:3,h:3,cost:100,upkeep:2,workers:2,faction:'frontier',sells:true,
+    desc:'Sells your refined goods abroad for £ sterling.'},
+  warehouse:{name:'Warehouse',ic:'📦',cat:'Trade',w:3,h:3,cost:50,upkeep:1,workers:0,storage:60,faction:'frontier',
+    desc:'Adds +60 storage capacity for all goods.'},
+  well:{name:'Well',ic:'💧',cat:'Infrastructure',w:1,h:1,cost:15,upkeep:0,workers:0,morale:3,faction:'frontier',
+    desc:'Clean water. Raises morale of nearby homes.'},
+  townhall:{name:'Town Hall',ic:'🏛️',cat:'Civic',w:3,h:3,cost:140,upkeep:3,workers:1,morale:8,faction:'frontier',tier:2,
+    desc:'Seat of the enterprise. Big morale boost. Village tier.'},
+
+  // ---- CONFEDERACY ----
+  wigwam:{name:'Wigwam',ic:'⛺',cat:'Housing',w:2,h:2,cost:18,upkeep:0,workers:0,houses:5,faction:'people',
+    desc:'Shelters 5 of the People. Light on the land.'},
+  longhouse:{name:'Longhouse',ic:'🏠',cat:'Housing',w:2,h:4,cost:55,upkeep:1,workers:0,houses:12,faction:'people',tier:2,
+    desc:'Communal housing for 12. Village tier.'},
+  garden:{name:'Three-Sisters Garden',ic:'🌽',cat:'Food',w:3,h:3,cost:24,upkeep:0,workers:2,faction:'people',
+    out:{grain:3}, food:{grain:4}, desc:'Maize, beans & squash. Steady food.'},
+  forage:{name:'Gathering Camp',ic:'🧺',cat:'Extraction',w:2,h:2,cost:14,upkeep:0,workers:2,faction:'people',
+    needsAdj:T.FOREST, out:{herbs:3}, food:{herbs:1}, desc:'Gathers herbs & food from the wild. Borders forest.'},
+  hunting:{name:'Hunting Grounds',ic:'🏹',cat:'Extraction',w:3,h:3,cost:26,upkeep:0,workers:3,faction:'people',
+    needsAdj:T.FOREST, out:{pelts:3}, food:{pelts:1}, desc:'Hunts game for pelts & meat. Borders forest.'},
+  weir:{name:'Fishing Weir',ic:'🎣',cat:'Extraction',w:2,h:2,cost:20,upkeep:0,workers:2,faction:'people',
+    needsAdj:T.WATER, out:{fish:3}, food:{fish:2}, desc:'Traps fish. Must border water.'},
+  smokehouse:{name:'Smokehouse',ic:'🔥',cat:'Refinement',w:3,h:3,cost:40,upkeep:1,workers:3,faction:'people',
+    in:{fish:2}, out:{smoked:2}, food:{smoked:1}, desc:'Smokes fish & meat into trade goods + food.'},
+  tanrack:{name:'Tanning Rack',ic:'🪡',cat:'Refinement',w:3,h:3,cost:38,upkeep:1,workers:3,faction:'people',
+    in:{pelts:2}, out:{leather:2}, desc:'Cures pelts into leather.'},
+  beadworks:{name:'Beadworks',ic:'📿',cat:'Refinement',w:2,h:2,cost:34,upkeep:1,workers:2,faction:'people',tier:2,
+    in:{herbs:2}, out:{beads:2}, desc:'Crafts trade beads. Village tier.'},
+  tradecircle:{name:'Trade Circle',ic:'🤝',cat:'Trade',w:3,h:3,cost:30,upkeep:0,workers:2,faction:'people',sells:true,
+    desc:'Barters surplus goods into standing & influence.'},
+  cache:{name:'Storage Cache',ic:'🧱',cat:'Trade',w:2,h:2,cost:16,upkeep:0,workers:0,storage:50,faction:'people',
+    desc:'Adds +50 storage capacity for all goods.'},
+  spring:{name:'Spring',ic:'⛲',cat:'Infrastructure',w:1,h:1,cost:8,upkeep:0,workers:0,morale:3,faction:'people',
+    desc:'Fresh spring water. Raises morale.'},
+  council:{name:'Council Fire',ic:'🔥',cat:'Civic',w:3,h:3,cost:50,upkeep:1,workers:1,morale:9,faction:'people',tier:2,
+    desc:'Heart of the camp. Strong morale & standing. Village tier.'},
+};
+const CATS = ['Infrastructure','Housing','Food','Extraction','Refinement','Trade','Civic'];
+
+/* =====================================================================
+   GAME STATE
+   ===================================================================== */
+let state = null;     // serializable game state
+let GRID = 26;        // tiles per side (set at gen)
+
+function newState(opts){
+  const seedStr = opts.seed || String(Math.floor(Math.random()*1e9));
+  const seed = hashSeed(seedStr);
+  const rng = makeRNG(seed);
+  GRID = opts.size;
+  const isFront = opts.faction==='frontier';
+  // generate terrain via value-noise-ish blobs + a river
+  const terr = genTerrain(GRID, rng, opts.wild);
+  const s = {
+    version:1, faction:opts.faction, seedStr, difficulty:opts.diff, grid:GRID,
+    terrain:terr,                  // flat array length grid*grid
+    buildings:[],                  // {id,key,col,row,w,h,workers,on}
+    occ:new Array(GRID*GRID).fill(-1), // building id occupying tile, -1 empty
+    res:{}, money: isFront?150:0, standing: isFront?0:20,
+    pop: isFront?3:7, popCap:0, morale:70,
+    day:1, year:1761, season:0, debtDays:0, nextId:1, absDay:0, hunger:0, alert:'',
+    tier:1, founded:false, sold:0, traded:0, peakMoney:isFront?150:0, peakPop:isFront?3:7,
+    ended:false,
+  };
+  for(const k in RES) s.res[k]=0;
+  // starting stock — a comfortable larder so new players have time to learn
+  if(isFront){ s.res.timber=12; s.res.food=40; s.res.grain=6; }
+  else { s.res.timber=8; s.res.food=55; s.res.herbs=6; }
+  return s;
+}
+
+function genTerrain(g, rng, wild){
+  const arr = new Array(g*g).fill(T.GRASS);
+  // forest blobs
+  const blobs = Math.round(g*0.5*wild);
+  for(let b=0;b<blobs;b++){
+    const cx=Math.floor(rng()*g), cy=Math.floor(rng()*g), r=1+rng()*3.5;
+    for(let y=0;y<g;y++)for(let x=0;x<g;x++){
+      const d=Math.hypot(x-cx,y-cy); if(d<r && rng()<0.85) arr[y*g+x]=T.FOREST;
+    }
+  }
+  // rock outcrops
+  for(let b=0;b<Math.round(g*0.18);b++){
+    const cx=Math.floor(rng()*g), cy=Math.floor(rng()*g), r=0.8+rng()*1.8;
+    for(let y=0;y<g;y++)for(let x=0;x<g;x++){ if(Math.hypot(x-cx,y-cy)<r) arr[y*g+x]=T.ROCK; }
+  }
+  // a meandering river
+  let rx=Math.floor(rng()*g), ry=0; let dir=rng()<0.5?1:-1;
+  for(let y=0;y<g;y++){
+    arr[y*g+rx]=T.WATER;
+    if(rx+1<g && rng()<0.4) arr[y*g+rx+1]=T.WATER;
+    if(rng()<0.45) rx+=dir;
+    if(rng()<0.15) dir*=-1;
+    rx=Math.max(0,Math.min(g-1,rx));
+  }
+  // fertile soil near water
+  for(let y=0;y<g;y++)for(let x=0;x<g;x++){
+    if(arr[y*g+x]!==T.GRASS) continue;
+    let nearW=false;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=g||ny>=g)continue;
+      if(arr[ny*g+nx]===T.WATER) nearW=true;
+    }
+    if(nearW && rng()<0.6) arr[y*g+x]=T.FERTILE;
+  }
+  // guarantee a clear starting plaza in the centre
+  const c=Math.floor(g/2);
+  for(let y=c-3;y<=c+3;y++)for(let x=c-3;x<=c+3;x++){
+    if(x<0||y<0||x>=g||y>=g)continue;
+    if(arr[y*g+x]===T.WATER) continue;
+    if(arr[y*g+x]===T.ROCK) arr[y*g+x]=T.GRASS;
+  }
+  // but keep some forest/water reachable on the rim of the plaza
+  return arr;
+}
+
+/* =====================================================================
+   THREE.JS SCENE
+   ===================================================================== */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.insertBefore(renderer.domElement, app.firstChild);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fb98a);
+scene.fog = new THREE.Fog(0x9fb98a, 40, 120);
+
+// orthographic isometric camera
+let viewSize = 18;
+const camera = new THREE.OrthographicCamera(-viewSize,viewSize,viewSize,-viewSize,0.1,400);
+let camRot = Math.PI*0.25;            // yaw, rotatable in 90° steps
+let camTarget = new THREE.Vector3(0,0,0);
+let camDist = 60;
+function placeCamera(){
+  const ele = Math.atan(1/Math.SQRT2); // classic iso ~35.26°
+  const x = Math.cos(camRot)*Math.cos(ele)*camDist;
+  const z = Math.sin(camRot)*Math.cos(ele)*camDist;
+  const y = Math.sin(ele)*camDist;
+  camera.position.set(camTarget.x+x, camTarget.y+y, camTarget.z+z);
+  camera.lookAt(camTarget);
+}
+function resizeCam(){
+  const a = innerWidth/innerHeight;
+  camera.left=-viewSize*a; camera.right=viewSize*a; camera.top=viewSize; camera.bottom=-viewSize;
+  camera.updateProjectionMatrix();
+}
+resizeCam();
+
+// lights
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.15);
+sun.position.set(30,50,18); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.left=-50; sun.shadow.camera.right=50; sun.shadow.camera.top=50; sun.shadow.camera.bottom=-50;
+sun.shadow.camera.far=200; sun.shadow.bias=-0.0006;
+scene.add(sun);
+const hemi = new THREE.HemisphereLight(0xbfe0ff, 0x4a5a2a, 0.7); scene.add(hemi);
+const amb = new THREE.AmbientLight(0xffffff,0.25); scene.add(amb);
+
+// root groups
+const worldGroup = new THREE.Group(); scene.add(worldGroup);
+const tileGroup = new THREE.Group(); worldGroup.add(tileGroup);
+const decoGroup = new THREE.Group(); worldGroup.add(decoGroup);
+const buildGroup = new THREE.Group(); worldGroup.add(buildGroup);
+const fxGroup = new THREE.Group(); worldGroup.add(fxGroup);
+const walkerGroup = new THREE.Group(); worldGroup.add(walkerGroup);
+
+// tile-space -> world helper (centre map at origin)
+function tileToWorld(col,row){ const o=(state?state.grid:GRID)/2-0.5; return [col-o, 0, row-o]; }
+
+/* ---------- terrain rendering ---------- */
+let groundMesh=null, waterMesh=null, treeMesh=null, rockMesh=null;
+const TILE = 1; // one world unit per tile
+
+const waterMat = new THREE.ShaderMaterial({
+  uniforms:{ t:{value:0}, cA:{value:new THREE.Color(0x2f6f96)}, cB:{value:new THREE.Color(0x67b3d6)} },
+  vertexShader:`varying vec2 vU; uniform float t; void main(){ vU=uv;
+    vec3 p=position; p.y += sin((position.x+t)*3.0)*0.04 + cos((position.z+t*0.8)*3.0)*0.04;
+    gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+  fragmentShader:`varying vec2 vU; uniform float t; uniform vec3 cA,cB;
+    void main(){ float w=sin((vU.x+vU.y)*40.0 + t*2.0)*0.5+0.5;
+      float sp=smoothstep(0.7,0.95,sin((vU.x*60.0)+(t*3.0))*sin((vU.y*60.0)-(t*2.0)));
+      vec3 c=mix(cA,cB,w*0.6)+sp*0.25; gl_FragColor=vec4(c,1.0);}`
+});
+
+function buildTerrain(){
+  // clear
+  [groundMesh,waterMesh].forEach(m=>{ if(m){m.geometry.dispose(); tileGroup.remove(m);} });
+  decoGroup.clear();
+  const g=state.grid, o=g/2-0.5;
+
+  // ground: one merged plane coloured per tile via vertex colors
+  const geo = new THREE.PlaneGeometry(g,g,g,g);
+  geo.rotateX(-Math.PI/2);
+  const colors=[]; const pos=geo.attributes.position; const col=new THREE.Color();
+  // per-vertex: sample nearest tile
+  for(let i=0;i<pos.count;i++){
+    const vx=pos.getX(i)+g/2, vz=pos.getZ(i)+g/2;
+    let cx=Math.min(g-1,Math.max(0,Math.floor(vx))), cz=Math.min(g-1,Math.max(0,Math.floor(vz)));
+    let tt=state.terrain[cz*g+cx];
+    if(tt===T.WATER) tt=T.GRASS; // water drawn separately; bed is grass-green
+    col.setHex(TERRAIN_COLORS[tt]||TERRAIN_COLORS[T.GRASS]);
+    // subtle per-vertex variance
+    const v=0.92+0.16*((Math.sin(cx*12.9+cz*78.2))*0.5+0.5);
+    colors.push(col.r*v,col.g*v,col.b*v);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors,3));
+  groundMesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({vertexColors:true}));
+  groundMesh.receiveShadow=true; groundMesh.position.y=-0.02;
+  tileGroup.add(groundMesh);
+
+  // water: gather water tiles into one plane at y just above ground per tile
+  const wmZ=[]; const wGeo=new THREE.BufferGeometry(); const verts=[]; const uvs=[];
+  for(let r=0;r<g;r++)for(let c=0;c<g;c++){
+    if(state.terrain[r*g+c]!==T.WATER) continue;
+    const [wx,,wz]=tileToWorld(c,r); const y=-0.04;
+    // two triangles
+    const q=[[wx-.5,wz-.5],[wx+.5,wz-.5],[wx+.5,wz+.5],[wx-.5,wz+.5]];
+    const tri=[0,1,2,0,2,3];
+    for(const ti of tri){ verts.push(q[ti][0],y,q[ti][1]); uvs.push((q[ti][0]+o)/g,(q[ti][1]+o)/g); }
+  }
+  if(verts.length){
+    wGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts,3));
+    wGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs,2));
+    waterMesh = new THREE.Mesh(wGeo, waterMat);
+    tileGroup.add(waterMesh);
+  }
+
+  buildDeco();
+  buildBaseGrid();
+}
+
+/* trees & rocks via InstancedMesh (perf) */
+function buildDeco(){
+  const g=state.grid;
+  const treePos=[], rockPos=[];
+  const rng=makeRNG(hashSeed(state.seedStr+'deco'));
+  for(let r=0;r<g;r++)for(let c=0;c<g;c++){
+    const tt=state.terrain[r*g+c];
+    const [wx,,wz]=tileToWorld(c,r);
+    if(tt===T.FOREST){ const n=1+Math.floor(rng()*2);
+      for(let k=0;k<n;k++) treePos.push([wx+(rng()-.5)*.6, wz+(rng()-.5)*.6, .7+rng()*.5, rng()*6.28]);
+    } else if(tt===T.ROCK){ if(rng()<0.7) rockPos.push([wx+(rng()-.5)*.5, wz+(rng()-.5)*.5, .3+rng()*.3, rng()*6.28]); }
+  }
+  // trees: trunk + foliage cone, batched into one instanced cone w/ trunk merged via group
+  const trunkG=new THREE.CylinderGeometry(.06,.09,.4,5);
+  const leafG=new THREE.ConeGeometry(.34,.8,7);
+  const trunkM=new THREE.MeshLambertMaterial({color:0x6b4426});
+  const leafM=new THREE.MeshLambertMaterial({color:0x3f6a2c});
+  treeMesh=new THREE.InstancedMesh(leafG,leafM,Math.max(1,treePos.length));
+  const trunkMesh=new THREE.InstancedMesh(trunkG,trunkM,Math.max(1,treePos.length));
+  treeMesh.castShadow=true;
+  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), pos=new THREE.Vector3();
+  treeMesh.userData.sway=[];
+  treePos.forEach((p,i)=>{
+    const [x,z,s,rot]=p;
+    q.setFromEuler(new THREE.Euler(0,rot,0));
+    pos.set(x,0.2,z); sc.set(s,s,s); m.compose(pos,q,sc); trunkMesh.setMatrixAt(i,m);
+    pos.set(x,0.55*s+0.2,z); m.compose(pos,q,sc); treeMesh.setMatrixAt(i,m);
+    treeMesh.userData.sway.push({x,z,s,rot,base:0.55*s+0.2});
+  });
+  if(treePos.length){ treeMesh.instanceMatrix.needsUpdate=true; trunkMesh.instanceMatrix.needsUpdate=true; decoGroup.add(trunkMesh); decoGroup.add(treeMesh);}
+  // rocks
+  const rockG=new THREE.DodecahedronGeometry(.3,0);
+  const rockM=new THREE.MeshLambertMaterial({color:0x8a8378,flatShading:true});
+  rockMesh=new THREE.InstancedMesh(rockG,rockM,Math.max(1,rockPos.length));
+  rockMesh.castShadow=true;
+  rockPos.forEach((p,i)=>{ const [x,z,s,rot]=p; q.setFromEuler(new THREE.Euler(rot,rot,0)); pos.set(x,s*0.6,z); sc.set(s,s*0.8,s); m.compose(pos,q,sc); rockMesh.setMatrixAt(i,m);});
+  if(rockPos.length){ rockMesh.instanceMatrix.needsUpdate=true; decoGroup.add(rockMesh);}
+}
+
+/* faint grid lines on buildable ground */
+let gridLines=null;
+function buildBaseGrid(){
+  if(gridLines){ tileGroup.remove(gridLines); gridLines.geometry.dispose(); }
+  const g=state.grid, o=g/2; const pts=[];
+  for(let i=0;i<=g;i++){
+    pts.push(-o+i,0.001,-o, -o+i,0.001,o);
+    pts.push(-o,0.001,-o+i, o,0.001,-o+i);
+  }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  gridLines=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0x2c1c10,transparent:true,opacity:0.08}));
+  tileGroup.add(gridLines);
+}
+
+/* =====================================================================
+   BUILDING MESHES
+   ===================================================================== */
+const buildMeshes = new Map(); // id -> THREE.Group
+const smokeEmitters = []; // {x,z}
+
+function makeBuildingMesh(b){
+  const def=BUILDINGS[b.key];
+  const grp=new THREE.Group();
+  const [wx,,wz]=tileToWorld(b.col + (b.w-1)/2, b.row + (b.h-1)/2);
+  grp.position.set(wx,0,wz);
+
+  if(def.road){
+    const g=new THREE.BoxGeometry(0.96,0.06,0.96);
+    const mesh=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0xb59a63}));
+    mesh.position.y=0.03; mesh.receiveShadow=true; grp.add(mesh);
+    grp.userData.def=def; return grp;
+  }
+
+  const palette = paletteFor(b.key);
+  const fw=def.w-0.18, fh=def.h-0.18;
+  // base/walls
+  const bodyH = def.cat==='Housing'?0.7: (def.cat==='Civic'?1.0:0.6);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(fw,bodyH,fh),
+    new THREE.MeshLambertMaterial({color:palette.wall}));
+  body.position.y=bodyH/2+0.03; body.castShadow=true; body.receiveShadow=true; grp.add(body);
+  // roof (pyramid-ish)
+  const roofH=0.45+def.h*0.06;
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(fw,fh)*0.78, roofH, 4),
+    new THREE.MeshLambertMaterial({color:palette.roof,flatShading:true}));
+  roof.rotation.y=Math.PI/4; roof.position.y=bodyH+roofH/2+0.03; roof.castShadow=true; grp.add(roof);
+
+  // accent: door
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.34,0.04),
+    new THREE.MeshLambertMaterial({color:0x3a2412}));
+  door.position.set(0,0.2,fh/2+0.02); grp.add(door);
+
+  // category-specific props
+  if(def.sells){ // flag/scale post
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,1.1,6),new THREE.MeshLambertMaterial({color:0x4a3120}));
+    pole.position.set(fw/2-0.2,0.55,-fh/2+0.2); grp.add(pole);
+    const flag=new THREE.Mesh(new THREE.PlaneGeometry(.4,.24),new THREE.MeshLambertMaterial({color:palette.accent,side:THREE.DoubleSide}));
+    flag.position.set(fw/2-0.0,0.95,-fh/2+0.2); grp.add(flag); grp.userData.flag=flag;
+  }
+  if(def.storage){ // crates
+    for(let i=0;i<3;i++){ const cr=new THREE.Mesh(new THREE.BoxGeometry(.24,.24,.24),new THREE.MeshLambertMaterial({color:0x8a5a2c}));
+      cr.position.set(-fw/2+0.25+i*0.26, 0.15, -fh/2+0.25); cr.castShadow=true; grp.add(cr);} }
+  if(def.cat==='Food'){ // crop rows
+    for(let i=0;i<3;i++){ const row=new THREE.Mesh(new THREE.BoxGeometry(fw*0.8,0.04,0.1),new THREE.MeshLambertMaterial({color:0x7a9a3a}));
+      row.position.set(0,0.06,-fh/2+0.3+i*0.3); grp.add(row);} }
+  // chimney + smoke for buildings that "work" with heat
+  if(['Housing','Refinement','Civic'].includes(def.cat)){
+    const chim=new THREE.Mesh(new THREE.BoxGeometry(.12,.34,.12),new THREE.MeshLambertMaterial({color:0x6a4a36}));
+    chim.position.set(fw/2-0.18,bodyH+0.25,fh/2-0.18); grp.add(chim);
+    grp.userData.smoke={x:wx+fw/2-0.18, z:wz+fh/2-0.18, y:bodyH+0.45};
+  }
+
+  grp.userData.def=def;
+  grp.userData.popT=0; // for build-pop animation
+  return grp;
+}
+function paletteFor(key){
+  const def=BUILDINGS[key];
+  const map={
+    Housing:{wall:0xd8b98a,roof:0x8a4b2a,accent:0xc9962a},
+    Food:{wall:0xc7b67e,roof:0x6e8a3a,accent:0x9bbb4a},
+    Extraction:{wall:0xb79a6a,roof:0x5a3a22,accent:0x7a5a2a},
+    Refinement:{wall:0xb0a08a,roof:0x6a4030,accent:0xc06030},
+    Trade:{wall:0xd0c08a,roof:0x9a7020,accent:0xf2c14e},
+    Civic:{wall:0xe0d2a8,roof:0x9a3320,accent:0xc9962a},
+    Infrastructure:{wall:0xb59a63,roof:0x7a5a2a,accent:0x88aacc},
+  };
+  let p = map[def.cat]||map.Housing;
+  if(state && state.faction==='people'){ // earthier confederacy tones
+    p = Object.assign({}, p, {wall: shade(p.wall,-0.08), roof: shade(p.roof,0.05)});
+  }
+  return p;
+}
+function shade(hex,amt){ const c=new THREE.Color(hex); c.offsetHSL(0,0,amt); return c.getHex(); }
+
+function addBuildingMesh(b){
+  const m=makeBuildingMesh(b); m.userData.popT=0.001; buildGroup.add(m); buildMeshes.set(b.id,m);
+  if(m.userData.smoke) smokeEmitters.push(m.userData.smoke);
+}
+function rebuildAllBuildings(){
+  buildGroup.clear(); buildMeshes.clear(); smokeEmitters.length=0;
+  for(const b of state.buildings) addBuildingMesh(b);
+}
+function buildingById(id){ return state.buildings.find(b=>b.id===id); }
+
+/* =====================================================================
+   SETTLERS (walking people) — emerge from homes, commute to jobs,
+   preferring roads/paths. Purely cosmetic, lightweight, capped & pooled.
+   ===================================================================== */
+const WALKER_CAP = 40;
+const walkers = [];           // active walkers
+const walkerPool = [];        // parked meshes for reuse
+const walkerHeadMat = new THREE.MeshLambertMaterial({color:0xe8c9a0});
+
+function makeWalkerMesh(){
+  if(walkerPool.length){ const g=walkerPool.pop(); g.visible=true; return g; }
+  const g=new THREE.Group();
+  const col = state && state.faction==='people' ? 0x7a5230 : 0x9a5a3a;
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.1,0.22,6),
+    new THREE.MeshLambertMaterial({color:col}));
+  body.position.y=0.13; body.castShadow=true; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.065,7,6), walkerHeadMat);
+  head.position.y=0.29; g.add(head);
+  g.userData.bodyCol=body.material;
+  walkerGroup.add(g);
+  return g;
+}
+function despawnWalker(w){ if(!w)return; w.mesh.visible=false; walkerPool.push(w.mesh); }
+function clearWalkers(){ while(walkers.length) despawnWalker(walkers.pop()); }
+
+// a walkable tile = open ground or road, never water/forest/rock or a building footprint
+function isRoadTile(c,r){ const id=state.occ[r*state.grid+c]; if(id===-1)return false; const b=buildingById(id); return !!(b&&BUILDINGS[b.key].road); }
+function walkable(c,r){
+  const g=state.grid; if(c<0||r<0||c>=g||r>=g) return false;
+  const tt=state.terrain[r*g+c]; if(tt===T.WATER||tt===T.FOREST||tt===T.ROCK) return false;
+  const id=state.occ[r*g+c]; if(id===-1) return true; return isRoadTile(c,r);
+}
+// a walkable access tile next to a building footprint, preferring a road
+function accessTile(b){
+  let fallback=null;
+  for(let r=b.row-1;r<=b.row+b.h;r++)for(let c=b.col-1;c<=b.col+b.w;c++){
+    const inside=(c>=b.col&&c<b.col+b.w&&r>=b.row&&r<b.row+b.h); if(inside)continue;
+    if(c<0||r<0||c>=state.grid||r>=state.grid)continue;
+    if(!walkable(c,r))continue;
+    if(isRoadTile(c,r)) return [c,r];
+    if(!fallback) fallback=[c,r];
+  }
+  return fallback;
+}
+// A* over walkable tiles, roads cheap so commuters follow paths
+function findPath(start,goal){
+  if(!start||!goal) return null;
+  const g=state.grid, key=(c,r)=>r*g+c, goalK=key(goal[0],goal[1]);
+  const open=[{c:start[0],r:start[1],g:0,f:0,p:null}];
+  const best={[key(start[0],start[1])]:0};
+  const h=(c,r)=>Math.abs(c-goal[0])+Math.abs(r-goal[1]);
+  let guard=0;
+  while(open.length){
+    if(++guard>3000) break;
+    let bi=0; for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i;
+    const cur=open.splice(bi,1)[0];
+    if(key(cur.c,cur.r)===goalK){ const path=[]; let n=cur; while(n){ path.push([n.c,n.r]); n=n.p;} return path.reverse(); }
+    for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nc=cur.c+dc, nr=cur.r+dr;
+      const isGoal=(key(nc,nr)===goalK);
+      if(!isGoal && !walkable(nc,nr)) continue;
+      if(nc<0||nr<0||nc>=g||nr>=g) continue;
+      const step = isRoadTile(nc,nr)?1:4;
+      const ng=cur.g+step, k=key(nc,nr);
+      if(best[k]!==undefined && ng>=best[k]) continue;
+      best[k]=ng; open.push({c:nc,r:nr,g:ng,f:ng+h(nc,nr),p:cur});
+    }
+  }
+  return null;
+}
+// build a world-space point list from home -> work (centres + path of tile centres)
+function commutePoints(home,work){
+  const hc=tileToWorld(home.col+(home.w-1)/2, home.row+(home.h-1)/2);
+  const wc=tileToWorld(work.col+(work.w-1)/2, work.row+(work.h-1)/2);
+  if(home.id===work.id) return [[hc[0],hc[2]]];
+  const a=accessTile(home), b=accessTile(work);
+  const pts=[[hc[0],hc[2]]];
+  const tilePath = findPath(a,b);
+  if(tilePath){ for(const [c,r] of tilePath){ const w=tileToWorld(c,r); pts.push([w[0],w[2]]); } }
+  pts.push([wc[0],wc[2]]);
+  return pts;
+}
+function nearestHome(homes,b){
+  let best=null,bd=1e9;
+  for(const h of homes){ const d=Math.abs(h.col-b.col)+Math.abs(h.row-b.row); if(d<bd){bd=d;best=h;} }
+  return best;
+}
+function randPause(){ return 2.5+Math.random()*5; }
+
+// reconcile walkers to current staffed jobs (called from recompute; cheap when stable)
+function syncWalkers(){
+  if(!state || state._vista || !state.founded){ clearWalkers(); return; }
+  const homes=state.buildings.filter(b=>b.on && BUILDINGS[b.key].houses>0);
+  const jobs=[];
+  for(const b of state.buildings){ const d=BUILDINGS[b.key];
+    if(b.on && (d.workers||0)>0 && (b.workers||0)>0){
+      const home=nearestHome(homes,b)||b;
+      for(let i=0;i<b.workers;i++) jobs.push({workId:b.id, homeId:home.id});
+    }
+  }
+  const N=Math.min(jobs.length, WALKER_CAP);
+  while(walkers.length>N) despawnWalker(walkers.pop());
+  while(walkers.length<N){
+    const w={mesh:makeWalkerMesh(), workId:-1, homeId:-1, phase:'resting',
+      phaseT:Math.random()*4, points:null, seg:0, segT:0, bob:Math.random()*6};
+    walkers.push(w);
+  }
+  for(let i=0;i<N;i++){ assignWalker(walkers[i], jobs[i]); }
+}
+function assignWalker(w, job){
+  if(w.workId===job.workId && w.homeId===job.homeId && w.toWork) return; // unchanged
+  w.workId=job.workId; w.homeId=job.homeId;
+  const home=buildingById(job.homeId), work=buildingById(job.workId);
+  if(!home||!work){ return; }
+  w.toWork=commutePoints(home,work);
+  w.toHome=w.toWork.slice().reverse();
+  // start resting at home, trickle out
+  w.phase='resting'; w.phaseT=Math.random()*4; w.points=null; w.seg=0; w.segT=0;
+  const p=w.toWork[0]; setWalkerPos(w,p[0],p[1],0);
+}
+function setWalkerPos(w,x,z,ang){
+  w.mesh.position.set(x, 0, z);
+  if(ang!==undefined) w.mesh.rotation.y=-ang+Math.PI/2;
+  w.x=x; w.z=z;
+}
+function updateWalkers(dt){
+  if(!walkers.length) return;
+  const moving = !paused;
+  const tscale = paused?0:gameSpeed;
+  const speed = 1.5*gameSpeed; // tiles/sec
+  for(const w of walkers){
+    if(w.phase==='resting'||w.phase==='working'){
+      w.phaseT-=dt*tscale;
+      // gentle idle bob (still while paused)
+      if(moving) w.mesh.position.y = Math.abs(Math.sin((performance.now()/1000)*2+w.bob))*0.01;
+      if(w.phaseT<=0 && moving){
+        w.phase = (w.phase==='resting')?'toWork':'toHome';
+        w.points = (w.phase==='toWork')?w.toWork:w.toHome;
+        w.seg=0; w.segT=0;
+        if(!w.points||w.points.length<2){ const end=w.points?w.points[w.points.length-1]:[w.x,w.z];
+          setWalkerPos(w,end[0],end[1]); w.phase=(w.phase==='toWork')?'working':'resting'; w.phaseT=randPause(); }
+      }
+      continue;
+    }
+    // moving
+    if(!w.points||w.points.length<2){ w.phase=(w.phase==='toWork')?'working':'resting'; w.phaseT=randPause(); continue; }
+    if(moving){
+      const a=w.points[w.seg], b=w.points[w.seg+1];
+      const dist=Math.max(0.001,Math.hypot(b[0]-a[0],b[1]-a[1]));
+      w.segT += (dt*speed)/dist;
+      while(w.segT>=1 && w.seg<w.points.length-1){ w.segT-=1; w.seg++; }
+      if(w.seg>=w.points.length-1){
+        const end=w.points[w.points.length-1]; setWalkerPos(w,end[0],end[1]);
+        w.phase=(w.phase==='toWork')?'working':'resting'; w.phaseT=randPause(); continue;
+      }
+      const a2=w.points[w.seg], b2=w.points[w.seg+1];
+      const x=a2[0]+(b2[0]-a2[0])*w.segT, z=a2[1]+(b2[1]-a2[1])*w.segT;
+      setWalkerPos(w,x,z, Math.atan2(b2[1]-a2[1], b2[0]-a2[0]));
+      // walking bob
+      w.mesh.position.y = Math.abs(Math.sin((performance.now()/1000)*9+w.bob))*0.04;
+    }
+  }
+}
+
+/* =====================================================================
+   PARTICLE POOLS (smoke + dust) — parked off-screen until emitted
+   ===================================================================== */
+const PARK = -10000;
+function makePool(count, size, color, opacity){
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(count*3).fill(PARK);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const mat=new THREE.PointsMaterial({color,size,transparent:true,opacity,depthWrite:false});
+  const pts=new THREE.Points(geo,mat); pts.frustumCulled=false; fxGroup.add(pts);
+  return { pts, pos, count, free:[...Array(count).keys()], live:[] };
+}
+let smokePool, dustPool, weatherPool;
+function initPools(){
+  if(smokePool) { fxGroup.remove(smokePool.pts); fxGroup.remove(dustPool.pts); if(weatherPool)fxGroup.remove(weatherPool.pts);}
+  smokePool=makePool(180,0.22,0xeeeeee,0.5);
+  dustPool=makePool(120,0.16,0xd8c79a,0.7);
+  weatherPool=makePool(300,0.12,0xffffff,0.0);
+}
+function emit(pool, x,y,z, vx,vy,vz, life){
+  if(!pool.free.length) return;
+  const i=pool.free.pop();
+  pool.pos[i*3]=x; pool.pos[i*3+1]=y; pool.pos[i*3+2]=z;
+  pool.live.push({i,x,y,z,vx,vy,vz,life,age:0});
+}
+function stepPool(pool,dt){
+  for(let k=pool.live.length-1;k>=0;k--){
+    const p=pool.live[k]; p.age+=dt;
+    if(p.age>=p.life){ pool.pos[p.i*3]=PARK; pool.pos[p.i*3+1]=PARK; pool.pos[p.i*3+2]=PARK;
+      pool.free.push(p.i); pool.live.splice(k,1); continue; }
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt;
+    pool.pos[p.i*3]=p.x; pool.pos[p.i*3+1]=p.y; pool.pos[p.i*3+2]=p.z;
+  }
+  pool.pts.geometry.attributes.position.needsUpdate=true;
+  // fade smoke by reducing opacity over typical life — handled globally
+}
+
+/* =====================================================================
+   PLACEMENT / GHOST
+   ===================================================================== */
+let selectedBuild=null;     // key being placed
+let ghost=null;             // ghost mesh
+let ghostValid=false;
+let hoverTile={col:-1,row:-1};
+let selectedBuildingId=-1;  // inspecting
+
+const ray=new THREE.Raycaster();
+const ndc=new THREE.Vector2();
+const groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+
+function screenToTile(mx,my){
+  ndc.x=(mx/innerWidth)*2-1; ndc.y=-(my/innerHeight)*2+1;
+  ray.setFromCamera(ndc,camera);
+  const pt=new THREE.Vector3();
+  if(!ray.ray.intersectPlane(groundPlane,pt)) return null;
+  const o=state.grid/2-0.5;
+  const col=Math.round(pt.x+o), row=Math.round(pt.z+o);
+  if(col<0||row<0||col>=state.grid||row>=state.grid) return null;
+  return {col,row};
+}
+
+function selectBuild(key){
+  selectedBuild = (selectedBuild===key)?null:key;
+  clearGhost();
+  if(selectedBuild) makeGhost();
+  selectedBuildingId=-1; ctxDirty=true; hudDirty=true; buildDockDirty=true;
+  updateHint();
+}
+function clearGhost(){ if(ghost){ buildGroup.remove(ghost); ghost.traverse(o=>{if(o.geometry)o.geometry.dispose();}); ghost=null; } }
+function makeGhost(){
+  const def=BUILDINGS[selectedBuild];
+  const fakeB={key:selectedBuild,col:0,row:0,w:def.w,h:def.h};
+  ghost=makeBuildingMesh(fakeB);
+  ghost.traverse(o=>{ if(o.material){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=0.55; } });
+  buildGroup.add(ghost);
+}
+
+/* ---- placement / hover tile highlight overlay ---- */
+const hiGeo=new THREE.PlaneGeometry(0.92,0.92);
+const hiTiles=[];
+function getHiTile(i){
+  while(hiTiles.length<=i){
+    const m=new THREE.Mesh(hiGeo, new THREE.MeshBasicMaterial({transparent:true,opacity:0.42,side:THREE.DoubleSide,depthWrite:false}));
+    m.rotation.x=-Math.PI/2; m.position.y=0.045; m.visible=false; m.renderOrder=2; fxGroup.add(m); hiTiles.push(m);
+  }
+  return hiTiles[i];
+}
+function hideHiFrom(n){ for(let i=n;i<hiTiles.length;i++) hiTiles[i].visible=false; }
+// per-tile buildability (terrain/occupancy only — the footprint reasons)
+function tileBuildableSelf(c,r,key){
+  const g=state.grid; if(c<0||r<0||c>=g||r>=g) return false;
+  const tt=state.terrain[r*g+c];
+  if(tt===T.WATER) return false;
+  if(tt===T.ROCK && key!=='mine') return false;
+  if(tt===T.FOREST) return false;
+  if(state.occ[r*g+c]!==-1) return false;
+  return true;
+}
+function updateHoverHighlight(){
+  if(!state || state._vista || !hudShown() || hoverTile.col<0){ hideHiFrom(0); return; }
+  if(selectedBuild){
+    const def=BUILDINGS[selectedBuild];
+    const overall=canPlace(selectedBuild,hoverTile.col,hoverTile.row);
+    let idx=0;
+    for(let r=hoverTile.row;r<hoverTile.row+def.h;r++)for(let c=hoverTile.col;c<hoverTile.col+def.w;c++){
+      const m=getHiTile(idx++); const w=tileToWorld(c,r);
+      m.position.set(w[0],0.045,w[2]); m.visible=true;
+      const free=tileBuildableSelf(c,r,selectedBuild);
+      // red: tile itself blocked · green: good to build · amber: footprint ok but a
+      // requirement (road/adjacency/funds) isn't met
+      m.material.color.setHex(!free?0xff4433:(overall?0x55e06a:0xf0c23a));
+      m.material.opacity = !free?0.52:(overall?0.46:0.42);
+    }
+    hideHiFrom(idx);
+  } else if(selectedBuildingId<0){
+    // subtle single-tile cursor highlight when just looking around
+    const m=getHiTile(0); const w=tileToWorld(hoverTile.col,hoverTile.row);
+    m.position.set(w[0],0.045,w[2]); m.visible=true;
+    m.material.color.setHex(0xffffff); m.material.opacity=0.13;
+    hideHiFrom(1);
+  } else { hideHiFrom(0); }
+}
+function canPlace(key,col,row){
+  const def=BUILDINGS[key];
+  if(col+def.w>state.grid||row+def.h>state.grid) return false;
+  // all tiles free, not water, not rock (unless infra), within map
+  for(let r=row;r<row+def.h;r++)for(let c=col;c<col+def.w;c++){
+    const tt=state.terrain[r*state.grid+c];
+    if(state.occ[r*state.grid+c]!==-1) return false;
+    if(tt===T.WATER) return false;
+    if(tt===T.ROCK && !def.needsAdj===false){} // mines handled below; rock not buildable generally
+    if(tt===T.ROCK && def.key!=='mine') return false;
+    if(tt===T.FOREST) return false; // must clear? we disallow building on forest tile directly
+  }
+  // adjacency requirement
+  if(def.needsAdj!==undefined && !hasAdjTerrain(col,row,def.w,def.h,def.needsAdj)) return false;
+  // road connectivity (except roads themselves and infra w/o workers)
+  if(!def.road && needsRoad(def) && !touchesRoad(col,row,def.w,def.h)) return false;
+  // cost
+  if(state.faction==='frontier'){ if(state.money < def.cost) return false; }
+  else { if(state.res.timber < Math.ceil(def.cost/6)) return false; }
+  return true;
+}
+function needsRoad(def){ return !['Infrastructure'].includes(def.cat) || def.morale; }
+function hasAdjTerrain(col,row,w,h,type){
+  for(let r=row-1;r<=row+h;r++)for(let c=col-1;c<=col+w;c++){
+    if(c<0||r<0||c>=state.grid||r>=state.grid)continue;
+    const inside = (c>=col&&c<col+w&&r>=row&&r<row+h); if(inside)continue;
+    if(state.terrain[r*state.grid+c]===type) return true;
+  }
+  return false;
+}
+function touchesRoad(col,row,w,h){
+  for(let r=row-1;r<=row+h;r++)for(let c=col-1;c<=col+w;c++){
+    if(c<0||r<0||c>=state.grid||r>=state.grid)continue;
+    const inside=(c>=col&&c<col+w&&r>=row&&r<row+h); if(inside)continue;
+    const id=state.occ[r*state.grid+c];
+    if(id!==-1){ const b=state.buildings.find(x=>x.id===id); if(b&&BUILDINGS[b.key].road) return true; }
+  }
+  return false;
+}
+
+function placeBuilding(key,col,row){
+  const def=BUILDINGS[key];
+  const b={id:state.nextId++, key, col, row, w:def.w, h:def.h, workers:0, on:true};
+  state.buildings.push(b);
+  for(let r=row;r<row+def.h;r++)for(let c=col;c<col+def.w;c++) state.occ[r*state.grid+c]=b.id;
+  // pay
+  if(state.faction==='frontier') state.money-=def.cost;
+  else state.res.timber-=Math.ceil(def.cost/6);
+  addBuildingMesh(b);
+  // build pop dust
+  const [wx,,wz]=tileToWorld(b.col+(b.w-1)/2,b.row+(b.h-1)/2);
+  for(let i=0;i<14;i++){ const a=Math.random()*6.28; emit(dustPool, wx+Math.cos(a)*0.3, 0.1, wz+Math.sin(a)*0.3, Math.cos(a)*0.8,1.2+Math.random(),Math.sin(a)*0.8, 0.6+Math.random()*0.4); }
+  sfxPlace();
+  recompute(); hudDirty=true; buildDockDirty=true;
+  if(!def.road) toast(`${def.name} built.`);
+}
+function removeBuilding(id){
+  const idx=state.buildings.findIndex(b=>b.id===id); if(idx<0)return;
+  const b=state.buildings[idx];
+  for(let r=b.row;r<b.row+b.h;r++)for(let c=b.col;c<b.col+b.w;c++) if(state.occ[r*state.grid+c]===id) state.occ[r*state.grid+c]=-1;
+  // refund half
+  const def=BUILDINGS[b.key];
+  if(state.faction==='frontier') state.money+=Math.floor(def.cost*0.4);
+  state.buildings.splice(idx,1);
+  const m=buildMeshes.get(id); if(m){ buildGroup.remove(m); buildMeshes.delete(id);
+    if(m.userData.smoke){ const i=smokeEmitters.indexOf(m.userData.smoke); if(i>=0)smokeEmitters.splice(i,1);} }
+  selectedBuildingId=-1; recompute(); hudDirty=true; ctxDirty=true; buildDockDirty=true;
+  toast(`${def.name} demolished.`,'warn');
+}
+
+/* =====================================================================
+   ECONOMY
+   ===================================================================== */
+function storageCap(){
+  let cap=80; for(const b of state.buildings){ const d=BUILDINGS[b.key]; if(d.storage&&b.on) cap+=d.storage; }
+  return cap;
+}
+function recompute(){
+  // popCap from housing
+  let cap=0, moraleBuild=0, workersNeeded=0;
+  for(const b of state.buildings){ const d=BUILDINGS[b.key]; if(!b.on)continue;
+    if(d.houses) cap+=d.houses; if(d.morale) moraleBuild+=d.morale;
+    workersNeeded += d.workers||0;
+  }
+  state.popCap=cap;
+  state._workersNeeded=workersNeeded;
+  state._moraleBuild=moraleBuild;
+  // tier unlock
+  if(state.pop>=14 && state.tier<2){ state.tier=2; toast('Your holding grew to a Village! New buildings unlocked.'); buildDockDirty=true; }
+  syncWalkers();
+}
+
+/* one in-game day */
+function economyTick(){
+  const diff=state.difficulty;
+  // worker allocation: distribute pop across buildings that need workers, by priority order
+  let avail=state.pop;
+  const ordered=[...state.buildings].filter(b=>b.on && (BUILDINGS[b.key].workers||0)>0);
+  // food & extraction first, then refinement, then trade
+  const prio={Food:0,Extraction:1,Refinement:2,Trade:3,Civic:4};
+  ordered.sort((a,b)=>(prio[BUILDINGS[a.key].cat]||9)-(prio[BUILDINGS[b.key].cat]||9));
+  for(const b of ordered){ const need=BUILDINGS[b.key].workers; b.workers=Math.min(need,avail); avail-=b.workers; }
+
+  const seasonMul = SEASON_PROD[state.season];
+  const cap=storageCap();
+  let upkeep=0;
+  // production
+  for(const b of state.buildings){
+    const d=BUILDINGS[b.key]; if(!b.on)continue;
+    upkeep += d.upkeep||0;
+    if((d.workers||0)>0 && b.workers<d.workers) continue; // understaffed = idle
+    const ratio = d.workers? (b.workers/d.workers):1;
+    // refinement needs inputs
+    if(d.in){ let ok=true; for(const k in d.in){ if(state.res[k] < d.in[k]) ok=false; }
+      if(!ok) continue;
+      for(const k in d.in) state.res[k]-=d.in[k];
+    }
+    if(d.out){ for(const k in d.out){ state.res[k]=Math.min(cap, state.res[k]+d.out[k]*ratio*seasonMul); } }
+    if(d.food){ for(const k in d.food){ state.res.food = Math.min(cap, state.res.food + d.food[k]*ratio*seasonMul); } }
+  }
+  // selling (trading post / trade circle): sell surplus refined/raw tradables
+  let income=0;
+  const sellers=state.buildings.filter(b=>b.on && BUILDINGS[b.key].sells && b.workers>=BUILDINGS[b.key].workers);
+  if(sellers.length){
+    const capacityPerSeller=8;
+    for(const b of sellers){
+      let budget=capacityPerSeller;
+      // sell most valuable first, keep a small reserve of food-ish raws
+      const tradables=Object.keys(VALUE).filter(k=>state.res[k]>0 && RES[k].kind!=='need');
+      tradables.sort((a,b2)=>marketPrice(b2)-marketPrice(a));
+      for(const k of tradables){
+        if(budget<=0)break;
+        const qty=Math.min(state.res[k], budget, 4);
+        if(qty<=0)continue;
+        const price=marketPrice(k);
+        income += qty*price;
+        state.res[k]-=qty; budget-=qty; state.sold+=qty; state.traded+=qty;
+        // supply pressure: flooding drops price
+        market[k]=(market[k]||1)*Math.pow(0.985,qty);
+      }
+    }
+  }
+  // market slowly recovers toward 1
+  for(const k in VALUE){ market[k]=(market[k]||1); market[k]+= (1-market[k])*0.05; }
+
+  // food consumption (winter costs more)
+  const foodNeed = state.pop * SEASON_FOOD[state.season] * diff;
+  state.res.food -= foodNeed;
+  let starving=false;
+  if(state.res.food<0){ starving=true; state.res.food=0; }
+  // hunger streak + escalating food warnings
+  if(starving){ state.hunger=(state.hunger||0)+1; }
+  else { if((state.hunger||0)>=3) toast('🍞 Your people are fed once more.'); state.hunger=0; }
+  const daysOfFood = foodNeed>0 ? state.res.food/foodNeed : 99;
+  if(!starving && daysOfFood<3.5)
+    gameAlert(`⚠️ Food stores are running low — build a ${state.faction==='frontier'?'Farm':'Garden'} soon.`,'lowfood',6);
+  if(starving && state.hunger===1)
+    gameAlert('🥣 Your people are starving! Build food production now, or they will begin to leave.','starve',1);
+
+  // money / standing
+  if(state.faction==='frontier'){
+    state.money += income - upkeep;
+    state.peakMoney=Math.max(state.peakMoney,Math.round(state.money));
+  } else {
+    // confederacy: standing from trade + surplus, minus nothing (no gold upkeep)
+    state.standing += income*0.5;
+    state.standing = Math.max(0,state.standing);
+  }
+
+  // morale
+  let targetMorale=45 + state._moraleBuild;
+  if(state.res.food>state.pop*2) targetMorale+=12; // surplus
+  if(starving) targetMorale-=35;
+  if(state.faction==='frontier' && state.money<0) targetMorale-=15;
+  if(SEASON_NAMES[state.season]==='Winter') targetMorale-=8;
+  targetMorale=Math.max(0,Math.min(100,targetMorale));
+  state.morale += (targetMorale-state.morale)*0.25;
+
+  // population dynamics — starvation is gradual and telegraphed, never sudden
+  const housed = state.pop<=state.popCap;
+  if(starving && state.hunger>=3){
+    // after 3 days of hunger, lose one settler every other day
+    if((state.hunger-3)%2===0 && state.pop>0){
+      state.pop=Math.max(0,state.pop-1);
+      if(state.pop>0) gameAlert(`😟 A settler left your holding — ${state.pop} remain. Feed them!`,'leave',1);
+    }
+  } else if(!starving && housed && state.morale>52 && state.res.food>state.pop*1.2){
+    state._growAccum=(state._growAccum||0)+ (state.morale/100)*0.22;
+    if(state._growAccum>=1){ state.pop++; state._growAccum=0; toast('🎉 A new settler joins your holding.'); }
+  }
+  if(state.pop===1 && starving) gameAlert('🚨 Only one settler remains — your holding is near collapse!','crit',2);
+  state.peakPop=Math.max(state.peakPop,state.pop);
+  // persistent status alert shown in the top bar
+  let al='';
+  if(starving) al='🥣 Starving';
+  else if(daysOfFood<3.5) al='⚠️ Low food';
+  if(state.faction==='frontier' && state.money<0) al = al? al+' · 💸 In debt' : '💸 In debt';
+  state.alert=al;
+
+  // bankruptcy / collapse tracking
+  if(state.faction==='frontier'){
+    if(state.money<0){ state.debtDays++; } else state.debtDays=Math.max(0,state.debtDays-2);
+  }
+  // advance day & seasons
+  state.day++; state.absDay=(state.absDay||0)+1;
+  if(state.day>SEASON_LEN){ state.day=1; advanceSeason(); }
+
+  recompute();
+  checkEndStates();
+  hudDirty=true; if(selectedBuildingId>=0) ctxDirty=true;
+}
+
+const market={}; // price multipliers per good
+function marketPrice(k){ return Math.max(1, Math.round(VALUE[k]*(market[k]||1))); }
+
+const SEASON_NAMES=['Spring','Summer','Autumn','Winter'];
+const SEASON_ICON=['🌸','☀️','🍂','❄️'];
+const SEASON_PROD=[1.05,1.15,1.0,0.6];     // extraction/production multiplier
+const SEASON_FOOD=[1.0,1.0,1.05,1.5];      // food demand per pop
+const SEASON_LEN=18;                        // days per season
+
+function advanceSeason(){
+  state.season=(state.season+1)%4;
+  if(state.season===0){ state.year++; }
+  applySeasonVisuals();
+  toast(`${SEASON_ICON[state.season]} ${SEASON_NAMES[state.season]} arrives.`);
+  maybeEvent();
+}
+
+function applySeasonVisuals(){
+  const cfgs={
+    Spring:{grass:0x6e9a4a,leaf:0x4f8a36,bg:0x9fb98a,fog:0xbfd6a8,snow:false},
+    Summer:{grass:0x6fa048,leaf:0x3f7a2c,bg:0x9fc080,fog:0xc8dca0,snow:false},
+    Autumn:{grass:0x9a8a3c,leaf:0xb5742a,bg:0xc2b079,fog:0xd8c79a,snow:false},
+    Winter:{grass:0xcfd6cf,leaf:0x7a8a6a,bg:0xcdd6da,fog:0xdfe6ea,snow:true},
+  };
+  const c=cfgs[SEASON_NAMES[state.season]];
+  scene.background.setHex(c.bg); scene.fog.color.setHex(c.fog);
+  if(treeMesh) treeMesh.material.color.setHex(c.leaf);
+  // tint ground: rebuild not needed; multiply via material? simplest: rebuild terrain colors lightly
+  if(groundMesh){
+    const g=state.grid, pos=groundMesh.geometry.attributes.position, colAttr=groundMesh.geometry.attributes.color;
+    const col=new THREE.Color();
+    for(let i=0;i<pos.count;i++){
+      const vx=pos.getX(i)+g/2, vz=pos.getZ(i)+g/2;
+      let cx=Math.min(g-1,Math.max(0,Math.floor(vx))), cz=Math.min(g-1,Math.max(0,Math.floor(vz)));
+      let tt=state.terrain[cz*g+cx]; if(tt===T.WATER) tt=T.GRASS;
+      let hex=TERRAIN_COLORS[tt];
+      if(SEASON_NAMES[state.season]==='Winter' && (tt===T.GRASS||tt===T.FERTILE||tt===T.FOREST)) hex=0xd8e0dc;
+      else if(SEASON_NAMES[state.season]==='Autumn' && tt===T.GRASS) hex=0x9a8a4c;
+      col.setHex(hex);
+      const v=0.92+0.16*((Math.sin(cx*12.9+cz*78.2))*0.5+0.5);
+      colAttr.setXYZ(i,col.r*v,col.g*v,col.b*v);
+    }
+    colAttr.needsUpdate=true;
+  }
+  weatherMode = c.snow?'snow':'none';
+}
+let weatherMode='none';
+
+/* =====================================================================
+   EVENTS
+   ===================================================================== */
+function maybeEvent(){
+  if(Math.random()>0.5) return;
+  const pool = EVENTS.filter(e=>!e.cond || e.cond());
+  if(!pool.length) return;
+  const e = pool[Math.floor(Math.random()*pool.length)];
+  showModal(e.title, e.text, e.choices());
+  setPaused(true);
+}
+const EVENTS=[
+  {title:'Wave of Settlers',text:'A weary band asks to join your holding. They will need feeding, but more hands mean more work.',
+   choices:()=>[
+     {label:'Welcome them (+3 pop)',act:()=>{ state.pop+=3; toast('Three newcomers settle in.'); }},
+     {label:'Turn them away',act:()=>{ state.morale-=4; }},
+   ]},
+  {title:'Bountiful Harvest',text:'The season has been kind. Granaries overflow.',
+   choices:()=>[ {label:'Splendid (+ food)',act:()=>{ state.res.food=Math.min(storageCap(),state.res.food+state.pop*2); }} ]},
+  {title:'Harsh Frost',text:'An early frost bites the land. Some stores are lost.',
+   choices:()=>[
+     {label:'Endure it (− food)',act:()=>{ state.res.food=Math.max(0,state.res.food-state.pop); }},
+     {label:'Trade for relief (−20 £/standing)',act:()=>{ if(state.faction==='frontier')state.money-=20; else state.standing=Math.max(0,state.standing-10); }},
+   ]},
+  {title:'Rival Undercuts You',text:'A competing trader floods the market, depressing prices for a time.',
+   cond:()=>true,
+   choices:()=>[ {label:'Weather the storm',act:()=>{ for(const k in VALUE) market[k]=(market[k]||1)*0.8; toast('Prices dip across the board.','warn'); }} ]},
+  {title:'Tax Edict from the Crown',text:'Distant rumblings of revolution. New duties are levied on trade.',
+   cond:()=>state.faction==='frontier',
+   choices:()=>[
+     {label:'Pay the duty (−25 £)',act:()=>{ state.money-=25; }},
+     {label:'Smuggle (risk morale)',act:()=>{ if(Math.random()<0.5){toast('You evade the taxman!');} else {state.morale-=10; state.money-=10; toast('Caught smuggling — a fine and ill repute.','warn');} }},
+   ]},
+  {title:'Offer of Alliance',text:'A neighboring people propose friendship and exchange of gifts.',
+   choices:()=>[
+     {label:'Accept (+ standing/£)',act:()=>{ if(state.faction==='people')state.standing+=12; else state.money+=20; toast('A bond is forged.'); }},
+     {label:'Decline politely',act:()=>{}},
+   ]},
+];
+
+/* =====================================================================
+   END STATES
+   ===================================================================== */
+function checkEndStates(){
+  if(state.ended)return;
+  if(state.faction==='frontier' && state.debtDays>=12){
+    endGame(false,'Bankruptcy','Your debts have swallowed the enterprise. The ledgers close in red ink.');
+  }
+  if(state.pop<=0){
+    endGame(false, state.faction==='frontier'?'Abandoned':'Collapse',
+      'With no people left, smoke no longer rises from the chimneys. The wilderness reclaims your holding.');
+  }
+}
+function endGame(win,title,text){
+  state.ended=true; setPaused(true);
+  saveStats();
+  showModal((win?'Victory — ':'Defeat — ')+title, text+`<br><br><span class="small">Year ${state.year}, ${SEASON_NAMES[state.season]} · Peak ${state.faction==='frontier'?('£'+state.peakMoney):(state.peakPop+' people')} · ${state.traded} goods traded.</span>`,
+    [{label:'Return to Menu',act:()=>{ toMenu(); }}]);
+}
+
+/* =====================================================================
+   HUD (signature-cached — only rebuild DOM when values change)
+   ===================================================================== */
+let hudDirty=true, buildDockDirty=true, ctxDirty=true;
+let lastTopSig='', lastDockSig='', lastCtxSig='';
+const topbar=document.getElementById('topbar');
+const builddock=document.getElementById('builddock');
+const ctxpanel=document.getElementById('ctxpanel');
+
+function curr(){ return state.faction==='frontier'? '£'+Math.round(state.money) : '◈'+Math.round(state.standing); }
+function buildTopbar(){
+  if(!state)return;
+  const r=state.res;
+  const shown=['food','timber','lumber','pelts','leather','grain','ore','herbs','fish','rum','tools','smoked','beads']
+    .filter(k=>r[k]>0 || ['food','timber'].includes(k));
+  const sig=[curr(),state.pop,state.popCap,Math.round(state.morale),state.day,state.season,state.year,
+    shown.map(k=>k+Math.floor(r[k])).join(','), gameSpeed, paused, state.alert].join('|');
+  if(sig===lastTopSig)return; lastTopSig=sig;
+  const moodIc = state.morale>70?'😊':state.morale>45?'🙂':state.morale>25?'😟':'😣';
+  let html='';
+  const curIc = state.faction==='frontier'?'💰':'◈';
+  html+=`<div class="res"><span class="ic">${curIc}</span><span class="v">${state.faction==='frontier'?Math.round(state.money):Math.round(state.standing)}</span></div>`;
+  html+=`<div class="res"><span class="ic">👥</span><span class="v">${state.pop}/${state.popCap}</span></div>`;
+  html+=`<div class="res"><span class="ic">${moodIc}</span><span class="v">${Math.round(state.morale)}%</span></div>`;
+  html+=`<span style="opacity:.4">│</span>`;
+  const foodLow = state.alert && state.alert.indexOf('food')>=0 || (state.hunger||0)>0;
+  for(const k of shown){ if(Math.floor(r[k])<=0 && !['food','timber'].includes(k))continue;
+    const danger = (k==='food' && foodLow);
+    html+=`<div class="res"${danger?' style="color:#ffd24a;font-weight:700"':''}><span class="ic">${RES[k].ic}</span><span class="v">${Math.floor(r[k])}</span></div>`; }
+  html+=`<div id="spacer"></div>`;
+  if(state.alert) html+=`<div class="alertchip">${state.alert}</div>`;
+  html+=`<div id="datebox">${SEASON_ICON[state.season]} ${SEASON_NAMES[state.season]} · Day ${state.day}<br><span style="font-size:.85em;opacity:.8">Year ${state.year}</span></div>`;
+  html+=`<div class="speedseg" id="speedseg">
+    <button data-s="0" class="${paused?'on':''}">❚❚</button>
+    <button data-s="1" class="${!paused&&gameSpeed===1?'on':''}">1×</button>
+    <button data-s="2" class="${!paused&&gameSpeed===2?'on':''}">2×</button>
+    <button data-s="3" class="${!paused&&gameSpeed===3?'on':''}">3×</button></div>`;
+  topbar.innerHTML=html;
+  topbar.querySelectorAll('#speedseg button').forEach(btn=>btn.onclick=()=>{
+    const s=+btn.dataset.s; if(s===0) setPaused(true); else { setPaused(false); gameSpeed=s; } hudDirty=true; });
+}
+
+function buildDock(){
+  if(!state)return;
+  const sig=[state.faction,state.tier,selectedBuild, curr()].join('|');
+  if(sig===lastDockSig && !buildDockDirty)return; lastDockSig=sig; buildDockDirty=false;
+  let html=`<h3>Build</h3>`;
+  for(const cat of CATS){
+    const keys=Object.keys(BUILDINGS).filter(k=>{ const d=BUILDINGS[k];
+      return d.cat===cat && (d.faction==='both'||d.faction===state.faction); });
+    if(!keys.length)continue;
+    html+=`<div class="cat-label">${cat}</div>`;
+    for(const k of keys){ const d=BUILDINGS[k];
+      const locked = (d.tier||1)>state.tier;
+      const costTxt = state.faction==='frontier'? `£${d.cost}` : `🪵${Math.ceil(d.cost/6)}`;
+      html+=`<button class="bbtn ${selectedBuild===k?'active':''} ${locked?'locked':''}" data-k="${k}" ${locked?'disabled':''}>
+        <span class="bic">${d.ic}</span><span class="bnm">${d.name}${locked?' 🔒':''}</span><span class="bcost">${costTxt}</span></button>`;
+    }
+  }
+  builddock.innerHTML=html;
+  builddock.querySelectorAll('.bbtn').forEach(b=>b.onclick=()=>selectBuild(b.dataset.k));
+}
+
+function buildCtx(){
+  if(selectedBuildingId<0){ if(!ctxpanel.classList.contains('hidden')){ctxpanel.classList.add('hidden');} return; }
+  const b=state.buildings.find(x=>x.id===selectedBuildingId);
+  if(!b){ ctxpanel.classList.add('hidden'); selectedBuildingId=-1; return; }
+  const d=BUILDINGS[b.key];
+  const sig=[b.id,b.workers,b.on, JSON.stringify(state.res), state.pop].join('|');
+  if(sig===lastCtxSig && !ctxDirty)return; lastCtxSig=sig; ctxDirty=false;
+  ctxpanel.classList.remove('hidden');
+  let html=`<span class="close-x" id="ctx-close">✕</span><h3>${d.ic} ${d.name}</h3>`;
+  html+=`<div class="muted">${d.desc}</div><div style="height:6px"></div>`;
+  if(d.workers){ html+=`<div class="line"><span>Workers</span><span>${b.workers}/${d.workers}</span></div>`;
+    if(b.workers<d.workers) html+=`<div class="muted" style="color:var(--bad)">Understaffed — idle. Grow your population.</div>`; }
+  if(d.houses) html+=`<div class="line"><span>Houses</span><span>+${d.houses}</span></div>`;
+  if(d.storage) html+=`<div class="line"><span>Storage</span><span>+${d.storage}</span></div>`;
+  if(d.morale) html+=`<div class="line"><span>Morale</span><span>+${d.morale}</span></div>`;
+  if(d.needsAdj!==undefined) html+=`<div class="line"><span>Requires</span><span>${terrName(d.needsAdj)} nearby</span></div>`;
+  if(d.in){ html+=`<div class="line"><span>Consumes</span><span>${Object.entries(d.in).map(([k,v])=>RES[k].ic+v).join(' ')}/day</span></div>`; }
+  if(d.out){ html+=`<div class="line"><span>Produces</span><span>${Object.entries(d.out).map(([k,v])=>RES[k].ic+v).join(' ')}/day</span></div>`; }
+  if(d.food){ html+=`<div class="line"><span>Food</span><span>${Object.entries(d.food).map(([k,v])=>'🍞+'+v).join(' ')}/day</span></div>`; }
+  if(d.sells) html+=`<div class="muted" style="color:var(--good)">Sells surplus goods for ${state.faction==='frontier'?'£':'standing'}.</div>`;
+  html+=`<div class="line"><span>Upkeep</span><span>${d.upkeep} ${state.faction==='frontier'?'£':' '}/day</span></div>`;
+  html+=`<div style="height:8px"></div>`;
+  html+=`<div class="row" style="justify-content:space-between;">
+    <button class="btn sm" id="ctx-toggle">${b.on?'Pause':'Resume'}</button>
+    <button class="btn sm" id="ctx-demo" style="background:linear-gradient(160deg,#b85a3e,#7a2a16)">Demolish</button></div>`;
+  ctxpanel.innerHTML=html;
+  document.getElementById('ctx-close').onclick=()=>{ selectedBuildingId=-1; buildCtx(); };
+  document.getElementById('ctx-toggle').onclick=()=>{ b.on=!b.on; recompute(); ctxDirty=true; hudDirty=true; };
+  document.getElementById('ctx-demo').onclick=()=>removeBuilding(b.id);
+}
+function terrName(t){ return {[T.FOREST]:'Forest',[T.WATER]:'Water',[T.ROCK]:'Rock',[T.FERTILE]:'Fertile soil',[T.GRASS]:'Open land'}[t]||'land'; }
+
+function updateHint(){
+  const h=document.getElementById('hint');
+  if(selectedBuild){ const d=BUILDINGS[selectedBuild];
+    h.textContent = `Placing ${d.name} — left-click to build · R rotate camera · Esc cancel`;
+  } else if(selectedBuildingId>=0){ h.textContent='Inspecting building'; }
+  else h.textContent='Pick a building to place, or click one to inspect · drag or arrows/WASD to pan · scroll to zoom · R rotate';
+}
+
+/* ---------- toasts ---------- */
+const toastBox=document.getElementById('toasts');
+function toast(msg,type){
+  const el=document.createElement('div'); el.className='toast'+(type==='warn'?' warn':''); el.textContent=msg;
+  toastBox.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 3200);
+  while(toastBox.children.length>5) toastBox.firstChild.remove();
+}
+// throttled alert: won't repeat the same `key` within `cooldown` in-game days
+let warnLog={};
+function gameAlert(msg,key,cooldown,type){
+  if(!state)return;
+  const last=warnLog[key];
+  if(last!==undefined && (state.absDay-last)<cooldown) return;
+  warnLog[key]=state.absDay; toast(msg,type||'warn');
+}
+
+/* =====================================================================
+   WEB-AUDIO SFX (lightweight, generated)
+   ===================================================================== */
+let actx=null;
+function audio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function beep(freq,dur,type,vol){ const a=audio(); if(!a)return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type||'sine'; o.frequency.value=freq;
+  const v=(vol??0.2)*settings.sfx*settings.master;
+  g.gain.setValueAtTime(0,a.currentTime); g.gain.linearRampToValueAtTime(v,a.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+dur);
+}
+function sfxPlace(){ beep(440,0.08,'triangle',0.18); setTimeout(()=>beep(660,0.1,'triangle',0.15),60); }
+function sfxClick(){ beep(520,0.05,'square',0.08); }
+function sfxCoin(){ beep(880,0.06,'sine',0.12); setTimeout(()=>beep(1180,0.08,'sine',0.1),50); }
+
+/* =====================================================================
+   TIME LOOP
+   ===================================================================== */
+let paused=true, gameSpeed=1;
+let tickAccum=0; const DAY_SECONDS=2.6; // real seconds per in-game day at 1x
+function setPaused(p){ paused=p; hudDirty=true; }
+
+let autosaveAccum=0;
+let lastT=performance.now()/1000;
+function animate(){
+  requestAnimationFrame(animate);
+  const now=performance.now()/1000; let dt=Math.min(0.05, now-lastT); lastT=now;
+
+  // arrow/WASD camera panning, then position the camera
+  updateKeyPan(dt);
+  placeCamera();
+
+  // economy
+  if(state && !paused && !state.ended){
+    tickAccum += dt*gameSpeed;
+    while(tickAccum>=DAY_SECONDS){ tickAccum-=DAY_SECONDS; economyTick(); }
+    autosaveAccum+=dt;
+    if(settings.autosave>0 && autosaveAccum>settings.autosave){ autosaveAccum=0; saveGame(true); }
+  }
+
+  // visual updates
+  const tg = now;
+  waterMat.uniforms.t.value = tg;
+  // tree sway
+  if(treeMesh && treeMesh.userData.sway && settings.anim!=='low'){
+    const sway=treeMesh.userData.sway; const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), p=new THREE.Vector3();
+    for(let i=0;i<sway.length;i++){ const t=sway[i];
+      const a=Math.sin(tg*1.5 + t.x*0.6 + t.z*0.4)*0.06;
+      q.setFromEuler(new THREE.Euler(a,t.rot,a*0.5)); p.set(t.x,t.base,t.z); s.set(t.s,t.s,t.s);
+      m.compose(p,q,s); treeMesh.setMatrixAt(i,m);
+    }
+    treeMesh.instanceMatrix.needsUpdate=true;
+  }
+
+  // smoke emission from chimneys of active buildings
+  if(state && settings.anim!=='low'){
+    smokeAccum+=dt;
+    if(smokeAccum>0.18){ smokeAccum=0;
+      for(const e of smokeEmitters){ if(Math.random()<0.5) emit(smokePool, e.x+(Math.random()-.5)*0.1, e.y, e.z+(Math.random()-.5)*0.1, (Math.random()-.5)*0.1, 0.5+Math.random()*0.3, (Math.random()-.5)*0.1, 2.2+Math.random()); }
+    }
+  }
+  stepPool(smokePool,dt); stepPool(dustPool,dt);
+
+  // weather (snow)
+  stepWeather(dt, tg);
+
+  // build-pop animation: scale up new meshes
+  for(const [id,m] of buildMeshes){ if(m.userData.popT>0 && m.userData.popT<1){
+    m.userData.popT=Math.min(1,m.userData.popT+dt*3.5);
+    const s=easeBack(m.userData.popT); m.scale.set(s,s,s);
+  } else if(m.userData.popT>=1 && m.scale.x!==1){ m.scale.set(1,1,1); } }
+
+  // selection glow pulse on inspected building
+  if(selectedBuildingId>=0){ const m=buildMeshes.get(selectedBuildingId);
+    if(m){ const k=0.5+0.5*Math.sin(tg*4); selMat.emissive && (selMat.emissive.setRGB(0.2*k,0.4*k,0.1*k)); } }
+
+  // day/night subtle sun sweep
+  if(state){ const dayFrac=(state.day + tickAccum/DAY_SECONDS)/SEASON_LEN;
+    const ang=Math.PI*0.2 + dayFrac*Math.PI*0.6;
+    sun.position.set(Math.cos(ang)*40, 30+Math.sin(ang)*20, 18);
+    sun.intensity=0.8+0.5*Math.sin(ang);
+  }
+
+  // commuting settlers
+  updateWalkers(dt);
+
+  // ghost follow + placement tile highlight
+  updateGhost();
+
+  // HUD refresh only when dirty
+  if(hudDirty){ buildTopbar(); buildDock(); hudDirty=false; }
+  buildCtx();
+
+  // ambient menu vista rotation
+  if(menuVistaActive){ camRot += dt*0.03; }
+
+  renderer.render(scene,camera);
+}
+let smokeAccum=0;
+function easeBack(t){ const c1=1.70158, c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
+const selMat={emissive:new THREE.Color()};
+
+function stepWeather(dt,tg){
+  if(!weatherPool)return;
+  if(weatherMode==='snow' && settings.anim!=='low' && state){
+    weatherPool.pts.material.opacity=0.8;
+    weatherAccum+=dt;
+    if(weatherAccum>0.05){ weatherAccum=0;
+      const o=state.grid/2;
+      emit(weatherPool, (Math.random()-.5)*state.grid, 14, (Math.random()-.5)*state.grid, (Math.random()-.5)*0.2, -2-Math.random(), (Math.random()-.5)*0.2, 6);
+    }
+  } else { weatherPool.pts.material.opacity=0; }
+  stepPool(weatherPool,dt);
+}
+let weatherAccum=0;
+
+function updateGhost(){
+  updateHoverHighlight();
+  if(!ghost||!state){return;}
+  if(hoverTile.col<0){ ghost.visible=false; return; }
+  ghost.visible=true;
+  const def=BUILDINGS[selectedBuild];
+  const [wx,,wz]=tileToWorld(hoverTile.col+(def.w-1)/2, hoverTile.row+(def.h-1)/2);
+  ghost.position.set(wx,0,wz);
+  const ok=canPlace(selectedBuild,hoverTile.col,hoverTile.row);
+  ghostValid=ok;
+  ghost.traverse(o=>{ if(o.material){ o.material.opacity=ok?0.62:0.32; } });
+}
+
+/* =====================================================================
+   INPUT
+   ===================================================================== */
+const dom=renderer.domElement;
+// world-space ground point under a screen pixel (for 1:1 "grab and drag" panning)
+function groundPoint(mx,my){
+  ndc.x=(mx/innerWidth)*2-1; ndc.y=-(my/innerHeight)*2+1;
+  ray.setFromCamera(ndc,camera);
+  const pt=new THREE.Vector3();
+  if(!ray.ray.intersectPlane(groundPlane,pt)) return null;
+  return pt;
+}
+let dragging=false, dragStartPx={x:0,y:0}, grabPoint=null, moved=false;
+dom.addEventListener('pointerdown',e=>{
+  if(!state||!hudShown())return;
+  dragging=true; moved=false; dragStartPx={x:e.clientX,y:e.clientY};
+  placeCamera(); grabPoint=groundPoint(e.clientX,e.clientY);
+  dom.setPointerCapture && dom.setPointerCapture(e.pointerId);
+});
+dom.addEventListener('pointermove',e=>{
+  if(!state||!hudShown())return;
+  if(dragging){
+    if(Math.abs(e.clientX-dragStartPx.x)+Math.abs(e.clientY-dragStartPx.y)>5) moved=true;
+    // keep the world point we grabbed pinned under the cursor (self-correcting, 1:1)
+    if(grabPoint){
+      placeCamera();
+      const now=groundPoint(e.clientX,e.clientY);
+      if(now){ camTarget.x += (grabPoint.x-now.x); camTarget.z += (grabPoint.z-now.z); clampCam(); placeCamera(); }
+    }
+  } else {
+    const tile=screenToTile(e.clientX,e.clientY);
+    hoverTile = tile||{col:-1,row:-1};
+  }
+});
+dom.addEventListener('pointerup',e=>{
+  if(!state||!hudShown())return;
+  dragging=false; grabPoint=null;
+  dom.releasePointerCapture && dom.releasePointerCapture(e.pointerId);
+  if(moved) return;
+  const tile=screenToTile(e.clientX,e.clientY);
+  if(!tile){ selectedBuildingId=-1; return; }
+  if(selectedBuild){
+    if(canPlace(selectedBuild,tile.col,tile.row)){
+      placeBuilding(selectedBuild,tile.col,tile.row);
+      if(BUILDINGS[selectedBuild].road){ /* keep road tool active for chaining */ }
+      else { /* keep tool active too for rapid building */ }
+    } else { sfxClick(); toast('Cannot build there.','warn'); }
+  } else {
+    const id=state.occ[tile.row*state.grid+tile.col];
+    setSelectedBuilding(id);
+  }
+});
+dom.addEventListener('wheel',e=>{
+  if(!state||!hudShown())return; e.preventDefault();
+  viewSize = Math.max(8, Math.min(34, viewSize + Math.sign(e.deltaY)*1.5));
+  resizeCam();
+},{passive:false});
+
+function setSelectedBuilding(id){
+  // clear old glow
+  if(selectedBuildingId>=0){ const om=buildMeshes.get(selectedBuildingId); if(om) om.traverse(o=>{if(o.material&&o.material.emissive)o.material.emissive.setHex(0x000000);}); }
+  selectedBuildingId = (id===selectedBuildingId)?-1:id;
+  if(selectedBuildingId>=0){ selectedBuild=null; clearGhost(); buildDockDirty=true; sfxClick(); }
+  ctxDirty=true; updateHint();
+}
+
+// keys held for continuous camera panning (arrows + WASD)
+const keysDown=new Set();
+const PAN_KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d']);
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ if(selectedBuild){selectBuild(selectedBuild);} else if(selectedBuildingId>=0){setSelectedBuilding(selectedBuildingId);} }
+  if(!state||!hudShown())return;
+  const k=e.key.toLowerCase();
+  if(PAN_KEYS.has(k)){ e.preventDefault(); keysDown.add(k); return; }
+  if(k==='r'){ camRot += Math.PI/2; }
+  if(k==='q'){ camRot -= Math.PI/2; }
+  if(e.key===' '){ e.preventDefault(); setPaused(!paused); }
+  if(k==='1') {setPaused(false);gameSpeed=1;hudDirty=true;}
+  if(k==='2') {setPaused(false);gameSpeed=2;hudDirty=true;}
+  if(k==='3') {setPaused(false);gameSpeed=3;hudDirty=true;}
+});
+addEventListener('keyup',e=>{ keysDown.delete(e.key.toLowerCase()); });
+addEventListener('blur',()=>keysDown.clear());
+// apply held-key panning each frame (called from animate)
+function updateKeyPan(dt){
+  if(!state||!hudShown()||!keysDown.size) return;
+  let fx=0, fy=0; // forward(+up) / right(+right) intent in screen space
+  if(keysDown.has('arrowup')||keysDown.has('w')) fy+=1;
+  if(keysDown.has('arrowdown')||keysDown.has('s')) fy-=1;
+  if(keysDown.has('arrowright')||keysDown.has('d')) fx+=1;
+  if(keysDown.has('arrowleft')||keysDown.has('a')) fx-=1;
+  if(!fx&&!fy) return;
+  const sp = viewSize*1.4*settings.camspeed*dt;
+  // ground-plane "up on screen" and "right on screen" relative to camera yaw
+  const upx=-Math.cos(camRot), upz=-Math.sin(camRot);
+  const rx=-Math.sin(camRot),  rz= Math.cos(camRot);
+  camTarget.x += (fy*upx + fx*rx)*sp;
+  camTarget.z += (fy*upz + fx*rz)*sp;
+  clampCam();
+}
+function clampCam(){ const lim=state.grid/2; camTarget.x=Math.max(-lim,Math.min(lim,camTarget.x)); camTarget.z=Math.max(-lim,Math.min(lim,camTarget.z)); }
+
+addEventListener('resize',()=>{ renderer.setSize(innerWidth,innerHeight); resizeCam(); });
+
+/* =====================================================================
+   SCREENS / MENU FLOW
+   ===================================================================== */
+let menuVistaActive=true;
+const screens=['menu','setup','stats','settings','almanac','modal'];
+function showScreen(id){ for(const s of screens){ document.getElementById(s).classList.toggle('hidden', s!==id); } }
+function hideScreens(){ for(const s of screens) document.getElementById(s).classList.add('hidden'); }
+function hudShown(){ return !document.getElementById('hud').classList.contains('hidden'); }
+
+function toMenu(){
+  document.getElementById('hud').classList.add('hidden');
+  hideScreens(); document.getElementById('menu').classList.remove('hidden');
+  clearWalkers(); hideHiFrom(0);
+  menuVistaActive=true; setPaused(true);
+  document.getElementById('m-continue').style.display = localStorage.getItem(SAVE_KEY)?'block':'none';
+}
+
+/* build a small idle vista for the menu background */
+function buildMenuVista(){
+  // generate a tiny throwaway state-like terrain so the menu has something pretty
+  if(state) return; // if a game terrain exists keep it
+  const tmpGrid=20; const rng=makeRNG(12345);
+  state={ grid:tmpGrid, terrain:genTerrain(tmpGrid,rng,1.1), seedStr:'menu', faction:'frontier',
+    buildings:[], occ:new Array(tmpGrid*tmpGrid).fill(-1), res:{}, season:0 };
+  for(const k in RES) state.res[k]=0;
+  buildTerrain();
+  // sprinkle a couple of decorative cabins
+  const demo=[['cabin',8,8],['logging',12,6],['farm',6,12],['trading',11,11]];
+  for(const [k,c,r] of demo){ const d=BUILDINGS[k]; const b={id:state.nextId=(state.nextId||1)+1,key:k,col:c,row:r,w:d.w,h:d.h,workers:d.workers,on:true};
+    state.buildings.push(b); for(let rr=r;rr<r+d.h;rr++)for(let cc=c;cc<c+d.w;cc++) state.occ[rr*tmpGrid+cc]=b.id; addBuildingMesh(b); }
+  camTarget.set(0,0,0); viewSize=16; resizeCam();
+  applySeasonVisuals && (state.day=1,state.year=1761);
+  // mark this as a non-playable vista
+  state._vista=true;
+}
+
+function startGame(opts){
+  menuVistaActive=false;
+  state=newState(opts);
+  // fresh scene
+  buildTerrain(); initPools(); rebuildAllBuildings(); clearWalkers();
+  // place the starting cabin / wigwam in the centre plaza
+  const c=Math.floor(state.grid/2);
+  const homeKey = state.faction==='frontier'?'cabin':'wigwam';
+  const hd=BUILDINGS[homeKey];
+  const hc=c-1, hr=c-1;
+  forcePlace(homeKey,hc,hr);
+  // a starter road beside the home
+  forcePlace('road',hc+hd.w,hr+1);
+  // a starter food source so the settlement isn't on a starvation timer from turn one.
+  // the Confederacy starts larger, so it gets a second garden to roughly break even.
+  if(state.faction==='frontier'){ forcePlace('farm', c-1, c+2); }
+  else { forcePlace('garden', c-1, c+2); forcePlace('garden', c+2, c+2); }
+  warnLog={};
+  recompute();
+  state.founded=true;
+  camTarget.set(0,0,0); viewSize=16; resizeCam(); camRot=Math.PI*0.25;
+  hideScreens(); document.getElementById('hud').classList.remove('hidden');
+  selectedBuild=null; selectedBuildingId=-1; buildDockDirty=true; hudDirty=true; updateHint();
+  setPaused(false); gameSpeed=1; tickAccum=0;
+  toast(`${state.faction==='frontier'?'The Enterprise':'The People'} settle here. Build wisely.`);
+  saveGame(true);
+}
+function forcePlace(key,col,row){
+  const d=BUILDINGS[key];
+  if(col<0||row<0||col+d.w>state.grid||row+d.h>state.grid) return;
+  // clear terrain obstacles under footprint
+  for(let r=row;r<row+d.h;r++)for(let c=col;c<col+d.w;c++){ if(state.terrain[r*state.grid+c]===T.WATER||state.terrain[r*state.grid+c]===T.ROCK||state.terrain[r*state.grid+c]===T.FOREST) state.terrain[r*state.grid+c]=T.GRASS; }
+  const b={id:state.nextId++,key,col,row,w:d.w,h:d.h,workers:0,on:true};
+  state.buildings.push(b);
+  for(let r=row;r<row+d.h;r++)for(let c=col;c<col+d.w;c++) state.occ[r*state.grid+c]=b.id;
+  addBuildingMesh(b);
+}
+
+/* =====================================================================
+   SAVE / LOAD / STATS
+   ===================================================================== */
+function saveGame(silent){
+  if(!state||state._vista)return;
+  try{
+    const copy=Object.assign({},state); delete copy._growAccum;
+    localStorage.setItem(SAVE_KEY, JSON.stringify({s:copy, market}));
+    if(!silent) toast('Game saved.');
+  }catch(e){ if(!silent) toast('Save failed.','warn'); }
+}
+function loadGame(){
+  const raw=loadJSON(SAVE_KEY,null); if(!raw)return false;
+  state=raw.s; GRID=state.grid;
+  if(state.absDay===undefined) state.absDay=0;
+  if(state.hunger===undefined) state.hunger=0;
+  if(state.alert===undefined) state.alert='';
+  warnLog={};
+  Object.assign(market, raw.market||{});
+  menuVistaActive=false;
+  buildTerrain(); initPools(); rebuildAllBuildings(); clearWalkers();
+  applySeasonVisuals();
+  camTarget.set(0,0,0); viewSize=16; resizeCam();
+  hideScreens(); document.getElementById('hud').classList.remove('hidden');
+  selectedBuild=null; selectedBuildingId=-1; buildDockDirty=true; hudDirty=true; recompute(); updateHint();
+  setPaused(true); tickAccum=0;
+  toast('Welcome back. (Paused)');
+  return true;
+}
+function saveStats(){
+  const st=loadJSON(STATS_KEY, {bestMoney:0,bestPop:0,longest:0,founded:0,traded:0,runs:0});
+  st.bestMoney=Math.max(st.bestMoney, state.peakMoney||0);
+  st.bestPop=Math.max(st.bestPop, state.peakPop||0);
+  const yearsRun=(state.year-1761)*4 + state.season;
+  st.longest=Math.max(st.longest, yearsRun);
+  st.founded=(st.founded||0)+1;
+  st.traded=(st.traded||0)+ (state.traded||0);
+  st.runs=(st.runs||0)+1;
+  localStorage.setItem(STATS_KEY, JSON.stringify(st));
+}
+
+/* =====================================================================
+   UI WIRING
+   ===================================================================== */
+// main menu buttons
+document.getElementById('m-play').onclick=()=>{ sfxClick(); showScreen('setup'); };
+document.getElementById('m-continue').onclick=()=>{ sfxClick(); if(!loadGame()) toast('No save found.','warn'); };
+document.getElementById('m-stats').onclick=()=>{ sfxClick(); openStats(); };
+document.getElementById('m-settings').onclick=()=>{ sfxClick(); openSettings(); };
+document.getElementById('m-almanac').onclick=()=>{ sfxClick(); openAlmanac(); };
+document.getElementById('b-menu').onclick=()=>{ saveGame(true); toMenu(); };
+document.getElementById('b-almanac').onclick=()=>{ openAlmanac(); };
+
+// close buttons
+document.querySelectorAll('[data-close]').forEach(x=>x.onclick=()=>{
+  const id=x.dataset.close; document.getElementById(id).classList.add('hidden');
+  if(!hudShown()) document.getElementById('menu').classList.remove('hidden');
+});
+
+// setup segmented controls
+let setupFaction=null;
+document.querySelectorAll('#setup .faction').forEach(f=>f.onclick=()=>{
+  document.querySelectorAll('#setup .faction').forEach(x=>x.classList.remove('sel'));
+  f.classList.add('sel'); setupFaction=f.dataset.faction; sfxClick();
+});
+function wireSeg(id){ const seg=document.getElementById(id);
+  seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); sfxClick(); }); }
+wireSeg('opt-size'); wireSeg('opt-wild'); wireSeg('opt-diff');
+function segVal(id){ return +document.querySelector('#'+id+' .on').dataset.v; }
+
+document.getElementById('setup-back').onclick=()=>{ showScreen('menu'); };
+document.getElementById('setup-start').onclick=()=>{
+  if(!setupFaction){ toast('Choose a faction first.','warn'); return; }
+  const seed=document.getElementById('opt-seed').value.trim()||String(Math.floor(Math.random()*1e9));
+  startGame({ faction:setupFaction, size:segVal('opt-size'), wild:segVal('opt-wild'), diff:segVal('opt-diff'), seed });
+};
+
+// stats
+function openStats(){
+  const st=loadJSON(STATS_KEY,{bestMoney:0,bestPop:0,longest:0,founded:0,traded:0,runs:0});
+  const rows=[
+    ['Best Net Worth','£'+(st.bestMoney||0)],
+    ['Largest Population',(st.bestPop||0)+' settlers'],
+    ['Longest Run',(st.longest||0)+' seasons'],
+    ['Settlements Founded', st.founded||0],
+    ['Goods Traded', st.traded||0],
+    ['Runs Played', st.runs||0],
+  ];
+  document.getElementById('stats-body').innerHTML = rows.map(r=>`<div class="line" style="display:flex;justify-content:space-between;font-size:1.2rem;padding:6px 0;border-bottom:1px dotted var(--wood-d)"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
+  showScreen('stats');
+}
+document.getElementById('stats-reset').onclick=()=>{ localStorage.removeItem(STATS_KEY); openStats(); toast('Records reset.'); };
+
+// settings
+function openSettings(){
+  const body=document.getElementById('settings-body');
+  body.innerHTML=`
+    <div class="field" style="margin:10px 0"><label>Master Volume</label><input type="range" id="set-master" min="0" max="1" step="0.05" value="${settings.master}"></div>
+    <div class="field" style="margin:10px 0"><label>Sound Effects</label><input type="range" id="set-sfx" min="0" max="1" step="0.05" value="${settings.sfx}"></div>
+    <div class="field" style="margin:10px 0"><label>Animation Quality</label>
+      <div class="seg" id="set-anim">
+        <button data-v="low" class="${settings.anim==='low'?'on':''}">Low</button>
+        <button data-v="med" class="${settings.anim==='med'?'on':''}">Med</button>
+        <button data-v="high" class="${settings.anim==='high'?'on':''}">High</button></div></div>
+    <div class="field" style="margin:10px 0"><label>Camera Speed</label><input type="range" id="set-cam" min="0.5" max="2" step="0.1" value="${settings.camspeed}"></div>
+    <div class="field" style="margin:10px 0"><label>Autosave (sec, 0=off)</label><input type="range" id="set-auto" min="0" max="180" step="15" value="${settings.autosave}"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-family:'IM Fell English SC'"><input type="checkbox" id="set-cb" ${settings.colorblind?'checked':''}> Colorblind-friendly palette</label>
+  `;
+  const bind=(id,key,num)=>{ const el=document.getElementById(id); el.oninput=()=>{ settings[key]=num?+el.value:el.value; saveSettings(); applyColorblind(); }; };
+  bind('set-master','master',true); bind('set-sfx','sfx',true); bind('set-cam','camspeed',true); bind('set-auto','autosave',true);
+  document.getElementById('set-cb').onchange=e=>{ settings.colorblind=e.target.checked; saveSettings(); applyColorblind(); };
+  const seg=document.getElementById('set-anim'); seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); settings.anim=b.dataset.v; saveSettings(); });
+  showScreen('settings');
+}
+function applyColorblind(){
+  if(settings.colorblind){ TERRAIN_COLORS[T.FOREST]=0x2c6e9c; TERRAIN_COLORS[T.FERTILE]=0xd0a020; }
+  else { TERRAIN_COLORS[T.FOREST]=0x4f7a36; TERRAIN_COLORS[T.FERTILE]=0x9a8a3c; }
+  if(state && groundMesh){ applySeasonVisuals(); }
+}
+
+// almanac
+const ALM_TABS=['Buildings','Goods','Factions','Frontier History'];
+let almTab=0;
+function openAlmanac(){
+  const tabs=document.getElementById('alm-tabs');
+  tabs.innerHTML=ALM_TABS.map((t,i)=>`<button class="btn sm ${i===almTab?'gold':''}" data-i="${i}">${t}</button>`).join('');
+  tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{ almTab=+b.dataset.i; openAlmanac(); });
+  const body=document.getElementById('alm-body');
+  if(almTab===0){
+    const fac = (state&&!state._vista)?state.faction:null;
+    const keys=Object.keys(BUILDINGS).filter(k=>!fac||BUILDINGS[k].faction==='both'||BUILDINGS[k].faction===fac);
+    body.innerHTML=`<div class="alm-grid">`+keys.map(k=>{const d=BUILDINGS[k];
+      return `<div class="alm-card"><b>${d.ic} ${d.name}</b><br><span class="small">${d.desc}</span><br><span class="small" style="color:var(--gold)">${d.w}×${d.h} · cost ${d.cost} · ${d.workers||0} workers</span></div>`;}).join('')+`</div>`;
+  } else if(almTab===1){
+    body.innerHTML=`<div class="alm-grid">`+Object.keys(RES).map(k=>{const r=RES[k];
+      const val=VALUE[k]?` · base value ${VALUE[k]}`:'';
+      return `<div class="alm-card"><b>${r.ic} ${r.name}</b><br><span class="small">${r.kind==='raw'?'Raw — extracted from the land':r.kind==='ref'?'Refined — manufactured for trade':'A vital need'}${val}</span></div>`;}).join('')+`</div>`;
+  } else if(almTab===2){
+    body.innerHTML=`<div class="scrollbox">
+      <div class="alm-card" style="margin-bottom:8px"><b>The Enterprise — Colonial Frontiersman</b><br><span class="small">A high-variance capitalist optimizer. Convert raw goods into refined exports and sell at a margin to build a fortune in £ sterling. Strong at manufacturing; land is bought and cleared. Beware bankruptcy.</span></div>
+      <div class="alm-card"><b>The People — Native Confederacy</b><br><span class="small">A resilient network-builder. Gather sustainably, barter for standing, and keep your people fed and content. Land-rich and capital-light. Beware collapse from famine.</span></div></div>`;
+  } else {
+    body.innerHTML=`<div class="scrollbox"><div class="alm-card"><span class="small">
+      The 1760s–70s frontier was a contested borderland on the eve of the American Revolution.
+      Trade in pelts, lumber, and rum bound distant settlements into a fragile economy, while
+      tax edicts and embargoes from a faraway crown rippled through every market. Seasons ruled
+      life: winters demanded stored food and warmth; bountiful harvests could make a settlement's fortune.
+      In <i>Frontier &amp; Fire</i> you steward one clearing in that living world — turning wilderness
+      into a thriving node of trade before history closes in.</span></div></div>`;
+  }
+  showScreen('almanac');
+}
+
+/* ---------- modal / decision card ---------- */
+function showModal(title,text,choices){
+  document.getElementById('modal-title').innerHTML=title;
+  document.getElementById('modal-text').innerHTML=text;
+  const box=document.getElementById('modal-choices'); box.innerHTML='';
+  for(const ch of choices){ const b=document.createElement('button'); b.className='btn'; b.textContent=ch.label;
+    b.onclick=()=>{ ch.act&&ch.act(); document.getElementById('modal').classList.add('hidden');
+      if(!state.ended && hudShown()) setPaused(false); hudDirty=true; recompute(); sfxClick(); };
+    box.appendChild(b); }
+  showScreen('modal');
+  // keep hud visible behind modal if in game
+  if(hudShownBefore()) document.getElementById('hud').classList.remove('hidden');
+}
+function hudShownBefore(){ return state && !state._vista && state.founded; }
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+applyColorblind();
+buildMenuVista();
+initPools();
+toMenu();
+placeCamera();
+animate();
+
+// resume audio context on first interaction (browser policy)
+addEventListener('pointerdown',()=>{ const a=audio(); if(a&&a.state==='suspended') a.resume(); },{once:false});
+
+// expose a couple for debugging / smoke test
+window.__FF__={ get state(){return state;}, startGame, saveGame, loadGame, BUILDINGS,
+  economyTick, placeBuilding, canPlace, recompute, forcePlace, marketPrice };
+</script>
+</body>
+</html>
